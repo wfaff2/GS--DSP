@@ -1,0 +1,8 @@
+prefix=/home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/install
+
+Name: rviz_plugins
+Description: Description of rviz_plugins
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

@@ -1,0 +1,23 @@
+# No traceable real-hardware box dimensions were found in this workspace.
+# These are explicit simulation validation values and may be overridden here.
+static_box:
+  id: 0
+  center: [5.0, 0.0, 1.5]
+  size: [0.8, 0.6, 1.2]
+  surface_resolution: 0.05
+
+dynamic:
+  count: 1
+  initial: [[5.0, -1.0, 1.5]]
+  size: [[0.8, 0.6, 1.2]]
+  velocity: [[0.0, 0.05, 0.0]]
+  initial_flat: [5.0, -1.0, 1.5]
+  size_flat: [0.8, 0.6, 1.2]
+  velocity_flat: [0.0, 0.05, 0.0]
+
+uav_trajectory:
+  type: cubic_smoothstep_line
+  start_position: [3.0, -1.0, 1.5]
+  end_position: [3.0, 1.0, 1.5]
+  warmup_sec: 3.0
+  motion_duration_sec: 20.0

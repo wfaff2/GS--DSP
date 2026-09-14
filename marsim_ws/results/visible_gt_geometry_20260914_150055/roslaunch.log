@@ -1,0 +1,154 @@
+WARNING: Package name "cascadePID" does not follow the naming conventions. It should start with a lower case letter and only contain lower case letters, digits, underscores, and dashes.
+[WARN] [1789369258.149397285]: Global Pointcloud received..
+Failed to find match for field 'intensity'.
+[WARN] [1789369258.153458726]: Normal compute finished.., mapsize = 466
+double free or corruption (top)
+WARNING: Package name "cascadePID" does not follow the naming conventions. It should start with a lower case letter and only contain lower case letters, digits, underscores, and dashes.
+WARNING: Package name "cascadePID" does not follow the naming conventions. It should start with a lower case letter and only contain lower case letters, digits, underscores, and dashes.
+[31m[quad0_pcl_render_node-2] process has died [pid 545986, exit code -6, cmd /home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/devel/lib/local_sensing_node/pcl_render_node ~global_map:=/map_generator/global_cloud ~odometry:=/coni_mpc/quad_odom1 __name:=quad0_pcl_render_node __log:=/home/jjm/.ros/log/cd794b1a-ade9-11f1-aae2-25bc297d88f9/quad0_pcl_render_node-2.log].
+log file: /home/jjm/.ros/log/cd794b1a-ade9-11f1-aae2-25bc297d88f9/quad0_pcl_render_node-2*.log[0m
+... logging to /home/jjm/.ros/log/cd794b1a-ade9-11f1-aae2-25bc297d88f9/roslaunch-jjm-545926.log
+Checking log directory for disk usage. This may take a while.
+Press Ctrl-C to interrupt
+Done checking log file disk usage. Usage is <1GB.
+]2;/home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/src/coni_mpc/launch/marsim_lv_dot_uav1.launch
+[1mstarted roslaunch server http://jjm:38387/[0m
+
+SUMMARY
+========
+
+PARAMETERS
+ * /box_validation/dynamic/count: 1
+ * /box_validation/dynamic/initial: [[5.0, -1.0, 1.5]]
+ * /box_validation/dynamic/initial_flat: [5.0, -1.0, 1.5]
+ * /box_validation/dynamic/size: [[0.8, 0.6, 1.2]]
+ * /box_validation/dynamic/size_flat: [0.8, 0.6, 1.2]
+ * /box_validation/dynamic/velocity: [[0.0, 0.05, 0.0]]
+ * /box_validation/dynamic/velocity_flat: [0.0, 0.05, 0.0]
+ * /box_validation/static_box/center: [5.0, 0.0, 1.5]
+ * /box_validation/static_box/id: 0
+ * /box_validation/static_box/size: [0.8, 0.6, 1.2]
+ * /box_validation/static_box/surface_resolution: 0.05
+ * /box_validation/uav_trajectory/end_position: [3.0, 1.0, 1.5]
+ * /box_validation/uav_trajectory/motion_duration_sec: 20.0
+ * /box_validation/uav_trajectory/start_position: [3.0, -1.0, 1.5]
+ * /box_validation/uav_trajectory/type: cubic_smoothstep_...
+ * /box_validation/uav_trajectory/warmup_sec: 3.0
+ * /lv_dot_map_pub/add_boundary: 0
+ * /lv_dot_map_pub/downsample_res: 0.1
+ * /lv_dot_map_pub/is_bridge: 0
+ * /lv_dot_map_pub/map_offset_x: 0.0
+ * /lv_dot_map_pub/map_offset_y: 0.0
+ * /lv_dot_map_pub/map_offset_z: 0.0
+ * /lv_dot_validation_pose/duration_sec: 20.0
+ * /lv_dot_validation_pose/motion: parallel
+ * /lv_dot_validation_pose/warmup_sec: 3.0
+ * /onboard_detector/body_to_camera_color: [1.0, 0.0, 0.0, 0...
+ * /onboard_detector/body_to_camera_depth: [1.0, 0.0, 0.0, 0...
+ * /onboard_detector/body_to_lidar: [1.0, 0.0, 0.0, 0...
+ * /onboard_detector/color_image_topic: /lv_dot/disabled/...
+ * /onboard_detector/color_intrinsics: [606.312072753906...
+ * /onboard_detector/dbscan_min_points_cluster: 20
+ * /onboard_detector/dbscan_search_range_epsilon: 0.05
+ * /onboard_detector/depth_filter_margin: 10
+ * /onboard_detector/depth_image_topic: /lv_dot/disabled/...
+ * /onboard_detector/depth_intrinsics: [385.309600830078...
+ * /onboard_detector/depth_max_value: 5.0
+ * /onboard_detector/depth_min_value: 0.5
+ * /onboard_detector/depth_scale_factor: 1000
+ * /onboard_detector/depth_skip_pixel: 2
+ * /onboard_detector/downsample_threshold: 3500
+ * /onboard_detector/dynamic_consistency_threshold: 5
+ * /onboard_detector/dynamic_velocity_threshold: 0.2
+ * /onboard_detector/dynamic_voting_threshold: 0.8
+ * /onboard_detector/feature_weight: [3.0, 3.0, 0.1, 0...
+ * /onboard_detector/filtering_BBox_IOU_threshold: 0.2
+ * /onboard_detector/fix_size_dimension_threshold: 0.4
+ * /onboard_detector/fix_size_history_threshold: 3
+ * /onboard_detector/frame_skip: 2
+ * /onboard_detector/frames_force_dynamic: 3
+ * /onboard_detector/frames_force_dynamic_check_range: 10
+ * /onboard_detector/gaussian_downsample_rate: 6
+ * /onboard_detector/ground_height: 0.2
+ * /onboard_detector/history_size: 100
+ * /onboard_detector/image_cols: 640
+ * /onboard_detector/image_rows: 480
+ * /onboard_detector/kalman_filter_averaging_frames: 3
+ * /onboard_detector/kalman_filter_param: [0.25, 0.01, 0.05...
+ * /onboard_detector/lidar_DBSCAN_epsilon: 0.05
+ * /onboard_detector/lidar_DBSCAN_min_points: 10
+ * /onboard_detector/lidar_pointcloud_topic: /quad0_pcl_render...
+ * /onboard_detector/localization_mode: 1
+ * /onboard_detector/max_match_range: 0.5
+ * /onboard_detector/max_object_size: [3.0, 3.0, 3.0]
+ * /onboard_detector/max_size_diff_range: 0.5
+ * /onboard_detector/odom_topic: /coni_mpc/quad_odom1
+ * /onboard_detector/pose_topic: /lv_dot/disabled/...
+ * /onboard_detector/roof_height: 3.0
+ * /onboard_detector/target_constrain_size: True
+ * /onboard_detector/target_object_size: [0.5, 0.5, 1.5]
+ * /onboard_detector/time_step: 0.1
+ * /onboard_detector/voxel_occupied_thresh: 5
+ * /quad0_pcl_render_node/collision_range: 0.3
+ * /quad0_pcl_render_node/collisioncheck_enable: 0
+ * /quad0_pcl_render_node/curvature_limit: 100.0
+ * /quad0_pcl_render_node/deterministic_box_mode: False
+ * /quad0_pcl_render_node/downsample_res: 0.1
+ * /quad0_pcl_render_node/drone_id: 0
+ * /quad0_pcl_render_node/dyn_mode: 0
+ * /quad0_pcl_render_node/dyn_velocity: 0.8
+ * /quad0_pcl_render_node/dynobj_enable: 0
+ * /quad0_pcl_render_node/dynobject_num: 8
+ * /quad0_pcl_render_node/dynobject_size: 0.8
+ * /quad0_pcl_render_node/estimation_rate: 10.0
+ * /quad0_pcl_render_node/hash_cubesize: 5.0
+ * /quad0_pcl_render_node/is_360lidar: 1
+ * /quad0_pcl_render_node/livox_linestep: 1.4
+ * /quad0_pcl_render_node/min_raylength: 0.1
+ * /quad0_pcl_render_node/output_pcd: 0
+ * /quad0_pcl_render_node/polar_resolution: 0.2
+ * /quad0_pcl_render_node/quadrotor_name: lv_dot_quad0
+ * /quad0_pcl_render_node/sensing_horizon: 15.0
+ * /quad0_pcl_render_node/sensing_rate: 10.0
+ * /quad0_pcl_render_node/uav_num: 1
+ * /quad0_pcl_render_node/use_avia_pattern: 0
+ * /quad0_pcl_render_node/use_minicf_pattern: 1
+ * /quad0_pcl_render_node/use_os128_pattern: 0
+ * /quad0_pcl_render_node/use_uav_extra_model: 0
+ * /quad0_pcl_render_node/use_vlp32_pattern: 0
+ * /quad0_pcl_render_node/vertical_fov: 90.0
+ * /quad0_pcl_render_node/visible_gt_debug_enable: True
+ * /quad0_pcl_render_node/yaw_fov: 360.0
+ * /rosdistro: noetic
+ * /rosversion: 1.17.4
+ * /visible_gt_vs_lvdot_collector/duration_sec: 20.0
+ * /visible_gt_vs_lvdot_collector/result_root: <...>
+ * /visible_gt_vs_lvdot_collector/target_frames: 200
+ * /visible_gt_vs_lvdot_collector/warmup_sec: 3.0
+
+NODES
+  /
+    lv_dot_detector (onboard_detector/detector_node)
+    lv_dot_map_pub (map_generator/map_pub)
+    lv_dot_validation_pose (coni_mpc/lv_dot_validation_pose.py)
+    quad0_pcl_render_node (local_sensing_node/pcl_render_node)
+    static_box_gt_publisher (coni_mpc/publish_static_box_gt.py)
+    visible_gt_vs_lvdot_collector (coni_mpc/collect_visible_gt_vs_lvdot.py)
+
+[1mROS_MASTER_URI=http://localhost:11311[0m
+]2;/home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/src/coni_mpc/launch/marsim_lv_dot_uav1.launch http://localhost:11311
+[1mprocess[lv_dot_map_pub-1]: started with pid [545985][0m
+[1mprocess[quad0_pcl_render_node-2]: started with pid [545986][0m
+[1mprocess[visible_gt_vs_lvdot_collector-3]: started with pid [545988][0m
+[1mprocess[static_box_gt_publisher-4]: started with pid [545989][0m
+[1mprocess[lv_dot_validation_pose-5]: started with pid [545990][0m
+[1mprocess[lv_dot_detector-6]: started with pid [545991][0m
+[1m[lv_dot_map_pub-1] process has finished cleanly
+log file: /home/jjm/.ros/log/cd794b1a-ade9-11f1-aae2-25bc297d88f9/lv_dot_map_pub-1*.log[0m
+[lv_dot_detector-6] killing on exit
+[lv_dot_validation_pose-5] killing on exit
+[static_box_gt_publisher-4] killing on exit
+[visible_gt_vs_lvdot_collector-3] killing on exit
+shutting down processing monitor...
+... shutting down processing monitor complete
+[1mdone[0m

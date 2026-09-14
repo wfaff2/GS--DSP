@@ -1,0 +1,3 @@
+/home/jjm/桌面/惯性 VS 非惯性/src/coni_mpc/acado_model/build_codegen_tmp/CMakeFiles/rebuild_cache.dir
+/home/jjm/桌面/惯性 VS 非惯性/src/coni_mpc/acado_model/build_codegen_tmp/CMakeFiles/edit_cache.dir
+/home/jjm/桌面/惯性 VS 非惯性/src/coni_mpc/acado_model/build_codegen_tmp/CMakeFiles/quadrotor_model_codegen.dir

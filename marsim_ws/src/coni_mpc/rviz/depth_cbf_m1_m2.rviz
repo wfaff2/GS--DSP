@@ -1,0 +1,88 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Background Color: 32; 32; 32
+    Fixed Frame: map
+    Frame Rate: 30
+  Displays:
+    - Class: rviz/Grid
+      Name: World Grid
+      Enabled: true
+      Reference Frame: map
+    - Class: rviz/TF
+      Name: W-N-B Frames
+      Enabled: true
+      Frame Timeout: 15
+      Marker Scale: 0.6
+      Show Axes: true
+      Show Names: true
+    - Class: rviz/PointCloud2
+      Name: Raw MARSIM sensor cloud
+      Enabled: true
+      Topic: /quad0_pcl_render_node/sensor_cloud
+      Size (m): 0.025
+      Style: Points
+      Color Transformer: FlatColor
+      Color: 180; 180; 180
+    - Class: rviz/PointCloud2
+      Name: Reconstructed world cloud
+      Enabled: true
+      Topic: /depth_cbf_cloud_preprocessor/cloud_world
+      Size (m): 0.035
+      Style: Points
+      Color Transformer: FlatColor
+      Color: 0; 180; 255
+    - Class: rviz/PointCloud2
+      Name: N-frame cloud
+      Enabled: false
+      Topic: /depth_cbf_cloud_preprocessor/cloud_noninertial
+      Size (m): 0.035
+      Style: Points
+      Color Transformer: FlatColor
+      Color: 255; 170; 0
+    - Class: rviz/PointCloud2
+      Name: Local N-frame cloud
+      Enabled: true
+      Topic: /depth_cbf_cloud_preprocessor/local_cloud_noninertial
+      Size (m): 0.05
+      Style: Points
+      Color Transformer: FlatColor
+      Color: 0; 255; 80
+    - Class: rviz/Odometry
+      Name: UAV1
+      Enabled: true
+      Topic: /coni_mpc/quad_odom1
+      Shape:
+        Axes Length: 0.5
+        Axes Radius: 0.05
+    - Class: rviz/Odometry
+      Name: UGV
+      Enabled: true
+      Topic: /coni_mpc/car_odom
+      Shape:
+        Axes Length: 0.7
+        Axes Radius: 0.06
+    - Class: rviz/MarkerArray
+      Name: Depth-CBF diagnostics
+      Enabled: true
+      Marker Topic: /depth_cbf_regression/markers
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 15
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 1
+      Pitch: 0.55
+      Yaw: 0.75
+Window Geometry:
+  Height: 900
+  Width: 1400

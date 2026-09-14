@@ -1,0 +1,178 @@
+[INFO] [1789205366.813328561]: drone_drawpoints_num = 4,4,2, Uav points num = 32
+
+Found pkg_path = /home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/src/MARSIM/local_sensing/data/m25_quad0_time_consumption.txt
+
+Found pkg_path = /home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/src/MARSIM/local_sensing/data/m25_quad0_collision_check_time_consumption.txt
+[WARN] [1789205367.292561528]: Global Pointcloud received..
+[WARN] [1789205367.307705269]: Normal compute finished.., mapsize = 2706
+[INFO] [1789205369.445027884]: Temp compute time = 0.023754, average compute time = 0.021695
+[INFO] [1789205369.554483227]: Temp compute time = 0.029063, average compute time = 0.022094
+[INFO] [1789205369.649268939]: Temp compute time = 0.024355, average compute time = 0.022528
+[INFO] [1789205369.737422054]: Temp compute time = 0.017817, average compute time = 0.022428
+[INFO] [1789205369.855779688]: Temp compute time = 0.036054, average compute time = 0.022719
+[INFO] [1789205369.947005860]: Temp compute time = 0.030812, average compute time = 0.023028
+[INFO] [1789205370.044281616]: Temp compute time = 0.026910, average compute time = 0.022775
+[INFO] [1789205370.142039159]: Temp compute time = 0.017289, average compute time = 0.022843
+[INFO] [1789205370.249286860]: Temp compute time = 0.024492, average compute time = 0.023097
+[INFO] [1789205370.337851073]: Temp compute time = 0.018105, average compute time = 0.022984
+[INFO] [1789205370.441079066]: Temp compute time = 0.021451, average compute time = 0.022964
+[INFO] [1789205370.546796093]: Temp compute time = 0.025285, average compute time = 0.023224
+[INFO] [1789205370.652398136]: Temp compute time = 0.035207, average compute time = 0.023385
+[INFO] [1789205370.757665615]: Temp compute time = 0.034980, average compute time = 0.023762
+[INFO] [1789205370.859187673]: Temp compute time = 0.040930, average compute time = 0.024883
+[INFO] [1789205370.954870622]: Temp compute time = 0.035427, average compute time = 0.025316
+[INFO] [1789205371.047698641]: Temp compute time = 0.022461, average compute time = 0.025520
+[INFO] [1789205371.129383616]: Temp compute time = 0.011319, average compute time = 0.025211
+[INFO] [1789205371.240130738]: Temp compute time = 0.022040, average compute time = 0.025812
+[INFO] [1789205371.341468489]: Temp compute time = 0.021071, average compute time = 0.025764
+[INFO] [1789205371.446444873]: Temp compute time = 0.024693, average compute time = 0.025882
+[INFO] [1789205371.558296398]: Temp compute time = 0.041502, average compute time = 0.026727
+[INFO] [1789205371.654083643]: Temp compute time = 0.035577, average compute time = 0.027037
+[INFO] [1789205371.744725642]: Temp compute time = 0.020459, average compute time = 0.026851
+[INFO] [1789205371.870450354]: Temp compute time = 0.045410, average compute time = 0.028165
+[INFO] [1789205371.941874862]: Temp compute time = 0.021151, average compute time = 0.027456
+[INFO] [1789205372.050783124]: Temp compute time = 0.028737, average compute time = 0.027357
+[INFO] [1789205372.137653557]: Temp compute time = 0.016623, average compute time = 0.026867
+[INFO] [1789205372.245148226]: Temp compute time = 0.024194, average compute time = 0.027196
+[INFO] [1789205372.345806997]: Temp compute time = 0.020441, average compute time = 0.027003
+[INFO] [1789205372.466584940]: Temp compute time = 0.050607, average compute time = 0.028551
+[INFO] [1789205372.562733637]: Temp compute time = 0.045907, average compute time = 0.029715
+[INFO] [1789205372.670420332]: Temp compute time = 0.047541, average compute time = 0.030775
+[INFO] [1789205372.764949275]: Temp compute time = 0.044387, average compute time = 0.031212
+[INFO] [1789205372.876810683]: Temp compute time = 0.051582, average compute time = 0.032003
+[INFO] [1789205372.961398322]: Temp compute time = 0.044442, average compute time = 0.032170
+[INFO] [1789205373.066298657]: Temp compute time = 0.044669, average compute time = 0.032610
+[INFO] [1789205373.165711379]: Temp compute time = 0.049117, average compute time = 0.033879
+[INFO] [1789205373.264297996]: Temp compute time = 0.048379, average compute time = 0.035644
+[INFO] [1789205373.354150238]: Temp compute time = 0.029653, average compute time = 0.036007
+[INFO] [1789205373.470592296]: Temp compute time = 0.046311, average compute time = 0.037209
+[INFO] [1789205373.566594061]: Temp compute time = 0.045779, average compute time = 0.038213
+[INFO] [1789205373.663514453]: Temp compute time = 0.046725, average compute time = 0.038462
+[INFO] [1789205373.772247761]: Temp compute time = 0.048597, average compute time = 0.039081
+[INF[INFO] [1789205366.790484342]: M2.5 evaluator writes /home/jjm/??????/????????????/code/??????/?????? VS ?????????/results/depth_cbf_m25/frames/A2_cylinder_oblique.csv; sole algorithm cloud input=/quad0_pcl_render_node/sensor_cloud; GT mode=A2_cylinder is evaluation-only.
+terminate called after throwing an instance of 'boost::wrapexcept<boost::lock_error>'
+  what():  boost: mutex lock failed in pthread_mutex_lock: Invalid argument
+[INFO] [1789205367.286989164]: Published latched M2.5 map /home/jjm/??????/????????????/code/??????/?????? VS ?????????/src/coni_mpc/test_data/depth_cbf_m25/A2_cylinder.pcd with 9180 points
+WARNING: Package name "cascadePID" does not follow the naming conventions. It should start with a lower case letter and only contain lower case letters, digits, underscores, and dashes.
+[31m================================================================================REQUIRED process [depth_cbf_m25_trajectory-3] has died!
+process has finished cleanly
+log file: /home/jjm/.ros/log/cd794b1a-ade9-11f1-aae2-25bc297d88f9/depth_cbf_m25_trajectory-3*.log
+Initiating shutdown!
+================================================================================[0m
+... logging to /home/jjm/.ros/log/cd794b1a-ade9-11f1-aae2-25bc297d88f9/roslaunch-jjm-236150.log
+Checking log directory for disk usage. This may take a while.
+Press Ctrl-C to interrupt
+Done checking log file disk usage. Usage is <1GB.
+]2;/home/jjm/桌面/论文修改/code/仿真/惯性 VS 非惯性/src/coni_mpc/launch/depth_cbf_m25.launch
+[1mstarted roslaunch server http://jjm:39739/[0m
+
+SUMMARY
+========
+
+PARAMETERS
+ * /depth_cbf_m25_evaluator/car_odom_topic: /coni_mpc/car_odom
+ * /depth_cbf_m25_evaluator/cloud_topic: /quad0_pcl_render...
+ * /depth_cbf_m25_evaluator/debug_compare_world_cloud: True
+ * /depth_cbf_m25_evaluator/debug_print_every_n_clouds: 20
+ * /depth_cbf_m25_evaluator/debug_random_seed: 7
+ * /depth_cbf_m25_evaluator/debug_sample_count: 3
+ * /depth_cbf_m25_evaluator/debug_world_cloud_topic: /quad0_pcl_render...
+ * /depth_cbf_m25_evaluator/extrinsics/rotation_BL: [1.0, 0.0, 0.0, 0...
+ * /depth_cbf_m25_evaluator/extrinsics/translation_BL: [0.0, 0.0, 0.0]
+ * /depth_cbf_m25_evaluator/filter/enable_ground_filter: False
+ * /depth_cbf_m25_evaluator/filter/enable_voxel_filter: True
+ * /depth_cbf_m25_evaluator/filter/ground_min_z_W: 0.1
+ * /depth_cbf_m25_evaluator/filter/local_radius: 4.0
+ * /depth_cbf_m25_evaluator/filter/max_range: 30.0
+ * /depth_cbf_m25_evaluator/filter/min_range: 1.0
+ * /depth_cbf_m25_evaluator/filter/voxel_leaf_size: 0.1
+ * /depth_cbf_m25_evaluator/m25/gt_pcd: <...>
+ * /depth_cbf_m25_evaluator/m25/max_pose_time_offset_sec: 0.025
+ * /depth_cbf_m25_evaluator/m25/min_raylength: 1.0
+ * /depth_cbf_m25_evaluator/m25/motion: oblique
+ * /depth_cbf_m25_evaluator/m25/non_conservative_tolerance: 0.001
+ * /depth_cbf_m25_evaluator/m25/result_root: <...>
+ * /depth_cbf_m25_evaluator/m25/root_max_distance: 4.0
+ * /depth_cbf_m25_evaluator/m25/root_samples: 160
+ * /depth_cbf_m25_evaluator/m25/run_id: A2_cylinder_oblique
+ * /depth_cbf_m25_evaluator/m25/scene: A2_cylinder
+ * /depth_cbf_m25_evaluator/m25/vertical_fov_deg: 77.2
+ * /depth_cbf_m25_evaluator/m25/yaw_fov_deg: 70.4
+ * /depth_cbf_m25_evaluator/max_pose_time_offset_sec: 0.025
+ * /depth_cbf_m25_evaluator/noninertial_frame_id: base_link
+ * /depth_cbf_m25_evaluator/quad_odom_topic: /coni_mpc/quad_odom1
+ * /depth_cbf_m25_evaluator/query_mesh/half_width_steps: 2
+ * /depth_cbf_m25_evaluator/query_mesh/nearest_neighbor_max_distance: 3.47
+ * /depth_cbf_m25_evaluator/query_mesh/spacing: 0.15
+ * /depth_cbf_m25_evaluator/regression/local_cloud_topic: /depth_cbf_cloud_...
+ * /depth_cbf_m25_evaluator/regression/log_every_n_fits: 20
+ * /depth_cbf_m25_evaluator/regression/max_abs_error: 0.75
+ * /depth_cbf_m25_evaluator/regression/max_condition_number: 1.0e8
+ * /depth_cbf_m25_evaluator/regression/max_rmse: 0.25
+ * /depth_cbf_m25_evaluator/regression/query_center_topic: /depth_cbf_cloud_...
+ * /depth_cbf_m25_evaluator/regression/relative_rank_tolerance: 1e-10
+ * /depth_cbf_m25_evaluator/regression/subscriber_queue_size: 5
+ * /depth_cbf_m25_evaluator/regression/sync_queue_size: 10
+ * /depth_cbf_m25_evaluator/safety/d_safe: 0.15
+ * /depth_cbf_m25_evaluator/safety/delta_surface: 0.0
+ * /depth_cbf_m25_evaluator/safety/r_uav: 0.15
+ * /depth_cbf_m25_evaluator/subscriber_queue_size: 20
+ * /depth_cbf_m25_evaluator/sync_queue_size: 40
+ * /depth_cbf_m25_evaluator/sync_slop_sec: 0.025
+ * /depth_cbf_m25_evaluator/world_frame_id: map
+ * /depth_cbf_m25_map_pub/map_name: <...>
+ * /depth_cbf_m25_trajectory/duration_sec: 5.0
+ * /depth_cbf_m25_trajectory/motion: oblique
+ * /depth_cbf_m25_trajectory/scene: A2_cylinder
+ * /depth_cbf_m25_trajectory/warmup_sec: 2.0
+ * /depth_cbf_m25_trajectory/yaw_offset_deg: 0.0
+ * /quad0_pcl_render_node/collision_range: 0.3
+ * /quad0_pcl_render_node/collisioncheck_enable: 0
+ * /quad0_pcl_render_node/curvature_limit: 100.0
+ * /quad0_pcl_render_node/downsample_res: 0.1
+ * /quad0_pcl_render_node/drone_id: 0
+ * /quad0_pcl_render_node/dyn_mode: 0
+ * /quad0_pcl_render_node/dyn_velocity: 0.0
+ * /quad0_pcl_render_node/dynobj_enable: 0
+ * /quad0_pcl_render_node/dynobject_num: 0
+ * /quad0_pcl_render_node/dynobject_size: 0.8
+ * /quad0_pcl_render_node/estimation_rate: 10.0
+ * /quad0_pcl_render_node/hash_cubesize: 5.0
+ * /quad0_pcl_render_node/is_360lidar: 0
+ * /quad0_pcl_render_node/livox_linestep: 1.4
+ * /quad0_pcl_render_node/min_raylength: 1.0
+ * /quad0_pcl_render_node/output_pcd: 0
+ * /quad0_pcl_render_node/polar_resolution: 0.2
+ * /quad0_pcl_render_node/quadrotor_name: m25_quad0
+ * /quad0_pcl_render_node/sensing_horizon: 30.0
+ * /quad0_pcl_render_node/sensing_rate: 10.0
+ * /quad0_pcl_render_node/uav_num: 1
+ * /quad0_pcl_render_node/use_avia_pattern: 1
+ * /quad0_pcl_render_node/use_minicf_pattern: 0
+ * /quad0_pcl_render_node/use_uav_extra_model: 0
+ * /quad0_pcl_render_node/use_vlp32_pattern: 0
+ * /quad0_pcl_render_node/vertical_fov: 77.2
+ * /quad0_pcl_render_node/yaw_fov: 70.4
+ * /rosdistro: noetic
+ * /rosversion: 1.17.4
+
+NODES
+  /
+    depth_cbf_m25_evaluator (coni_mpc/depth_cbf_m25_evaluation_node)
+    depth_cbf_m25_map_pub (coni_mpc/depth_cbf_m25_map_publisher_node)
+    depth_cbf_m25_trajectory (coni_mpc/depth_cbf_m25_trajectory_node)
+    quad0_pcl_render_node (local_sensing_node/pcl_render_node)
+
+[1mROS_MASTER_URI=http://localhost:11311[0m
+]2;/home/jjm/桌面/论文修改/code/仿真/惯性 VS 非惯性/src/coni_mpc/launch/depth_cbf_m25.launch http://localhost:11311
+[1mprocess[depth_cbf_m25_map_pub-1]: started with pid [236191][0m
+[1mprocess[quad0_pcl_render_node-2]: started with pid [236192][0m
+[1mprocess[depth_cbf_m25_trajectory-3]: started with pid [236193][0m
+[1mprocess[depth_cbf_m25_evaluator-4]: started with pid [236199][0m
+[depth_cbf_m25_evaluator-4] killing on exit
+[depth_cbf_m25_trajectory-3] killing on exit
+[quad0_pcl_render_node-2] killing on exit
+[depth_cbf_m25_map_pub-1] killing on exit
+shutting down processing monitor...
+... shutting down processing monitor complete
+[1mdone[0m

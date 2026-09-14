@@ -1,0 +1,8 @@
+prefix=/home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/devel
+
+Name: uav_utils
+Description: Description of uav_utils
+Version: 0.0.0
+Cflags: -I/home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/src/MARSIM/Utils/uav_utils/include
+Libs: -L${prefix}/lib 
+Requires: roscpp rospy

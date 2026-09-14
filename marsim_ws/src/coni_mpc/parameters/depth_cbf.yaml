@@ -1,0 +1,61 @@
+# M1/M2-only Depth-CBF configuration. It is intentionally disconnected from
+# ACADO and the existing analytical obstacle/HOCBF path.
+cloud_topic: /quad0_pcl_render_node/sensor_cloud
+quad_odom_topic: /coni_mpc/quad_odom1
+car_odom_topic: /coni_mpc/car_odom
+world_frame_id: map
+noninertial_frame_id: base_link
+
+subscriber_queue_size: 20
+sync_queue_size: 40
+sync_slop_sec: 0.025
+max_pose_time_offset_sec: 0.025
+
+filter:
+  # Must match the selected MARSIM CPU Livox Mid-360 renderer.
+  min_range: 1.0
+  max_range: 15.0
+  local_radius: 4.0
+  enable_voxel_filter: true
+  voxel_leaf_size: 0.10
+  enable_ground_filter: false
+  ground_min_z_W: 0.10
+
+extrinsics:
+  # Audited MARSIM CPU sensor_cloud path currently uses identity body-to-LiDAR
+  # rotation and zero translation. Matrix is R_BL, row-major.
+  rotation_BL: [1.0, 0.0, 0.0,
+                0.0, 1.0, 0.0,
+                0.0, 0.0, 1.0]
+  translation_BL: [0.0, 0.0, 0.0]
+
+query_mesh:
+  half_width_steps: 2
+  spacing: 0.15
+  # Fit-support limit, not a safety radius. With this value the crop invariant
+  # requires local_radius >= r_mesh + 3.47 = 3.989615 m.
+  nearest_neighbor_max_distance: 3.47
+
+regression:
+  local_cloud_topic: /depth_cbf_cloud_preprocessor/local_cloud_noninertial
+  query_center_topic: /depth_cbf_cloud_preprocessor/query_center_noninertial
+  subscriber_queue_size: 5
+  sync_queue_size: 10
+  relative_rank_tolerance: 1.0e-10
+  max_condition_number: 1.0e8
+  max_rmse: 0.25
+  max_abs_error: 0.75
+  log_every_n_fits: 20
+
+safety:
+  r_uav: 0.15
+  # Provisional M1/M2 placeholder only. The final closed-loop value is an
+  # explicit author/design decision and has not been selected in this round.
+  delta_surface: 0.0
+  d_safe: 0.15
+
+debug_compare_world_cloud: true
+debug_world_cloud_topic: /quad0_pcl_render_node/cloud
+debug_sample_count: 3
+debug_print_every_n_clouds: 20
+debug_random_seed: 7

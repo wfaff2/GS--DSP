@@ -1,0 +1,90 @@
+timestamp,scenario,frame_index,event_type,obstacle_id,tracking_id,lvdot_slot_id,details
+1789357084.981939077,static_box,1,track_created,,0,,collector track created
+1789357089.682188749,static_box,48,track_created,,1,,collector track created
+1789357089.682188749,static_box,48,id_switch,0,1,0,previous tracking_id=0
+1789357089.682188749,static_box,48,unmatched_detection,,0,1,no GT within 1.5 m
+1789357089.782577753,static_box,49,id_switch,0,0,0,previous tracking_id=1
+1789357090.083929062,static_box,52,track_created,,2,,collector track created
+1789357090.083929062,static_box,52,id_switch,0,2,2,previous tracking_id=0
+1789357090.083929062,static_box,52,unmatched_detection,,0,0,no GT within 1.5 m
+1789357090.083929062,static_box,52,unmatched_detection,,1,1,no GT within 1.5 m
+1789357090.182798862,static_box,53,id_switch,0,0,0,previous tracking_id=2
+1789357090.282120943,static_box,54,id_switch,0,1,0,previous tracking_id=0
+1789357090.282120943,static_box,54,unmatched_detection,,0,1,no GT within 1.5 m
+1789357090.382460594,static_box,55,id_switch,0,0,0,previous tracking_id=1
+1789357090.480646372,static_box,56,track_lost,,2,,collector track exceeded missed-frame limit
+1789357090.480646372,static_box,56,id_switch,0,1,1,previous tracking_id=0
+1789357090.480646372,static_box,56,unmatched_detection,,0,0,no GT within 1.5 m
+1789357090.579805613,static_box,57,id_switch,0,0,0,previous tracking_id=1
+1789357090.682056665,static_box,58,unmatched_detection,,1,1,no GT within 1.5 m
+1789357090.782794476,static_box,59,id_switch,0,1,1,previous tracking_id=0
+1789357090.782794476,static_box,59,unmatched_detection,,0,0,no GT within 1.5 m
+1789357090.881602764,static_box,60,unmatched_detection,,0,0,no GT within 1.5 m
+1789357090.982362986,static_box,61,id_switch,0,0,0,previous tracking_id=1
+1789357091.082100630,static_box,62,unmatched_detection,,1,1,no GT within 1.5 m
+1789357091.481308222,static_box,66,track_created,,3,,collector track created
+1789357091.481308222,static_box,66,id_switch,0,3,2,previous tracking_id=0
+1789357091.481308222,static_box,66,unmatched_detection,,0,0,no GT within 1.5 m
+1789357091.481308222,static_box,66,unmatched_detection,,1,1,no GT within 1.5 m
+1789357091.580033541,static_box,67,id_switch,0,0,0,previous tracking_id=3
+1789357091.881546259,static_box,70,track_lost,,1,,collector track exceeded missed-frame limit
+1789357091.881546259,static_box,70,track_lost,,3,,collector track exceeded missed-frame limit
+1789357098.685501814,static_box,138,track_created,,4,,collector track created
+1789357098.685501814,static_box,138,id_switch,0,4,1,previous tracking_id=0
+1789357098.685501814,static_box,138,unmatched_detection,,0,0,no GT within 1.5 m
+1789357098.781948090,static_box,139,id_switch,0,0,0,previous tracking_id=4
+1789357098.781948090,static_box,139,unmatched_detection,,4,1,no GT within 1.5 m
+1789357098.982423544,static_box,141,unmatched_detection,,4,1,no GT within 1.5 m
+1789357099.082403183,static_box,142,track_created,,5,,collector track created
+1789357099.082403183,static_box,142,id_switch,0,5,1,previous tracking_id=0
+1789357099.082403183,static_box,142,unmatched_detection,,0,0,no GT within 1.5 m
+1789357099.082403183,static_box,142,unmatched_detection,,4,2,no GT within 1.5 m
+1789357099.183076382,static_box,143,unmatched_detection,,0,1,no GT within 1.5 m
+1789357099.282859325,static_box,144,id_switch,0,0,0,previous tracking_id=5
+1789357099.282859325,static_box,144,unmatched_detection,,5,1,no GT within 1.5 m
+1789357099.383235931,static_box,145,unmatched_detection,,5,0,no GT within 1.5 m
+1789357099.482916832,static_box,146,track_lost,,4,,collector track exceeded missed-frame limit
+1789357099.482916832,static_box,146,unmatched_detection,,5,0,no GT within 1.5 m
+1789357099.582421541,static_box,147,unmatched_detection,,5,0,no GT within 1.5 m
+1789357099.681977749,static_box,148,track_created,,6,,collector track created
+1789357099.681977749,static_box,148,id_switch,0,6,2,previous tracking_id=0
+1789357099.681977749,static_box,148,unmatched_detection,,5,0,no GT within 1.5 m
+1789357099.681977749,static_box,148,unmatched_detection,,0,1,no GT within 1.5 m
+1789357099.782578945,static_box,149,id_switch,0,0,0,previous tracking_id=6
+1789357099.782578945,static_box,149,unmatched_detection,,5,1,no GT within 1.5 m
+1789357099.882621288,static_box,150,id_switch,0,6,2,previous tracking_id=0
+1789357099.882621288,static_box,150,unmatched_detection,,5,0,no GT within 1.5 m
+1789357099.882621288,static_box,150,unmatched_detection,,0,1,no GT within 1.5 m
+1789357099.982981920,static_box,151,id_switch,0,0,0,previous tracking_id=6
+1789357099.982981920,static_box,151,unmatched_detection,,5,1,no GT within 1.5 m
+1789357100.082713842,static_box,152,unmatched_detection,,5,0,no GT within 1.5 m
+1789357100.182366371,static_box,153,unmatched_detection,,5,1,no GT within 1.5 m
+1789357100.283927441,static_box,154,track_lost,,6,,collector track exceeded missed-frame limit
+1789357100.283927441,static_box,154,unmatched_detection,,5,0,no GT within 1.5 m
+1789357100.382267475,static_box,155,id_switch,0,5,1,previous tracking_id=0
+1789357100.382267475,static_box,155,unmatched_detection,,0,0,no GT within 1.5 m
+1789357100.482170105,static_box,156,unmatched_detection,,0,0,no GT within 1.5 m
+1789357100.582170963,static_box,157,unmatched_detection,,0,1,no GT within 1.5 m
+1789357100.682465792,static_box,158,unmatched_detection,,0,0,no GT within 1.5 m
+1789357100.782463312,static_box,159,unmatched_detection,,0,0,no GT within 1.5 m
+1789357100.882150412,static_box,160,unmatched_detection,,0,1,no GT within 1.5 m
+1789357100.982522964,static_box,161,id_switch,0,0,0,previous tracking_id=5
+1789357101.283126354,static_box,164,track_lost,,5,,collector track exceeded missed-frame limit
+1789357109.593938351,dynamic_box,1,track_created,,0,,collector track created
+1789357119.594441175,dynamic_box,101,track_created,,1,,collector track created
+1789357119.594441175,dynamic_box,101,unmatched_detection,,1,1,no GT within 1.5 m
+1789357119.894142866,dynamic_box,104,id_switch,0,1,1,previous tracking_id=0
+1789357119.894142866,dynamic_box,104,unmatched_detection,,0,0,no GT within 1.5 m
+1789357119.994094849,dynamic_box,105,id_switch,0,0,0,previous tracking_id=1
+1789357120.294613838,dynamic_box,108,track_lost,,1,,collector track exceeded missed-frame limit
+1789357120.394161701,dynamic_box,109,track_created,,2,,collector track created
+1789357120.394161701,dynamic_box,109,id_switch,0,2,1,previous tracking_id=0
+1789357120.394161701,dynamic_box,109,unmatched_detection,,0,0,no GT within 1.5 m
+1789357120.493758440,dynamic_box,110,id_switch,0,0,0,previous tracking_id=2
+1789357120.792444229,dynamic_box,113,track_lost,,2,,collector track exceeded missed-frame limit
+1789357122.294283628,dynamic_box,128,track_created,,3,,collector track created
+1789357122.294283628,dynamic_box,128,unmatched_detection,,3,1,no GT within 1.5 m
+1789357122.693736792,dynamic_box,132,track_lost,,3,,collector track exceeded missed-frame limit
+1789357122.994120121,dynamic_box,135,track_created,,4,,collector track created
+1789357122.994120121,dynamic_box,135,unmatched_detection,,4,1,no GT within 1.5 m
+1789357123.393741369,dynamic_box,139,track_lost,,4,,collector track exceeded missed-frame limit

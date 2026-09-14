@@ -1,0 +1,138 @@
+<launch>
+  <!-- Independent perception validation only. No MPC/CBF node is started. -->
+  <arg name="map_name" default="$(find coni_mpc)/test_data/depth_cbf_m25/A2_cylinder.pcd" />
+  <arg name="motion" default="stationary" />
+  <arg name="duration_sec" default="20.0" />
+  <arg name="warmup_sec" default="3.0" />
+  <arg name="result_file" default="results/lv_dot_mid360_validation/summary.json" />
+  <arg name="dynamic_obstacles" default="false" />
+  <arg name="dynamic_obstacle_count" default="8" />
+  <arg name="dynamic_obstacle_size" default="0.8" />
+  <arg name="dynamic_obstacle_velocity" default="0.8" />
+  <arg name="start_validator" default="true" />
+  <arg name="start_collector" default="false" />
+  <arg name="collection_scenario" default="static" />
+  <arg name="collection_root" default="results/lv_dot_raw_collection" />
+  <arg name="raw_filename" default="obstacle_raw.csv" />
+  <arg name="expected_gt_count" default="1" />
+  <arg name="box_collection" default="false" />
+  <arg name="box_config" default="$(find coni_mpc)/parameters/lv_dot_box_collection.yaml" />
+  <arg name="static_box_gt" default="false" />
+  <arg name="deterministic_box_mode" default="false" />
+  <arg name="visible_gt_debug" default="false" />
+  <arg name="start_visible_gt_collector" default="false" />
+  <arg name="visible_gt_result_root" default="results/visible_gt_vs_lvdot" />
+  <arg name="visible_gt_target_frames" default="0" />
+  <arg name="start_rviz" default="false" />
+  <arg name="start_world_rviz" default="false" />
+
+  <rosparam if="$(arg box_collection)" command="load" file="$(arg box_config)"
+            ns="/box_validation" />
+
+  <node pkg="map_generator" name="lv_dot_map_pub" type="map_pub"
+        output="log" args="$(arg map_name)">
+    <param name="add_boundary" value="0" />
+    <param name="is_bridge" value="0" />
+    <param name="downsample_res" value="0.1" />
+    <param name="map_offset_x" value="0.0" />
+    <param name="map_offset_y" value="0.0" />
+    <param name="map_offset_z" value="0.0" />
+  </node>
+
+  <node pkg="local_sensing_node" type="pcl_render_node"
+        name="quad0_pcl_render_node" output="log">
+    <remap from="~global_map" to="/map_generator/global_cloud" />
+    <remap from="~odometry" to="/coni_mpc/quad_odom1" />
+    <param name="drone_id" value="0" />
+    <param name="quadrotor_name" value="lv_dot_quad0" />
+    <param name="uav_num" value="1" />
+    <param name="is_360lidar" value="1" />
+    <param name="sensing_horizon" value="15.0" />
+    <param name="sensing_rate" value="10.0" />
+    <param name="estimation_rate" value="10.0" />
+    <param name="polar_resolution" value="0.2" />
+    <param name="yaw_fov" value="360.0" />
+    <param name="vertical_fov" value="90.0" />
+    <param name="min_raylength" value="0.1" />
+    <param name="livox_linestep" value="1.4" />
+    <param name="curvature_limit" value="100.0" />
+    <param name="hash_cubesize" value="5.0" />
+    <param name="use_avia_pattern" value="0" />
+    <param name="use_vlp32_pattern" value="0" />
+    <param name="use_minicf_pattern" value="1" />
+    <param name="use_os128_pattern" value="0" />
+    <param name="downsample_res" value="0.1" />
+    <param name="dynobj_enable"
+           value="$(eval 1 if arg('dynamic_obstacles') else 0)" />
+    <param name="dynobject_size" value="$(arg dynamic_obstacle_size)" />
+    <param name="dynobject_num" value="$(arg dynamic_obstacle_count)" />
+    <param name="dyn_mode" value="0" />
+    <param name="dyn_velocity" value="$(arg dynamic_obstacle_velocity)" />
+    <param name="deterministic_box_mode" value="$(arg deterministic_box_mode)" />
+    <param name="visible_gt_debug_enable" value="$(arg visible_gt_debug)" />
+    <param name="use_uav_extra_model" value="0" />
+    <param name="collisioncheck_enable" value="0" />
+    <param name="collision_range" value="0.3" />
+    <param name="output_pcd" value="0" />
+  </node>
+
+  <node if="$(arg start_visible_gt_collector)" pkg="coni_mpc"
+        type="collect_visible_gt_vs_lvdot.py" name="visible_gt_vs_lvdot_collector"
+        output="screen" required="true">
+    <param name="result_root" value="$(arg visible_gt_result_root)" />
+    <param name="duration_sec" value="$(arg duration_sec)" />
+    <param name="warmup_sec" value="$(arg warmup_sec)" />
+    <param name="target_frames" value="$(arg visible_gt_target_frames)" />
+  </node>
+
+  <node if="$(arg static_box_gt)" pkg="coni_mpc" type="publish_static_box_gt.py"
+        name="static_box_gt_publisher" output="log" />
+
+  <node pkg="coni_mpc" type="lv_dot_validation_pose.py"
+        name="lv_dot_validation_pose" output="log">
+    <param name="motion" value="$(arg motion)" />
+    <param name="duration_sec" value="$(arg duration_sec)" />
+    <param name="warmup_sec" value="$(arg warmup_sec)" />
+  </node>
+
+  <rosparam command="load" file="$(find coni_mpc)/parameters/lv_dot_marsim.yaml"
+            ns="/onboard_detector" />
+  <node pkg="onboard_detector" type="detector_node"
+        name="lv_dot_detector" output="log" />
+
+  <node if="$(arg start_validator)" pkg="coni_mpc"
+        type="validate_lv_dot_mid360.py" name="lv_dot_mid360_validator"
+        output="screen" required="true">
+    <param name="duration_sec" value="$(arg duration_sec)" />
+    <param name="warmup_sec" value="$(arg warmup_sec)" />
+    <param name="expect_dynamic" value="$(arg dynamic_obstacles)" />
+    <param name="result_file" value="$(arg result_file)" />
+  </node>
+
+  <node if="$(arg start_collector)" pkg="coni_mpc"
+        type="collect_lv_dot_raw.py" name="lv_dot_raw_collector"
+        output="screen" required="true">
+    <param name="scenario" value="$(arg collection_scenario)" />
+    <param name="collection_root" value="$(arg collection_root)" />
+    <param name="duration_sec" value="$(arg duration_sec)" />
+    <param name="warmup_sec" value="$(arg warmup_sec)" />
+    <param name="motion" value="$(arg motion)" />
+    <param name="map_name" value="$(arg map_name)" />
+    <param name="dynamic_obstacles" value="$(arg dynamic_obstacles)" />
+    <param name="dynamic_obstacle_count" value="$(arg dynamic_obstacle_count)" />
+    <param name="dynamic_obstacle_size" value="$(arg dynamic_obstacle_size)" />
+    <param name="dynamic_obstacle_velocity" value="$(arg dynamic_obstacle_velocity)" />
+    <param name="raw_filename" value="$(arg raw_filename)" />
+    <param name="expected_gt_count" value="$(arg expected_gt_count)" />
+  </node>
+
+  <node if="$(arg start_rviz)" pkg="rviz" type="rviz"
+        name="lv_dot_rviz" args="-d $(find onboard_detector)/rviz/detector_lv.rviz" />
+
+  <group if="$(arg start_world_rviz)">
+    <node pkg="coni_mpc" type="lv_dot_world_visualizer.py"
+          name="lv_dot_world_visualizer" output="log" />
+    <node pkg="rviz" type="rviz" name="lv_dot_gt_world_rviz"
+          args="-d $(find coni_mpc)/rviz/lv_dot_gt_world.rviz" />
+  </group>
+</launch>

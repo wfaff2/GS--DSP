@@ -1,0 +1,74 @@
+<launch>
+  <!-- M1/M2 integration only: one UAV (UAV1), CPU Livox Mid-360, static PCD. -->
+  <arg name="map_name"
+       default="$(find map_generator)/resource/small_forest01cutoff.pcd" />
+  <arg name="downsample_resolution" default="0.1" />
+  <arg name="start_marsim" default="true" />
+  <!-- Preserved legacy path. Disabled by default now that LV-DOT is the
+       active perception-development path. Set true only for old M1/M2 runs. -->
+  <arg name="start_depth_cbf" default="false" />
+  <arg name="start_rviz" default="false" />
+
+  <group if="$(arg start_marsim)">
+    <node pkg="map_generator" name="depth_cbf_map_pub" type="map_pub"
+          output="screen" args="$(arg map_name)">
+      <param name="add_boundary" value="0" />
+      <param name="is_bridge" value="0" />
+      <param name="downsample_res" value="$(arg downsample_resolution)" />
+      <param name="map_offset_x" value="0.0" />
+      <param name="map_offset_y" value="0.0" />
+      <param name="map_offset_z" value="0.0" />
+    </node>
+
+    <!-- Deliberately do not include MARSIM single_drone.xml: it would also
+         start MARSIM dynamics/PID. This is the MARSIM CPU Mid-360 renderer only. -->
+    <node pkg="local_sensing_node" type="pcl_render_node"
+          name="quad0_pcl_render_node" output="screen">
+      <remap from="~global_map" to="/map_generator/global_cloud" />
+      <remap from="~odometry" to="/coni_mpc/quad_odom1" />
+      <param name="drone_id" value="0" />
+      <param name="quadrotor_name" value="uav_1" />
+      <param name="uav_num" value="1" />
+      <param name="is_360lidar" value="1" />
+      <param name="sensing_horizon" value="15.0" />
+      <param name="sensing_rate" value="10.0" />
+      <param name="estimation_rate" value="10.0" />
+      <param name="polar_resolution" value="0.2" />
+      <param name="yaw_fov" value="360.0" />
+      <param name="vertical_fov" value="90.0" />
+      <param name="min_raylength" value="0.1" />
+      <param name="livox_linestep" value="1.4" />
+      <param name="curvature_limit" value="100.0" />
+      <param name="hash_cubesize" value="5.0" />
+      <param name="use_avia_pattern" value="0" />
+      <param name="use_vlp32_pattern" value="0" />
+      <param name="use_minicf_pattern" value="1" />
+      <param name="use_os128_pattern" value="0" />
+      <param name="downsample_res" value="$(arg downsample_resolution)" />
+      <param name="dynobj_enable" value="0" />
+      <param name="dynobject_size" value="0.8" />
+      <param name="dynobject_num" value="0" />
+      <param name="dyn_mode" value="0" />
+      <param name="dyn_velocity" value="0.0" />
+      <param name="use_uav_extra_model" value="0" />
+      <param name="collisioncheck_enable" value="0" />
+      <param name="collision_range" value="0.3" />
+      <param name="output_pcd" value="0" />
+    </node>
+  </group>
+
+  <group if="$(arg start_depth_cbf)">
+    <node pkg="coni_mpc" type="marsim_cloud_preprocessor_node"
+          name="depth_cbf_cloud_preprocessor" output="screen">
+      <rosparam command="load" file="$(find coni_mpc)/parameters/depth_cbf.yaml" />
+    </node>
+
+    <node pkg="coni_mpc" type="depth_cbf_regression_node"
+          name="depth_cbf_regression" output="screen">
+      <rosparam command="load" file="$(find coni_mpc)/parameters/depth_cbf.yaml" />
+    </node>
+  </group>
+
+  <node if="$(arg start_rviz)" pkg="rviz" type="rviz"
+        name="depth_cbf_rviz" args="-d $(find coni_mpc)/rviz/depth_cbf_m1_m2.rviz" />
+</launch>

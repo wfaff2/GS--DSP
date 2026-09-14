@@ -1,0 +1,2 @@
+LV-DOT/onboard_detector:MARSIM/Utils/mars_quadrotor_msgs:MARSIM/Utils/odom_visualization:MARSIM/Utils/pose_utils:MARSIM/Utils/rviz_plugins:MARSIM/Utils/uav_utils:MARSIM/Utils/waypoint_generator:MARSIM/cascadePID:MARSIM/local_sensing:MARSIM/map_generator:MARSIM/mars_drone_sim:MARSIM/test_interface:coni_mpc:vision_msgs
+-DCATKIN_DEVEL_PREFIX=/home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/devel -DCMAKE_INSTALL_PREFIX=/home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/install -G Unix Makefiles

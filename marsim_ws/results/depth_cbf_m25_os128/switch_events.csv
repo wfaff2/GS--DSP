@@ -1,0 +1,4 @@
+run_id,cloud_stamp,nearest_obstacle_id,uav_x,uav_y
+A4_switch_oblique,1789300179.15,1,3.03040830021,0.0721106694395
+A4_switch_parallel,1789300170.64,1,3.35,0.0721029332267
+A4_switch_switching,1789300187.65,1,2.8,0.0722115712818

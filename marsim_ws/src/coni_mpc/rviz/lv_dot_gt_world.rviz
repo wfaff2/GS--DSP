@@ -1,0 +1,93 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+  - Class: rviz/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Background Color: 38; 42; 48
+    Fixed Frame: world
+    Frame Rate: 30
+  Displays:
+    - Class: rviz/Grid
+      Name: Ground Grid
+      Enabled: true
+      Plane: XY
+      Cell Size: 1
+      Plane Cell Count: 30
+      Alpha: 0.35
+      Color: 110; 115; 125
+    - Class: rviz/Axes
+      Name: World Axes
+      Enabled: true
+      Reference Frame: world
+      Length: 1
+      Radius: 0.03
+    - Class: rviz/MarkerArray
+      Name: Solid GT World
+      Enabled: true
+      Marker Topic: /box_validation/world_markers
+      Queue Size: 10
+    - Class: rviz/PointCloud2
+      Name: Mid-360 Actual Returns
+      Enabled: true
+      Topic: /quad0_pcl_render_node/cloud
+      Queue Size: 10
+      Unreliable: false
+      Selectable: true
+      Style: Flat Squares
+      Size (Pixels): 3
+      Size (m): 0.025
+      Alpha: 1
+      Position Transformer: XYZ
+      Color Transformer: FlatColor
+      Color: 0; 220; 255
+      Use Fixed Frame: true
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Min Value: -10
+        Max Value: 10
+        Value: true
+    - Class: rviz/PointCloud2
+      Name: Visible GT Box Returns
+      Enabled: true
+      Topic: /quad0_pcl_render_node/visible_gt_points
+      Queue Size: 10
+      Unreliable: false
+      Selectable: true
+      Style: Spheres
+      Size (Pixels): 4
+      Size (m): 0.04
+      Alpha: 1
+      Position Transformer: XYZ
+      Color Transformer: FlatColor
+      Color: 80; 255; 80
+      Use Fixed Frame: true
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Min Value: -10
+        Max Value: 10
+        Value: true
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Name: GT World View
+      Target Frame: world
+      Distance: 10
+      Pitch: 0.55
+      Yaw: 0.8
+      Focal Point:
+        X: 3.8
+        Y: 0
+        Z: 1.2
+Window Geometry:
+  Height: 850
+  Width: 1100
+  X: 40
+  Y: 40

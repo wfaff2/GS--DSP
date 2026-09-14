@@ -1,0 +1,1213 @@
+timestamp,scenario,frame_index,event_type,obstacle_id,tracking_id,lvdot_slot_id,details
+1789354295.129108667,static,1,track_created,,0,,collector track created
+1789354319.788382053,dynamic,0,gt_teleport,1,,,same MARSIM ID moved more than 1.0 m between GT messages
+1789354319.788382053,dynamic,0,gt_teleport,12,,,same MARSIM ID moved more than 1.0 m between GT messages
+1789354319.894652128,dynamic,1,track_created,,0,,collector track created
+1789354319.894652128,dynamic,1,track_created,,1,,collector track created
+1789354319.894652128,dynamic,1,track_created,,2,,collector track created
+1789354319.894652128,dynamic,1,track_created,,3,,collector track created
+1789354319.894652128,dynamic,1,track_created,,4,,collector track created
+1789354319.894652128,dynamic,1,track_created,,5,,collector track created
+1789354319.894652128,dynamic,1,track_created,,6,,collector track created
+1789354319.894652128,dynamic,1,track_created,,7,,collector track created
+1789354319.894652128,dynamic,1,unmatched_detection,,1,1,no GT within 1.5 m
+1789354319.894652128,dynamic,1,unmatched_detection,,2,2,no GT within 1.5 m
+1789354319.894652128,dynamic,1,unmatched_gt,1,,,no LV-DOT estimate within 1.5 m
+1789354319.894652128,dynamic,1,unmatched_gt,3,,,no LV-DOT estimate within 1.5 m
+1789354319.894652128,dynamic,1,unmatched_gt,4,,,no LV-DOT estimate within 1.5 m
+1789354319.894652128,dynamic,1,unmatched_gt,5,,,no LV-DOT estimate within 1.5 m
+1789354319.894652128,dynamic,1,unmatched_gt,6,,,no LV-DOT estimate within 1.5 m
+1789354319.894652128,dynamic,1,unmatched_gt,7,,,no LV-DOT estimate within 1.5 m
+1789354319.894652128,dynamic,1,unmatched_gt,8,,,no LV-DOT estimate within 1.5 m
+1789354319.894652128,dynamic,1,unmatched_gt,9,,,no LV-DOT estimate within 1.5 m
+1789354319.894652128,dynamic,1,unmatched_gt,10,,,no LV-DOT estimate within 1.5 m
+1789354319.894652128,dynamic,1,unmatched_gt,12,,,no LV-DOT estimate within 1.5 m
+1789354319.894652128,dynamic,1,unmatched_gt,14,,,no LV-DOT estimate within 1.5 m
+1789354319.894652128,dynamic,1,unmatched_gt,17,,,no LV-DOT estimate within 1.5 m
+1789354319.894652128,dynamic,1,unmatched_gt,18,,,no LV-DOT estimate within 1.5 m
+1789354319.894652128,dynamic,1,unmatched_gt,19,,,no LV-DOT estimate within 1.5 m
+1789354319.983521223,dynamic,2,id_switch,16,1,3,previous tracking_id=3
+1789354319.983521223,dynamic,2,unmatched_gt,1,,,no LV-DOT estimate within 1.5 m
+1789354319.983521223,dynamic,2,unmatched_gt,2,,,no LV-DOT estimate within 1.5 m
+1789354319.983521223,dynamic,2,unmatched_gt,3,,,no LV-DOT estimate within 1.5 m
+1789354319.983521223,dynamic,2,unmatched_gt,4,,,no LV-DOT estimate within 1.5 m
+1789354319.983521223,dynamic,2,unmatched_gt,5,,,no LV-DOT estimate within 1.5 m
+1789354319.983521223,dynamic,2,unmatched_gt,6,,,no LV-DOT estimate within 1.5 m
+1789354319.983521223,dynamic,2,unmatched_gt,7,,,no LV-DOT estimate within 1.5 m
+1789354319.983521223,dynamic,2,unmatched_gt,8,,,no LV-DOT estimate within 1.5 m
+1789354319.983521223,dynamic,2,unmatched_gt,9,,,no LV-DOT estimate within 1.5 m
+1789354319.983521223,dynamic,2,unmatched_gt,10,,,no LV-DOT estimate within 1.5 m
+1789354319.983521223,dynamic,2,unmatched_gt,12,,,no LV-DOT estimate within 1.5 m
+1789354319.983521223,dynamic,2,unmatched_gt,14,,,no LV-DOT estimate within 1.5 m
+1789354319.983521223,dynamic,2,unmatched_gt,17,,,no LV-DOT estimate within 1.5 m
+1789354319.983521223,dynamic,2,unmatched_gt,18,,,no LV-DOT estimate within 1.5 m
+1789354319.983521223,dynamic,2,unmatched_gt,19,,,no LV-DOT estimate within 1.5 m
+1789354319.988417625,dynamic,2,gt_teleport,5,,,same MARSIM ID moved more than 1.0 m between GT messages
+1789354319.988417625,dynamic,2,gt_teleport,7,,,same MARSIM ID moved more than 1.0 m between GT messages
+1789354320.071479321,dynamic,3,unmatched_gt,0,,,no LV-DOT estimate within 1.5 m
+1789354320.071479321,dynamic,3,unmatched_gt,1,,,no LV-DOT estimate within 1.5 m
+1789354320.071479321,dynamic,3,unmatched_gt,2,,,no LV-DOT estimate within 1.5 m
+1789354320.071479321,dynamic,3,unmatched_gt,3,,,no LV-DOT estimate within 1.5 m
+1789354320.071479321,dynamic,3,unmatched_gt,4,,,no LV-DOT estimate within 1.5 m
+1789354320.071479321,dynamic,3,unmatched_gt,5,,,no LV-DOT estimate within 1.5 m
+1789354320.071479321,dynamic,3,unmatched_gt,6,,,no LV-DOT estimate within 1.5 m
+1789354320.071479321,dynamic,3,unmatched_gt,7,,,no LV-DOT estimate within 1.5 m
+1789354320.071479321,dynamic,3,unmatched_gt,8,,,no LV-DOT estimate within 1.5 m
+1789354320.071479321,dynamic,3,unmatched_gt,9,,,no LV-DOT estimate within 1.5 m
+1789354320.071479321,dynamic,3,unmatched_gt,10,,,no LV-DOT estimate within 1.5 m
+1789354320.071479321,dynamic,3,unmatched_gt,12,,,no LV-DOT estimate within 1.5 m
+1789354320.071479321,dynamic,3,unmatched_gt,14,,,no LV-DOT estimate within 1.5 m
+1789354320.071479321,dynamic,3,unmatched_gt,16,,,no LV-DOT estimate within 1.5 m
+1789354320.071479321,dynamic,3,unmatched_gt,17,,,no LV-DOT estimate within 1.5 m
+1789354320.071479321,dynamic,3,unmatched_gt,18,,,no LV-DOT estimate within 1.5 m
+1789354320.071479321,dynamic,3,unmatched_gt,19,,,no LV-DOT estimate within 1.5 m
+1789354320.171154737,dynamic,4,unmatched_gt,0,,,no LV-DOT estimate within 1.5 m
+1789354320.171154737,dynamic,4,unmatched_gt,1,,,no LV-DOT estimate within 1.5 m
+1789354320.171154737,dynamic,4,unmatched_gt,2,,,no LV-DOT estimate within 1.5 m
+1789354320.171154737,dynamic,4,unmatched_gt,3,,,no LV-DOT estimate within 1.5 m
+1789354320.171154737,dynamic,4,unmatched_gt,4,,,no LV-DOT estimate within 1.5 m
+1789354320.171154737,dynamic,4,unmatched_gt,5,,,no LV-DOT estimate within 1.5 m
+1789354320.171154737,dynamic,4,unmatched_gt,6,,,no LV-DOT estimate within 1.5 m
+1789354320.171154737,dynamic,4,unmatched_gt,7,,,no LV-DOT estimate within 1.5 m
+1789354320.171154737,dynamic,4,unmatched_gt,8,,,no LV-DOT estimate within 1.5 m
+1789354320.171154737,dynamic,4,unmatched_gt,9,,,no LV-DOT estimate within 1.5 m
+1789354320.171154737,dynamic,4,unmatched_gt,10,,,no LV-DOT estimate within 1.5 m
+1789354320.171154737,dynamic,4,unmatched_gt,11,,,no LV-DOT estimate within 1.5 m
+1789354320.171154737,dynamic,4,unmatched_gt,12,,,no LV-DOT estimate within 1.5 m
+1789354320.171154737,dynamic,4,unmatched_gt,13,,,no LV-DOT estimate within 1.5 m
+1789354320.171154737,dynamic,4,unmatched_gt,14,,,no LV-DOT estimate within 1.5 m
+1789354320.171154737,dynamic,4,unmatched_gt,16,,,no LV-DOT estimate within 1.5 m
+1789354320.171154737,dynamic,4,unmatched_gt,17,,,no LV-DOT estimate within 1.5 m
+1789354320.171154737,dynamic,4,unmatched_gt,18,,,no LV-DOT estimate within 1.5 m
+1789354320.171154737,dynamic,4,unmatched_gt,19,,,no LV-DOT estimate within 1.5 m
+1789354320.188337803,dynamic,4,gt_teleport,13,,,same MARSIM ID moved more than 1.0 m between GT messages
+1789354320.286039114,dynamic,5,track_lost,,0,,collector track exceeded missed-frame limit
+1789354320.286039114,dynamic,5,track_lost,,2,,collector track exceeded missed-frame limit
+1789354320.286039114,dynamic,5,track_lost,,3,,collector track exceeded missed-frame limit
+1789354320.286039114,dynamic,5,unmatched_gt,0,,,no LV-DOT estimate within 1.5 m
+1789354320.286039114,dynamic,5,unmatched_gt,1,,,no LV-DOT estimate within 1.5 m
+1789354320.286039114,dynamic,5,unmatched_gt,2,,,no LV-DOT estimate within 1.5 m
+1789354320.286039114,dynamic,5,unmatched_gt,3,,,no LV-DOT estimate within 1.5 m
+1789354320.286039114,dynamic,5,unmatched_gt,4,,,no LV-DOT estimate within 1.5 m
+1789354320.286039114,dynamic,5,unmatched_gt,5,,,no LV-DOT estimate within 1.5 m
+1789354320.286039114,dynamic,5,unmatched_gt,6,,,no LV-DOT estimate within 1.5 m
+1789354320.286039114,dynamic,5,unmatched_gt,7,,,no LV-DOT estimate within 1.5 m
+1789354320.286039114,dynamic,5,unmatched_gt,8,,,no LV-DOT estimate within 1.5 m
+1789354320.286039114,dynamic,5,unmatched_gt,9,,,no LV-DOT estimate within 1.5 m
+1789354320.286039114,dynamic,5,unmatched_gt,10,,,no LV-DOT estimate within 1.5 m
+1789354320.286039114,dynamic,5,unmatched_gt,11,,,no LV-DOT estimate within 1.5 m
+1789354320.286039114,dynamic,5,unmatched_gt,12,,,no LV-DOT estimate within 1.5 m
+1789354320.286039114,dynamic,5,unmatched_gt,13,,,no LV-DOT estimate within 1.5 m
+1789354320.286039114,dynamic,5,unmatched_gt,14,,,no LV-DOT estimate within 1.5 m
+1789354320.286039114,dynamic,5,unmatched_gt,16,,,no LV-DOT estimate within 1.5 m
+1789354320.286039114,dynamic,5,unmatched_gt,17,,,no LV-DOT estimate within 1.5 m
+1789354320.286039114,dynamic,5,unmatched_gt,18,,,no LV-DOT estimate within 1.5 m
+1789354320.286039114,dynamic,5,unmatched_gt,19,,,no LV-DOT estimate within 1.5 m
+1789354320.288353205,dynamic,5,gt_teleport,17,,,same MARSIM ID moved more than 1.0 m between GT messages
+1789354320.373742819,dynamic,6,track_lost,,1,,collector track exceeded missed-frame limit
+1789354320.373742819,dynamic,6,track_created,,8,,collector track created
+1789354320.373742819,dynamic,6,track_created,,9,,collector track created
+1789354320.373742819,dynamic,6,id_switch,2,8,2,previous tracking_id=0
+1789354320.373742819,dynamic,6,unmatched_gt,1,,,no LV-DOT estimate within 1.5 m
+1789354320.373742819,dynamic,6,unmatched_gt,3,,,no LV-DOT estimate within 1.5 m
+1789354320.373742819,dynamic,6,unmatched_gt,4,,,no LV-DOT estimate within 1.5 m
+1789354320.373742819,dynamic,6,unmatched_gt,5,,,no LV-DOT estimate within 1.5 m
+1789354320.373742819,dynamic,6,unmatched_gt,6,,,no LV-DOT estimate within 1.5 m
+1789354320.373742819,dynamic,6,unmatched_gt,8,,,no LV-DOT estimate within 1.5 m
+1789354320.373742819,dynamic,6,unmatched_gt,9,,,no LV-DOT estimate within 1.5 m
+1789354320.373742819,dynamic,6,unmatched_gt,10,,,no LV-DOT estimate within 1.5 m
+1789354320.373742819,dynamic,6,unmatched_gt,12,,,no LV-DOT estimate within 1.5 m
+1789354320.373742819,dynamic,6,unmatched_gt,13,,,no LV-DOT estimate within 1.5 m
+1789354320.373742819,dynamic,6,unmatched_gt,14,,,no LV-DOT estimate within 1.5 m
+1789354320.373742819,dynamic,6,unmatched_gt,16,,,no LV-DOT estimate within 1.5 m
+1789354320.373742819,dynamic,6,unmatched_gt,17,,,no LV-DOT estimate within 1.5 m
+1789354320.373742819,dynamic,6,unmatched_gt,18,,,no LV-DOT estimate within 1.5 m
+1789354320.373742819,dynamic,6,unmatched_gt,19,,,no LV-DOT estimate within 1.5 m
+1789354320.473639250,dynamic,7,track_lost,,7,,collector track exceeded missed-frame limit
+1789354320.473639250,dynamic,7,unmatched_gt,0,,,no LV-DOT estimate within 1.5 m
+1789354320.473639250,dynamic,7,unmatched_gt,1,,,no LV-DOT estimate within 1.5 m
+1789354320.473639250,dynamic,7,unmatched_gt,2,,,no LV-DOT estimate within 1.5 m
+1789354320.473639250,dynamic,7,unmatched_gt,3,,,no LV-DOT estimate within 1.5 m
+1789354320.473639250,dynamic,7,unmatched_gt,4,,,no LV-DOT estimate within 1.5 m
+1789354320.473639250,dynamic,7,unmatched_gt,5,,,no LV-DOT estimate within 1.5 m
+1789354320.473639250,dynamic,7,unmatched_gt,6,,,no LV-DOT estimate within 1.5 m
+1789354320.473639250,dynamic,7,unmatched_gt,7,,,no LV-DOT estimate within 1.5 m
+1789354320.473639250,dynamic,7,unmatched_gt,8,,,no LV-DOT estimate within 1.5 m
+1789354320.473639250,dynamic,7,unmatched_gt,9,,,no LV-DOT estimate within 1.5 m
+1789354320.473639250,dynamic,7,unmatched_gt,10,,,no LV-DOT estimate within 1.5 m
+1789354320.473639250,dynamic,7,unmatched_gt,12,,,no LV-DOT estimate within 1.5 m
+1789354320.473639250,dynamic,7,unmatched_gt,13,,,no LV-DOT estimate within 1.5 m
+1789354320.473639250,dynamic,7,unmatched_gt,14,,,no LV-DOT estimate within 1.5 m
+1789354320.473639250,dynamic,7,unmatched_gt,16,,,no LV-DOT estimate within 1.5 m
+1789354320.473639250,dynamic,7,unmatched_gt,17,,,no LV-DOT estimate within 1.5 m
+1789354320.473639250,dynamic,7,unmatched_gt,18,,,no LV-DOT estimate within 1.5 m
+1789354320.473639250,dynamic,7,unmatched_gt,19,,,no LV-DOT estimate within 1.5 m
+1789354320.571683407,dynamic,8,track_created,,10,,collector track created
+1789354320.571683407,dynamic,8,track_created,,11,,collector track created
+1789354320.571683407,dynamic,8,unmatched_detection,,10,0,no GT within 1.5 m
+1789354320.571683407,dynamic,8,unmatched_detection,,8,1,no GT within 1.5 m
+1789354320.571683407,dynamic,8,unmatched_detection,,11,2,no GT within 1.5 m
+1789354320.571683407,dynamic,8,unmatched_detection,,5,3,no GT within 1.5 m
+1789354320.571683407,dynamic,8,unmatched_detection,,9,4,no GT within 1.5 m
+1789354320.671671152,dynamic,9,unmatched_detection,,10,0,no GT within 1.5 m
+1789354320.671671152,dynamic,9,unmatched_detection,,8,1,no GT within 1.5 m
+1789354320.671671152,dynamic,9,unmatched_detection,,11,2,no GT within 1.5 m
+1789354320.671671152,dynamic,9,unmatched_detection,,5,3,no GT within 1.5 m
+1789354320.671671152,dynamic,9,unmatched_detection,,9,4,no GT within 1.5 m
+1789354320.771241426,dynamic,10,track_lost,,4,,collector track exceeded missed-frame limit
+1789354320.771241426,dynamic,10,unmatched_detection,,10,0,no GT within 1.5 m
+1789354320.771241426,dynamic,10,unmatched_detection,,8,1,no GT within 1.5 m
+1789354320.771241426,dynamic,10,unmatched_detection,,11,2,no GT within 1.5 m
+1789354320.771241426,dynamic,10,unmatched_detection,,5,3,no GT within 1.5 m
+1789354320.771241426,dynamic,10,unmatched_detection,,9,4,no GT within 1.5 m
+1789354320.871631622,dynamic,11,track_lost,,6,,collector track exceeded missed-frame limit
+1789354320.871631622,dynamic,11,unmatched_detection,,10,0,no GT within 1.5 m
+1789354320.871631622,dynamic,11,unmatched_detection,,8,1,no GT within 1.5 m
+1789354320.871631622,dynamic,11,unmatched_detection,,11,2,no GT within 1.5 m
+1789354320.871631622,dynamic,11,unmatched_detection,,5,3,no GT within 1.5 m
+1789354320.871631622,dynamic,11,unmatched_detection,,9,4,no GT within 1.5 m
+1789354320.971701145,dynamic,12,unmatched_detection,,10,0,no GT within 1.5 m
+1789354320.971701145,dynamic,12,unmatched_detection,,8,1,no GT within 1.5 m
+1789354320.971701145,dynamic,12,unmatched_detection,,11,2,no GT within 1.5 m
+1789354320.971701145,dynamic,12,unmatched_detection,,5,3,no GT within 1.5 m
+1789354320.971701145,dynamic,12,unmatched_detection,,9,4,no GT within 1.5 m
+1789354321.071616173,dynamic,13,unmatched_detection,,10,0,no GT within 1.5 m
+1789354321.071616173,dynamic,13,unmatched_detection,,8,1,no GT within 1.5 m
+1789354321.071616173,dynamic,13,unmatched_detection,,11,2,no GT within 1.5 m
+1789354321.071616173,dynamic,13,unmatched_detection,,5,3,no GT within 1.5 m
+1789354321.071616173,dynamic,13,unmatched_detection,,9,4,no GT within 1.5 m
+1789354321.171516418,dynamic,14,unmatched_detection,,10,0,no GT within 1.5 m
+1789354321.171516418,dynamic,14,unmatched_detection,,8,1,no GT within 1.5 m
+1789354321.171516418,dynamic,14,unmatched_detection,,11,2,no GT within 1.5 m
+1789354321.171516418,dynamic,14,unmatched_detection,,5,3,no GT within 1.5 m
+1789354321.171516418,dynamic,14,unmatched_detection,,9,4,no GT within 1.5 m
+1789354321.271311760,dynamic,15,unmatched_detection,,10,0,no GT within 1.5 m
+1789354321.271311760,dynamic,15,unmatched_detection,,8,1,no GT within 1.5 m
+1789354321.271311760,dynamic,15,unmatched_detection,,11,2,no GT within 1.5 m
+1789354321.271311760,dynamic,15,unmatched_detection,,5,3,no GT within 1.5 m
+1789354321.271311760,dynamic,15,unmatched_detection,,9,4,no GT within 1.5 m
+1789354321.371305466,dynamic,16,unmatched_detection,,10,0,no GT within 1.5 m
+1789354321.371305466,dynamic,16,unmatched_detection,,8,1,no GT within 1.5 m
+1789354321.371305466,dynamic,16,unmatched_detection,,11,2,no GT within 1.5 m
+1789354321.371305466,dynamic,16,unmatched_detection,,5,3,no GT within 1.5 m
+1789354321.371305466,dynamic,16,unmatched_detection,,9,4,no GT within 1.5 m
+1789354321.471323729,dynamic,17,unmatched_detection,,10,0,no GT within 1.5 m
+1789354321.471323729,dynamic,17,unmatched_detection,,8,1,no GT within 1.5 m
+1789354321.471323729,dynamic,17,unmatched_detection,,11,2,no GT within 1.5 m
+1789354321.471323729,dynamic,17,unmatched_detection,,5,3,no GT within 1.5 m
+1789354321.471323729,dynamic,17,unmatched_detection,,9,4,no GT within 1.5 m
+1789354321.571322203,dynamic,18,unmatched_detection,,10,0,no GT within 1.5 m
+1789354321.571322203,dynamic,18,unmatched_detection,,8,1,no GT within 1.5 m
+1789354321.571322203,dynamic,18,unmatched_detection,,11,2,no GT within 1.5 m
+1789354321.571322203,dynamic,18,unmatched_detection,,5,3,no GT within 1.5 m
+1789354321.571322203,dynamic,18,unmatched_detection,,9,4,no GT within 1.5 m
+1789354321.671309471,dynamic,19,unmatched_detection,,10,0,no GT within 1.5 m
+1789354321.671309471,dynamic,19,unmatched_detection,,8,1,no GT within 1.5 m
+1789354321.671309471,dynamic,19,unmatched_detection,,11,2,no GT within 1.5 m
+1789354321.671309471,dynamic,19,unmatched_detection,,5,3,no GT within 1.5 m
+1789354321.671309471,dynamic,19,unmatched_detection,,9,4,no GT within 1.5 m
+1789354321.771209717,dynamic,20,unmatched_detection,,10,0,no GT within 1.5 m
+1789354321.771209717,dynamic,20,unmatched_detection,,8,1,no GT within 1.5 m
+1789354321.771209717,dynamic,20,unmatched_detection,,11,2,no GT within 1.5 m
+1789354321.771209717,dynamic,20,unmatched_detection,,5,3,no GT within 1.5 m
+1789354321.771209717,dynamic,20,unmatched_detection,,9,4,no GT within 1.5 m
+1789354321.871592999,dynamic,21,unmatched_detection,,10,0,no GT within 1.5 m
+1789354321.871592999,dynamic,21,unmatched_detection,,8,1,no GT within 1.5 m
+1789354321.871592999,dynamic,21,unmatched_detection,,11,2,no GT within 1.5 m
+1789354321.871592999,dynamic,21,unmatched_detection,,5,3,no GT within 1.5 m
+1789354321.871592999,dynamic,21,unmatched_detection,,9,4,no GT within 1.5 m
+1789354321.971579552,dynamic,22,unmatched_detection,,10,0,no GT within 1.5 m
+1789354321.971579552,dynamic,22,unmatched_detection,,8,1,no GT within 1.5 m
+1789354321.971579552,dynamic,22,unmatched_detection,,11,2,no GT within 1.5 m
+1789354321.971579552,dynamic,22,unmatched_detection,,5,3,no GT within 1.5 m
+1789354321.971579552,dynamic,22,unmatched_detection,,9,4,no GT within 1.5 m
+1789354322.071669579,dynamic,23,unmatched_detection,,10,0,no GT within 1.5 m
+1789354322.071669579,dynamic,23,unmatched_detection,,8,1,no GT within 1.5 m
+1789354322.071669579,dynamic,23,unmatched_detection,,11,2,no GT within 1.5 m
+1789354322.071669579,dynamic,23,unmatched_detection,,5,3,no GT within 1.5 m
+1789354322.071669579,dynamic,23,unmatched_detection,,9,4,no GT within 1.5 m
+1789354322.171620369,dynamic,24,unmatched_detection,,10,0,no GT within 1.5 m
+1789354322.171620369,dynamic,24,unmatched_detection,,8,1,no GT within 1.5 m
+1789354322.171620369,dynamic,24,unmatched_detection,,11,2,no GT within 1.5 m
+1789354322.171620369,dynamic,24,unmatched_detection,,5,3,no GT within 1.5 m
+1789354322.171620369,dynamic,24,unmatched_detection,,9,4,no GT within 1.5 m
+1789354322.271595240,dynamic,25,unmatched_detection,,10,0,no GT within 1.5 m
+1789354322.271595240,dynamic,25,unmatched_detection,,8,1,no GT within 1.5 m
+1789354322.271595240,dynamic,25,unmatched_detection,,11,2,no GT within 1.5 m
+1789354322.271595240,dynamic,25,unmatched_detection,,5,3,no GT within 1.5 m
+1789354322.271595240,dynamic,25,unmatched_detection,,9,4,no GT within 1.5 m
+1789354322.371595144,dynamic,26,unmatched_detection,,10,0,no GT within 1.5 m
+1789354322.371595144,dynamic,26,unmatched_detection,,8,1,no GT within 1.5 m
+1789354322.371595144,dynamic,26,unmatched_detection,,11,2,no GT within 1.5 m
+1789354322.371595144,dynamic,26,unmatched_detection,,5,3,no GT within 1.5 m
+1789354322.371595144,dynamic,26,unmatched_detection,,9,4,no GT within 1.5 m
+1789354322.471585989,dynamic,27,unmatched_detection,,10,0,no GT within 1.5 m
+1789354322.471585989,dynamic,27,unmatched_detection,,8,1,no GT within 1.5 m
+1789354322.471585989,dynamic,27,unmatched_detection,,11,2,no GT within 1.5 m
+1789354322.471585989,dynamic,27,unmatched_detection,,5,3,no GT within 1.5 m
+1789354322.471585989,dynamic,27,unmatched_detection,,9,4,no GT within 1.5 m
+1789354322.571620464,dynamic,28,unmatched_detection,,10,0,no GT within 1.5 m
+1789354322.571620464,dynamic,28,unmatched_detection,,8,1,no GT within 1.5 m
+1789354322.571620464,dynamic,28,unmatched_detection,,11,2,no GT within 1.5 m
+1789354322.571620464,dynamic,28,unmatched_detection,,5,3,no GT within 1.5 m
+1789354322.571620464,dynamic,28,unmatched_detection,,9,4,no GT within 1.5 m
+1789354322.671553850,dynamic,29,unmatched_detection,,10,0,no GT within 1.5 m
+1789354322.671553850,dynamic,29,unmatched_detection,,8,1,no GT within 1.5 m
+1789354322.671553850,dynamic,29,unmatched_detection,,11,2,no GT within 1.5 m
+1789354322.671553850,dynamic,29,unmatched_detection,,5,3,no GT within 1.5 m
+1789354322.671553850,dynamic,29,unmatched_detection,,9,4,no GT within 1.5 m
+1789354322.771586895,dynamic,30,unmatched_detection,,10,0,no GT within 1.5 m
+1789354322.771586895,dynamic,30,unmatched_detection,,8,1,no GT within 1.5 m
+1789354322.771586895,dynamic,30,unmatched_detection,,11,2,no GT within 1.5 m
+1789354322.771586895,dynamic,30,unmatched_detection,,5,3,no GT within 1.5 m
+1789354322.771586895,dynamic,30,unmatched_detection,,9,4,no GT within 1.5 m
+1789354322.871634007,dynamic,31,unmatched_detection,,10,0,no GT within 1.5 m
+1789354322.871634007,dynamic,31,unmatched_detection,,8,1,no GT within 1.5 m
+1789354322.871634007,dynamic,31,unmatched_detection,,11,2,no GT within 1.5 m
+1789354322.871634007,dynamic,31,unmatched_detection,,5,3,no GT within 1.5 m
+1789354322.871634007,dynamic,31,unmatched_detection,,9,4,no GT within 1.5 m
+1789354322.971584320,dynamic,32,unmatched_detection,,10,0,no GT within 1.5 m
+1789354322.971584320,dynamic,32,unmatched_detection,,8,1,no GT within 1.5 m
+1789354322.971584320,dynamic,32,unmatched_detection,,11,2,no GT within 1.5 m
+1789354322.971584320,dynamic,32,unmatched_detection,,5,3,no GT within 1.5 m
+1789354322.971584320,dynamic,32,unmatched_detection,,9,4,no GT within 1.5 m
+1789354323.071572781,dynamic,33,unmatched_detection,,10,0,no GT within 1.5 m
+1789354323.071572781,dynamic,33,unmatched_detection,,8,1,no GT within 1.5 m
+1789354323.071572781,dynamic,33,unmatched_detection,,11,2,no GT within 1.5 m
+1789354323.071572781,dynamic,33,unmatched_detection,,5,3,no GT within 1.5 m
+1789354323.071572781,dynamic,33,unmatched_detection,,9,4,no GT within 1.5 m
+1789354323.171670675,dynamic,34,unmatched_detection,,10,0,no GT within 1.5 m
+1789354323.171670675,dynamic,34,unmatched_detection,,8,1,no GT within 1.5 m
+1789354323.171670675,dynamic,34,unmatched_detection,,11,2,no GT within 1.5 m
+1789354323.171670675,dynamic,34,unmatched_detection,,5,3,no GT within 1.5 m
+1789354323.171670675,dynamic,34,unmatched_detection,,9,4,no GT within 1.5 m
+1789354323.271665335,dynamic,35,unmatched_detection,,10,0,no GT within 1.5 m
+1789354323.271665335,dynamic,35,unmatched_detection,,8,1,no GT within 1.5 m
+1789354323.271665335,dynamic,35,unmatched_detection,,11,2,no GT within 1.5 m
+1789354323.271665335,dynamic,35,unmatched_detection,,5,3,no GT within 1.5 m
+1789354323.271665335,dynamic,35,unmatched_detection,,9,4,no GT within 1.5 m
+1789354323.371628046,dynamic,36,unmatched_detection,,10,0,no GT within 1.5 m
+1789354323.371628046,dynamic,36,unmatched_detection,,8,1,no GT within 1.5 m
+1789354323.371628046,dynamic,36,unmatched_detection,,11,2,no GT within 1.5 m
+1789354323.371628046,dynamic,36,unmatched_detection,,5,3,no GT within 1.5 m
+1789354323.371628046,dynamic,36,unmatched_detection,,9,4,no GT within 1.5 m
+1789354323.471626282,dynamic,37,unmatched_detection,,10,0,no GT within 1.5 m
+1789354323.471626282,dynamic,37,unmatched_detection,,8,1,no GT within 1.5 m
+1789354323.471626282,dynamic,37,unmatched_detection,,11,2,no GT within 1.5 m
+1789354323.471626282,dynamic,37,unmatched_detection,,5,3,no GT within 1.5 m
+1789354323.471626282,dynamic,37,unmatched_detection,,9,4,no GT within 1.5 m
+1789354323.571676970,dynamic,38,unmatched_detection,,10,0,no GT within 1.5 m
+1789354323.571676970,dynamic,38,unmatched_detection,,8,1,no GT within 1.5 m
+1789354323.571676970,dynamic,38,unmatched_detection,,11,2,no GT within 1.5 m
+1789354323.571676970,dynamic,38,unmatched_detection,,5,3,no GT within 1.5 m
+1789354323.571676970,dynamic,38,unmatched_detection,,9,4,no GT within 1.5 m
+1789354323.671725035,dynamic,39,unmatched_detection,,10,0,no GT within 1.5 m
+1789354323.671725035,dynamic,39,unmatched_detection,,8,1,no GT within 1.5 m
+1789354323.671725035,dynamic,39,unmatched_detection,,11,2,no GT within 1.5 m
+1789354323.671725035,dynamic,39,unmatched_detection,,5,3,no GT within 1.5 m
+1789354323.671725035,dynamic,39,unmatched_detection,,9,4,no GT within 1.5 m
+1789354323.771557093,dynamic,40,unmatched_detection,,10,0,no GT within 1.5 m
+1789354323.771557093,dynamic,40,unmatched_detection,,8,1,no GT within 1.5 m
+1789354323.771557093,dynamic,40,unmatched_detection,,11,2,no GT within 1.5 m
+1789354323.771557093,dynamic,40,unmatched_detection,,5,3,no GT within 1.5 m
+1789354323.771557093,dynamic,40,unmatched_detection,,9,4,no GT within 1.5 m
+1789354323.871573448,dynamic,41,unmatched_detection,,10,0,no GT within 1.5 m
+1789354323.871573448,dynamic,41,unmatched_detection,,8,1,no GT within 1.5 m
+1789354323.871573448,dynamic,41,unmatched_detection,,11,2,no GT within 1.5 m
+1789354323.871573448,dynamic,41,unmatched_detection,,5,3,no GT within 1.5 m
+1789354323.871573448,dynamic,41,unmatched_detection,,9,4,no GT within 1.5 m
+1789354323.971451283,dynamic,42,unmatched_detection,,10,0,no GT within 1.5 m
+1789354323.971451283,dynamic,42,unmatched_detection,,8,1,no GT within 1.5 m
+1789354323.971451283,dynamic,42,unmatched_detection,,11,2,no GT within 1.5 m
+1789354323.971451283,dynamic,42,unmatched_detection,,5,3,no GT within 1.5 m
+1789354323.971451283,dynamic,42,unmatched_detection,,9,4,no GT within 1.5 m
+1789354324.071355581,dynamic,43,unmatched_detection,,10,0,no GT within 1.5 m
+1789354324.071355581,dynamic,43,unmatched_detection,,8,1,no GT within 1.5 m
+1789354324.071355581,dynamic,43,unmatched_detection,,11,2,no GT within 1.5 m
+1789354324.071355581,dynamic,43,unmatched_detection,,5,3,no GT within 1.5 m
+1789354324.071355581,dynamic,43,unmatched_detection,,9,4,no GT within 1.5 m
+1789354324.171345472,dynamic,44,unmatched_detection,,10,0,no GT within 1.5 m
+1789354324.171345472,dynamic,44,unmatched_detection,,8,1,no GT within 1.5 m
+1789354324.171345472,dynamic,44,unmatched_detection,,11,2,no GT within 1.5 m
+1789354324.171345472,dynamic,44,unmatched_detection,,5,3,no GT within 1.5 m
+1789354324.171345472,dynamic,44,unmatched_detection,,9,4,no GT within 1.5 m
+1789354324.271351099,dynamic,45,unmatched_detection,,10,0,no GT within 1.5 m
+1789354324.271351099,dynamic,45,unmatched_detection,,8,1,no GT within 1.5 m
+1789354324.271351099,dynamic,45,unmatched_detection,,11,2,no GT within 1.5 m
+1789354324.271351099,dynamic,45,unmatched_detection,,5,3,no GT within 1.5 m
+1789354324.271351099,dynamic,45,unmatched_detection,,9,4,no GT within 1.5 m
+1789354324.371329784,dynamic,46,unmatched_detection,,10,0,no GT within 1.5 m
+1789354324.371329784,dynamic,46,unmatched_detection,,8,1,no GT within 1.5 m
+1789354324.371329784,dynamic,46,unmatched_detection,,11,2,no GT within 1.5 m
+1789354324.371329784,dynamic,46,unmatched_detection,,5,3,no GT within 1.5 m
+1789354324.371329784,dynamic,46,unmatched_detection,,9,4,no GT within 1.5 m
+1789354324.471347570,dynamic,47,unmatched_detection,,10,0,no GT within 1.5 m
+1789354324.471347570,dynamic,47,unmatched_detection,,8,1,no GT within 1.5 m
+1789354324.471347570,dynamic,47,unmatched_detection,,11,2,no GT within 1.5 m
+1789354324.471347570,dynamic,47,unmatched_detection,,5,3,no GT within 1.5 m
+1789354324.471347570,dynamic,47,unmatched_detection,,9,4,no GT within 1.5 m
+1789354324.571303368,dynamic,48,unmatched_detection,,10,0,no GT within 1.5 m
+1789354324.571303368,dynamic,48,unmatched_detection,,8,1,no GT within 1.5 m
+1789354324.571303368,dynamic,48,unmatched_detection,,11,2,no GT within 1.5 m
+1789354324.571303368,dynamic,48,unmatched_detection,,5,3,no GT within 1.5 m
+1789354324.571303368,dynamic,48,unmatched_detection,,9,4,no GT within 1.5 m
+1789354324.671358585,dynamic,49,unmatched_detection,,10,0,no GT within 1.5 m
+1789354324.671358585,dynamic,49,unmatched_detection,,8,1,no GT within 1.5 m
+1789354324.671358585,dynamic,49,unmatched_detection,,11,2,no GT within 1.5 m
+1789354324.671358585,dynamic,49,unmatched_detection,,5,3,no GT within 1.5 m
+1789354324.671358585,dynamic,49,unmatched_detection,,9,4,no GT within 1.5 m
+1789354324.771328926,dynamic,50,unmatched_detection,,10,0,no GT within 1.5 m
+1789354324.771328926,dynamic,50,unmatched_detection,,8,1,no GT within 1.5 m
+1789354324.771328926,dynamic,50,unmatched_detection,,11,2,no GT within 1.5 m
+1789354324.771328926,dynamic,50,unmatched_detection,,5,3,no GT within 1.5 m
+1789354324.771328926,dynamic,50,unmatched_detection,,9,4,no GT within 1.5 m
+1789354324.871333599,dynamic,51,unmatched_detection,,10,0,no GT within 1.5 m
+1789354324.871333599,dynamic,51,unmatched_detection,,8,1,no GT within 1.5 m
+1789354324.871333599,dynamic,51,unmatched_detection,,11,2,no GT within 1.5 m
+1789354324.871333599,dynamic,51,unmatched_detection,,5,3,no GT within 1.5 m
+1789354324.871333599,dynamic,51,unmatched_detection,,9,4,no GT within 1.5 m
+1789354324.971345901,dynamic,52,unmatched_detection,,10,0,no GT within 1.5 m
+1789354324.971345901,dynamic,52,unmatched_detection,,8,1,no GT within 1.5 m
+1789354324.971345901,dynamic,52,unmatched_detection,,11,2,no GT within 1.5 m
+1789354324.971345901,dynamic,52,unmatched_detection,,5,3,no GT within 1.5 m
+1789354324.971345901,dynamic,52,unmatched_detection,,9,4,no GT within 1.5 m
+1789354325.071362972,dynamic,53,unmatched_detection,,10,0,no GT within 1.5 m
+1789354325.071362972,dynamic,53,unmatched_detection,,8,1,no GT within 1.5 m
+1789354325.071362972,dynamic,53,unmatched_detection,,11,2,no GT within 1.5 m
+1789354325.071362972,dynamic,53,unmatched_detection,,5,3,no GT within 1.5 m
+1789354325.071362972,dynamic,53,unmatched_detection,,9,4,no GT within 1.5 m
+1789354325.171341658,dynamic,54,unmatched_detection,,10,0,no GT within 1.5 m
+1789354325.171341658,dynamic,54,unmatched_detection,,8,1,no GT within 1.5 m
+1789354325.171341658,dynamic,54,unmatched_detection,,11,2,no GT within 1.5 m
+1789354325.171341658,dynamic,54,unmatched_detection,,5,3,no GT within 1.5 m
+1789354325.171341658,dynamic,54,unmatched_detection,,9,4,no GT within 1.5 m
+1789354325.271413803,dynamic,55,unmatched_detection,,10,0,no GT within 1.5 m
+1789354325.271413803,dynamic,55,unmatched_detection,,8,1,no GT within 1.5 m
+1789354325.271413803,dynamic,55,unmatched_detection,,11,2,no GT within 1.5 m
+1789354325.271413803,dynamic,55,unmatched_detection,,5,3,no GT within 1.5 m
+1789354325.271413803,dynamic,55,unmatched_detection,,9,4,no GT within 1.5 m
+1789354325.371430635,dynamic,56,unmatched_detection,,10,0,no GT within 1.5 m
+1789354325.371430635,dynamic,56,unmatched_detection,,8,1,no GT within 1.5 m
+1789354325.371430635,dynamic,56,unmatched_detection,,11,2,no GT within 1.5 m
+1789354325.371430635,dynamic,56,unmatched_detection,,5,3,no GT within 1.5 m
+1789354325.371430635,dynamic,56,unmatched_detection,,9,4,no GT within 1.5 m
+1789354325.471390963,dynamic,57,unmatched_detection,,10,0,no GT within 1.5 m
+1789354325.471390963,dynamic,57,unmatched_detection,,8,1,no GT within 1.5 m
+1789354325.471390963,dynamic,57,unmatched_detection,,11,2,no GT within 1.5 m
+1789354325.471390963,dynamic,57,unmatched_detection,,5,3,no GT within 1.5 m
+1789354325.471390963,dynamic,57,unmatched_detection,,9,4,no GT within 1.5 m
+1789354325.571363449,dynamic,58,unmatched_detection,,10,0,no GT within 1.5 m
+1789354325.571363449,dynamic,58,unmatched_detection,,8,1,no GT within 1.5 m
+1789354325.571363449,dynamic,58,unmatched_detection,,11,2,no GT within 1.5 m
+1789354325.571363449,dynamic,58,unmatched_detection,,5,3,no GT within 1.5 m
+1789354325.571363449,dynamic,58,unmatched_detection,,9,4,no GT within 1.5 m
+1789354325.671335459,dynamic,59,unmatched_detection,,10,0,no GT within 1.5 m
+1789354325.671335459,dynamic,59,unmatched_detection,,8,1,no GT within 1.5 m
+1789354325.671335459,dynamic,59,unmatched_detection,,11,2,no GT within 1.5 m
+1789354325.671335459,dynamic,59,unmatched_detection,,5,3,no GT within 1.5 m
+1789354325.671335459,dynamic,59,unmatched_detection,,9,4,no GT within 1.5 m
+1789354325.771338463,dynamic,60,unmatched_detection,,10,0,no GT within 1.5 m
+1789354325.771338463,dynamic,60,unmatched_detection,,8,1,no GT within 1.5 m
+1789354325.771338463,dynamic,60,unmatched_detection,,11,2,no GT within 1.5 m
+1789354325.771338463,dynamic,60,unmatched_detection,,5,3,no GT within 1.5 m
+1789354325.771338463,dynamic,60,unmatched_detection,,9,4,no GT within 1.5 m
+1789354325.871344090,dynamic,61,unmatched_detection,,10,0,no GT within 1.5 m
+1789354325.871344090,dynamic,61,unmatched_detection,,8,1,no GT within 1.5 m
+1789354325.871344090,dynamic,61,unmatched_detection,,11,2,no GT within 1.5 m
+1789354325.871344090,dynamic,61,unmatched_detection,,5,3,no GT within 1.5 m
+1789354325.871344090,dynamic,61,unmatched_detection,,9,4,no GT within 1.5 m
+1789354325.971342087,dynamic,62,unmatched_detection,,10,0,no GT within 1.5 m
+1789354325.971342087,dynamic,62,unmatched_detection,,8,1,no GT within 1.5 m
+1789354325.971342087,dynamic,62,unmatched_detection,,11,2,no GT within 1.5 m
+1789354325.971342087,dynamic,62,unmatched_detection,,5,3,no GT within 1.5 m
+1789354325.971342087,dynamic,62,unmatched_detection,,9,4,no GT within 1.5 m
+1789354326.071321249,dynamic,63,unmatched_detection,,10,0,no GT within 1.5 m
+1789354326.071321249,dynamic,63,unmatched_detection,,8,1,no GT within 1.5 m
+1789354326.071321249,dynamic,63,unmatched_detection,,11,2,no GT within 1.5 m
+1789354326.071321249,dynamic,63,unmatched_detection,,5,3,no GT within 1.5 m
+1789354326.071321249,dynamic,63,unmatched_detection,,9,4,no GT within 1.5 m
+1789354326.171467304,dynamic,64,unmatched_detection,,10,0,no GT within 1.5 m
+1789354326.171467304,dynamic,64,unmatched_detection,,8,1,no GT within 1.5 m
+1789354326.171467304,dynamic,64,unmatched_detection,,11,2,no GT within 1.5 m
+1789354326.171467304,dynamic,64,unmatched_detection,,5,3,no GT within 1.5 m
+1789354326.171467304,dynamic,64,unmatched_detection,,9,4,no GT within 1.5 m
+1789354326.271339417,dynamic,65,unmatched_detection,,10,0,no GT within 1.5 m
+1789354326.271339417,dynamic,65,unmatched_detection,,8,1,no GT within 1.5 m
+1789354326.271339417,dynamic,65,unmatched_detection,,11,2,no GT within 1.5 m
+1789354326.271339417,dynamic,65,unmatched_detection,,5,3,no GT within 1.5 m
+1789354326.271339417,dynamic,65,unmatched_detection,,9,4,no GT within 1.5 m
+1789354326.371347189,dynamic,66,unmatched_detection,,10,0,no GT within 1.5 m
+1789354326.371347189,dynamic,66,unmatched_detection,,8,1,no GT within 1.5 m
+1789354326.371347189,dynamic,66,unmatched_detection,,11,2,no GT within 1.5 m
+1789354326.371347189,dynamic,66,unmatched_detection,,5,3,no GT within 1.5 m
+1789354326.371347189,dynamic,66,unmatched_detection,,9,4,no GT within 1.5 m
+1789354326.471332073,dynamic,67,unmatched_detection,,10,0,no GT within 1.5 m
+1789354326.471332073,dynamic,67,unmatched_detection,,8,1,no GT within 1.5 m
+1789354326.471332073,dynamic,67,unmatched_detection,,11,2,no GT within 1.5 m
+1789354326.471332073,dynamic,67,unmatched_detection,,5,3,no GT within 1.5 m
+1789354326.471332073,dynamic,67,unmatched_detection,,9,4,no GT within 1.5 m
+1789354326.571345329,dynamic,68,unmatched_detection,,10,0,no GT within 1.5 m
+1789354326.571345329,dynamic,68,unmatched_detection,,8,1,no GT within 1.5 m
+1789354326.571345329,dynamic,68,unmatched_detection,,11,2,no GT within 1.5 m
+1789354326.571345329,dynamic,68,unmatched_detection,,5,3,no GT within 1.5 m
+1789354326.571345329,dynamic,68,unmatched_detection,,9,4,no GT within 1.5 m
+1789354326.671333075,dynamic,69,unmatched_detection,,10,0,no GT within 1.5 m
+1789354326.671333075,dynamic,69,unmatched_detection,,8,1,no GT within 1.5 m
+1789354326.671333075,dynamic,69,unmatched_detection,,11,2,no GT within 1.5 m
+1789354326.671333075,dynamic,69,unmatched_detection,,5,3,no GT within 1.5 m
+1789354326.671333075,dynamic,69,unmatched_detection,,9,4,no GT within 1.5 m
+1789354326.771343231,dynamic,70,unmatched_detection,,10,0,no GT within 1.5 m
+1789354326.771343231,dynamic,70,unmatched_detection,,8,1,no GT within 1.5 m
+1789354326.771343231,dynamic,70,unmatched_detection,,11,2,no GT within 1.5 m
+1789354326.771343231,dynamic,70,unmatched_detection,,5,3,no GT within 1.5 m
+1789354326.771343231,dynamic,70,unmatched_detection,,9,4,no GT within 1.5 m
+1789354326.871381998,dynamic,71,unmatched_detection,,10,0,no GT within 1.5 m
+1789354326.871381998,dynamic,71,unmatched_detection,,8,1,no GT within 1.5 m
+1789354326.871381998,dynamic,71,unmatched_detection,,11,2,no GT within 1.5 m
+1789354326.871381998,dynamic,71,unmatched_detection,,5,3,no GT within 1.5 m
+1789354326.871381998,dynamic,71,unmatched_detection,,9,4,no GT within 1.5 m
+1789354326.971457005,dynamic,72,unmatched_detection,,10,0,no GT within 1.5 m
+1789354326.971457005,dynamic,72,unmatched_detection,,8,1,no GT within 1.5 m
+1789354326.971457005,dynamic,72,unmatched_detection,,11,2,no GT within 1.5 m
+1789354326.971457005,dynamic,72,unmatched_detection,,5,3,no GT within 1.5 m
+1789354326.971457005,dynamic,72,unmatched_detection,,9,4,no GT within 1.5 m
+1789354327.071386576,dynamic,73,unmatched_detection,,10,0,no GT within 1.5 m
+1789354327.071386576,dynamic,73,unmatched_detection,,8,1,no GT within 1.5 m
+1789354327.071386576,dynamic,73,unmatched_detection,,11,2,no GT within 1.5 m
+1789354327.071386576,dynamic,73,unmatched_detection,,5,3,no GT within 1.5 m
+1789354327.071386576,dynamic,73,unmatched_detection,,9,4,no GT within 1.5 m
+1789354327.171385050,dynamic,74,unmatched_detection,,10,0,no GT within 1.5 m
+1789354327.171385050,dynamic,74,unmatched_detection,,8,1,no GT within 1.5 m
+1789354327.171385050,dynamic,74,unmatched_detection,,11,2,no GT within 1.5 m
+1789354327.171385050,dynamic,74,unmatched_detection,,5,3,no GT within 1.5 m
+1789354327.171385050,dynamic,74,unmatched_detection,,9,4,no GT within 1.5 m
+1789354327.271396160,dynamic,75,unmatched_detection,,10,0,no GT within 1.5 m
+1789354327.271396160,dynamic,75,unmatched_detection,,8,1,no GT within 1.5 m
+1789354327.271396160,dynamic,75,unmatched_detection,,11,2,no GT within 1.5 m
+1789354327.271396160,dynamic,75,unmatched_detection,,5,3,no GT within 1.5 m
+1789354327.271396160,dynamic,75,unmatched_detection,,9,4,no GT within 1.5 m
+1789354327.371417046,dynamic,76,unmatched_detection,,10,0,no GT within 1.5 m
+1789354327.371417046,dynamic,76,unmatched_detection,,8,1,no GT within 1.5 m
+1789354327.371417046,dynamic,76,unmatched_detection,,11,2,no GT within 1.5 m
+1789354327.371417046,dynamic,76,unmatched_detection,,5,3,no GT within 1.5 m
+1789354327.371417046,dynamic,76,unmatched_detection,,9,4,no GT within 1.5 m
+1789354327.471375227,dynamic,77,unmatched_detection,,10,0,no GT within 1.5 m
+1789354327.471375227,dynamic,77,unmatched_detection,,8,1,no GT within 1.5 m
+1789354327.471375227,dynamic,77,unmatched_detection,,11,2,no GT within 1.5 m
+1789354327.471375227,dynamic,77,unmatched_detection,,5,3,no GT within 1.5 m
+1789354327.471375227,dynamic,77,unmatched_detection,,9,4,no GT within 1.5 m
+1789354327.571371794,dynamic,78,unmatched_detection,,10,0,no GT within 1.5 m
+1789354327.571371794,dynamic,78,unmatched_detection,,8,1,no GT within 1.5 m
+1789354327.571371794,dynamic,78,unmatched_detection,,11,2,no GT within 1.5 m
+1789354327.571371794,dynamic,78,unmatched_detection,,5,3,no GT within 1.5 m
+1789354327.571371794,dynamic,78,unmatched_detection,,9,4,no GT within 1.5 m
+1789354327.671383619,dynamic,79,unmatched_detection,,10,0,no GT within 1.5 m
+1789354327.671383619,dynamic,79,unmatched_detection,,8,1,no GT within 1.5 m
+1789354327.671383619,dynamic,79,unmatched_detection,,11,2,no GT within 1.5 m
+1789354327.671383619,dynamic,79,unmatched_detection,,5,3,no GT within 1.5 m
+1789354327.671383619,dynamic,79,unmatched_detection,,9,4,no GT within 1.5 m
+1789354327.771419287,dynamic,80,unmatched_detection,,10,0,no GT within 1.5 m
+1789354327.771419287,dynamic,80,unmatched_detection,,8,1,no GT within 1.5 m
+1789354327.771419287,dynamic,80,unmatched_detection,,11,2,no GT within 1.5 m
+1789354327.771419287,dynamic,80,unmatched_detection,,5,3,no GT within 1.5 m
+1789354327.771419287,dynamic,80,unmatched_detection,,9,4,no GT within 1.5 m
+1789354327.871402025,dynamic,81,unmatched_detection,,10,0,no GT within 1.5 m
+1789354327.871402025,dynamic,81,unmatched_detection,,8,1,no GT within 1.5 m
+1789354327.871402025,dynamic,81,unmatched_detection,,11,2,no GT within 1.5 m
+1789354327.871402025,dynamic,81,unmatched_detection,,5,3,no GT within 1.5 m
+1789354327.871402025,dynamic,81,unmatched_detection,,9,4,no GT within 1.5 m
+1789354327.971400023,dynamic,82,unmatched_detection,,10,0,no GT within 1.5 m
+1789354327.971400023,dynamic,82,unmatched_detection,,8,1,no GT within 1.5 m
+1789354327.971400023,dynamic,82,unmatched_detection,,11,2,no GT within 1.5 m
+1789354327.971400023,dynamic,82,unmatched_detection,,5,3,no GT within 1.5 m
+1789354327.971400023,dynamic,82,unmatched_detection,,9,4,no GT within 1.5 m
+1789354328.071423769,dynamic,83,unmatched_detection,,10,0,no GT within 1.5 m
+1789354328.071423769,dynamic,83,unmatched_detection,,8,1,no GT within 1.5 m
+1789354328.071423769,dynamic,83,unmatched_detection,,11,2,no GT within 1.5 m
+1789354328.071423769,dynamic,83,unmatched_detection,,5,3,no GT within 1.5 m
+1789354328.071423769,dynamic,83,unmatched_detection,,9,4,no GT within 1.5 m
+1789354328.171448469,dynamic,84,unmatched_detection,,10,0,no GT within 1.5 m
+1789354328.171448469,dynamic,84,unmatched_detection,,8,1,no GT within 1.5 m
+1789354328.171448469,dynamic,84,unmatched_detection,,11,2,no GT within 1.5 m
+1789354328.171448469,dynamic,84,unmatched_detection,,5,3,no GT within 1.5 m
+1789354328.171448469,dynamic,84,unmatched_detection,,9,4,no GT within 1.5 m
+1789354328.271432400,dynamic,85,unmatched_detection,,10,0,no GT within 1.5 m
+1789354328.271432400,dynamic,85,unmatched_detection,,8,1,no GT within 1.5 m
+1789354328.271432400,dynamic,85,unmatched_detection,,11,2,no GT within 1.5 m
+1789354328.271432400,dynamic,85,unmatched_detection,,5,3,no GT within 1.5 m
+1789354328.271432400,dynamic,85,unmatched_detection,,9,4,no GT within 1.5 m
+1789354328.371455193,dynamic,86,unmatched_detection,,10,0,no GT within 1.5 m
+1789354328.371455193,dynamic,86,unmatched_detection,,8,1,no GT within 1.5 m
+1789354328.371455193,dynamic,86,unmatched_detection,,11,2,no GT within 1.5 m
+1789354328.371455193,dynamic,86,unmatched_detection,,5,3,no GT within 1.5 m
+1789354328.371455193,dynamic,86,unmatched_detection,,9,4,no GT within 1.5 m
+1789354328.471417904,dynamic,87,unmatched_detection,,10,0,no GT within 1.5 m
+1789354328.471417904,dynamic,87,unmatched_detection,,8,1,no GT within 1.5 m
+1789354328.471417904,dynamic,87,unmatched_detection,,11,2,no GT within 1.5 m
+1789354328.471417904,dynamic,87,unmatched_detection,,5,3,no GT within 1.5 m
+1789354328.471417904,dynamic,87,unmatched_detection,,9,4,no GT within 1.5 m
+1789354328.571391344,dynamic,88,unmatched_detection,,10,0,no GT within 1.5 m
+1789354328.571391344,dynamic,88,unmatched_detection,,8,1,no GT within 1.5 m
+1789354328.571391344,dynamic,88,unmatched_detection,,11,2,no GT within 1.5 m
+1789354328.571391344,dynamic,88,unmatched_detection,,5,3,no GT within 1.5 m
+1789354328.571391344,dynamic,88,unmatched_detection,,9,4,no GT within 1.5 m
+1789354328.671392202,dynamic,89,unmatched_detection,,10,0,no GT within 1.5 m
+1789354328.671392202,dynamic,89,unmatched_detection,,8,1,no GT within 1.5 m
+1789354328.671392202,dynamic,89,unmatched_detection,,11,2,no GT within 1.5 m
+1789354328.671392202,dynamic,89,unmatched_detection,,5,3,no GT within 1.5 m
+1789354328.671392202,dynamic,89,unmatched_detection,,9,4,no GT within 1.5 m
+1789354328.771387815,dynamic,90,unmatched_detection,,10,0,no GT within 1.5 m
+1789354328.771387815,dynamic,90,unmatched_detection,,8,1,no GT within 1.5 m
+1789354328.771387815,dynamic,90,unmatched_detection,,11,2,no GT within 1.5 m
+1789354328.771387815,dynamic,90,unmatched_detection,,5,3,no GT within 1.5 m
+1789354328.771387815,dynamic,90,unmatched_detection,,9,4,no GT within 1.5 m
+1789354328.871380806,dynamic,91,unmatched_detection,,10,0,no GT within 1.5 m
+1789354328.871380806,dynamic,91,unmatched_detection,,8,1,no GT within 1.5 m
+1789354328.871380806,dynamic,91,unmatched_detection,,11,2,no GT within 1.5 m
+1789354328.871380806,dynamic,91,unmatched_detection,,5,3,no GT within 1.5 m
+1789354328.871380806,dynamic,91,unmatched_detection,,9,4,no GT within 1.5 m
+1789354328.971395493,dynamic,92,unmatched_detection,,10,0,no GT within 1.5 m
+1789354328.971395493,dynamic,92,unmatched_detection,,8,1,no GT within 1.5 m
+1789354328.971395493,dynamic,92,unmatched_detection,,11,2,no GT within 1.5 m
+1789354328.971395493,dynamic,92,unmatched_detection,,5,3,no GT within 1.5 m
+1789354328.971395493,dynamic,92,unmatched_detection,,9,4,no GT within 1.5 m
+1789354329.071376562,dynamic,93,unmatched_detection,,10,0,no GT within 1.5 m
+1789354329.071376562,dynamic,93,unmatched_detection,,8,1,no GT within 1.5 m
+1789354329.071376562,dynamic,93,unmatched_detection,,11,2,no GT within 1.5 m
+1789354329.071376562,dynamic,93,unmatched_detection,,5,3,no GT within 1.5 m
+1789354329.071376562,dynamic,93,unmatched_detection,,9,4,no GT within 1.5 m
+1789354329.171407223,dynamic,94,unmatched_detection,,10,0,no GT within 1.5 m
+1789354329.171407223,dynamic,94,unmatched_detection,,8,1,no GT within 1.5 m
+1789354329.171407223,dynamic,94,unmatched_detection,,11,2,no GT within 1.5 m
+1789354329.171407223,dynamic,94,unmatched_detection,,5,3,no GT within 1.5 m
+1789354329.171407223,dynamic,94,unmatched_detection,,9,4,no GT within 1.5 m
+1789354329.271408796,dynamic,95,unmatched_detection,,10,0,no GT within 1.5 m
+1789354329.271408796,dynamic,95,unmatched_detection,,8,1,no GT within 1.5 m
+1789354329.271408796,dynamic,95,unmatched_detection,,11,2,no GT within 1.5 m
+1789354329.271408796,dynamic,95,unmatched_detection,,5,3,no GT within 1.5 m
+1789354329.271408796,dynamic,95,unmatched_detection,,9,4,no GT within 1.5 m
+1789354329.371404171,dynamic,96,unmatched_detection,,10,0,no GT within 1.5 m
+1789354329.371404171,dynamic,96,unmatched_detection,,8,1,no GT within 1.5 m
+1789354329.371404171,dynamic,96,unmatched_detection,,11,2,no GT within 1.5 m
+1789354329.371404171,dynamic,96,unmatched_detection,,5,3,no GT within 1.5 m
+1789354329.371404171,dynamic,96,unmatched_detection,,9,4,no GT within 1.5 m
+1789354329.471400738,dynamic,97,unmatched_detection,,10,0,no GT within 1.5 m
+1789354329.471400738,dynamic,97,unmatched_detection,,8,1,no GT within 1.5 m
+1789354329.471400738,dynamic,97,unmatched_detection,,11,2,no GT within 1.5 m
+1789354329.471400738,dynamic,97,unmatched_detection,,5,3,no GT within 1.5 m
+1789354329.471400738,dynamic,97,unmatched_detection,,9,4,no GT within 1.5 m
+1789354329.571391821,dynamic,98,unmatched_detection,,10,0,no GT within 1.5 m
+1789354329.571391821,dynamic,98,unmatched_detection,,8,1,no GT within 1.5 m
+1789354329.571391821,dynamic,98,unmatched_detection,,11,2,no GT within 1.5 m
+1789354329.571391821,dynamic,98,unmatched_detection,,5,3,no GT within 1.5 m
+1789354329.571391821,dynamic,98,unmatched_detection,,9,4,no GT within 1.5 m
+1789354329.671390772,dynamic,99,unmatched_detection,,10,0,no GT within 1.5 m
+1789354329.671390772,dynamic,99,unmatched_detection,,8,1,no GT within 1.5 m
+1789354329.671390772,dynamic,99,unmatched_detection,,11,2,no GT within 1.5 m
+1789354329.671390772,dynamic,99,unmatched_detection,,5,3,no GT within 1.5 m
+1789354329.671390772,dynamic,99,unmatched_detection,,9,4,no GT within 1.5 m
+1789354329.771400690,dynamic,100,unmatched_detection,,10,0,no GT within 1.5 m
+1789354329.771400690,dynamic,100,unmatched_detection,,8,1,no GT within 1.5 m
+1789354329.771400690,dynamic,100,unmatched_detection,,11,2,no GT within 1.5 m
+1789354329.771400690,dynamic,100,unmatched_detection,,5,3,no GT within 1.5 m
+1789354329.771400690,dynamic,100,unmatched_detection,,9,4,no GT within 1.5 m
+1789354329.871323586,dynamic,101,unmatched_detection,,10,0,no GT within 1.5 m
+1789354329.871323586,dynamic,101,unmatched_detection,,8,1,no GT within 1.5 m
+1789354329.871323586,dynamic,101,unmatched_detection,,11,2,no GT within 1.5 m
+1789354329.871323586,dynamic,101,unmatched_detection,,5,3,no GT within 1.5 m
+1789354329.871323586,dynamic,101,unmatched_detection,,9,4,no GT within 1.5 m
+1789354329.971337795,dynamic,102,unmatched_detection,,10,0,no GT within 1.5 m
+1789354329.971337795,dynamic,102,unmatched_detection,,8,1,no GT within 1.5 m
+1789354329.971337795,dynamic,102,unmatched_detection,,11,2,no GT within 1.5 m
+1789354329.971337795,dynamic,102,unmatched_detection,,5,3,no GT within 1.5 m
+1789354329.971337795,dynamic,102,unmatched_detection,,9,4,no GT within 1.5 m
+1789354330.071299791,dynamic,103,unmatched_detection,,10,0,no GT within 1.5 m
+1789354330.071299791,dynamic,103,unmatched_detection,,8,1,no GT within 1.5 m
+1789354330.071299791,dynamic,103,unmatched_detection,,11,2,no GT within 1.5 m
+1789354330.071299791,dynamic,103,unmatched_detection,,5,3,no GT within 1.5 m
+1789354330.071299791,dynamic,103,unmatched_detection,,9,4,no GT within 1.5 m
+1789354330.171277523,dynamic,104,unmatched_detection,,10,0,no GT within 1.5 m
+1789354330.171277523,dynamic,104,unmatched_detection,,8,1,no GT within 1.5 m
+1789354330.171277523,dynamic,104,unmatched_detection,,11,2,no GT within 1.5 m
+1789354330.171277523,dynamic,104,unmatched_detection,,5,3,no GT within 1.5 m
+1789354330.171277523,dynamic,104,unmatched_detection,,9,4,no GT within 1.5 m
+1789354330.271301508,dynamic,105,unmatched_detection,,10,0,no GT within 1.5 m
+1789354330.271301508,dynamic,105,unmatched_detection,,8,1,no GT within 1.5 m
+1789354330.271301508,dynamic,105,unmatched_detection,,11,2,no GT within 1.5 m
+1789354330.271301508,dynamic,105,unmatched_detection,,5,3,no GT within 1.5 m
+1789354330.271301508,dynamic,105,unmatched_detection,,9,4,no GT within 1.5 m
+1789354330.371283054,dynamic,106,unmatched_detection,,10,0,no GT within 1.5 m
+1789354330.371283054,dynamic,106,unmatched_detection,,8,1,no GT within 1.5 m
+1789354330.371283054,dynamic,106,unmatched_detection,,11,2,no GT within 1.5 m
+1789354330.371283054,dynamic,106,unmatched_detection,,5,3,no GT within 1.5 m
+1789354330.371283054,dynamic,106,unmatched_detection,,9,4,no GT within 1.5 m
+1789354330.471305132,dynamic,107,unmatched_detection,,10,0,no GT within 1.5 m
+1789354330.471305132,dynamic,107,unmatched_detection,,8,1,no GT within 1.5 m
+1789354330.471305132,dynamic,107,unmatched_detection,,11,2,no GT within 1.5 m
+1789354330.471305132,dynamic,107,unmatched_detection,,5,3,no GT within 1.5 m
+1789354330.471305132,dynamic,107,unmatched_detection,,9,4,no GT within 1.5 m
+1789354330.571310520,dynamic,108,unmatched_detection,,10,0,no GT within 1.5 m
+1789354330.571310520,dynamic,108,unmatched_detection,,8,1,no GT within 1.5 m
+1789354330.571310520,dynamic,108,unmatched_detection,,11,2,no GT within 1.5 m
+1789354330.571310520,dynamic,108,unmatched_detection,,5,3,no GT within 1.5 m
+1789354330.571310520,dynamic,108,unmatched_detection,,9,4,no GT within 1.5 m
+1789354330.671296120,dynamic,109,unmatched_detection,,10,0,no GT within 1.5 m
+1789354330.671296120,dynamic,109,unmatched_detection,,8,1,no GT within 1.5 m
+1789354330.671296120,dynamic,109,unmatched_detection,,11,2,no GT within 1.5 m
+1789354330.671296120,dynamic,109,unmatched_detection,,5,3,no GT within 1.5 m
+1789354330.671296120,dynamic,109,unmatched_detection,,9,4,no GT within 1.5 m
+1789354330.771326542,dynamic,110,unmatched_detection,,10,0,no GT within 1.5 m
+1789354330.771326542,dynamic,110,unmatched_detection,,8,1,no GT within 1.5 m
+1789354330.771326542,dynamic,110,unmatched_detection,,11,2,no GT within 1.5 m
+1789354330.771326542,dynamic,110,unmatched_detection,,5,3,no GT within 1.5 m
+1789354330.771326542,dynamic,110,unmatched_detection,,9,4,no GT within 1.5 m
+1789354330.871305227,dynamic,111,unmatched_detection,,10,0,no GT within 1.5 m
+1789354330.871305227,dynamic,111,unmatched_detection,,8,1,no GT within 1.5 m
+1789354330.871305227,dynamic,111,unmatched_detection,,11,2,no GT within 1.5 m
+1789354330.871305227,dynamic,111,unmatched_detection,,5,3,no GT within 1.5 m
+1789354330.871305227,dynamic,111,unmatched_detection,,9,4,no GT within 1.5 m
+1789354330.971296310,dynamic,112,unmatched_detection,,10,0,no GT within 1.5 m
+1789354330.971296310,dynamic,112,unmatched_detection,,8,1,no GT within 1.5 m
+1789354330.971296310,dynamic,112,unmatched_detection,,11,2,no GT within 1.5 m
+1789354330.971296310,dynamic,112,unmatched_detection,,5,3,no GT within 1.5 m
+1789354330.971296310,dynamic,112,unmatched_detection,,9,4,no GT within 1.5 m
+1789354331.071331501,dynamic,113,unmatched_detection,,10,0,no GT within 1.5 m
+1789354331.071331501,dynamic,113,unmatched_detection,,8,1,no GT within 1.5 m
+1789354331.071331501,dynamic,113,unmatched_detection,,11,2,no GT within 1.5 m
+1789354331.071331501,dynamic,113,unmatched_detection,,5,3,no GT within 1.5 m
+1789354331.071331501,dynamic,113,unmatched_detection,,9,4,no GT within 1.5 m
+1789354331.171293497,dynamic,114,unmatched_detection,,10,0,no GT within 1.5 m
+1789354331.171293497,dynamic,114,unmatched_detection,,8,1,no GT within 1.5 m
+1789354331.171293497,dynamic,114,unmatched_detection,,11,2,no GT within 1.5 m
+1789354331.171293497,dynamic,114,unmatched_detection,,5,3,no GT within 1.5 m
+1789354331.171293497,dynamic,114,unmatched_detection,,9,4,no GT within 1.5 m
+1789354331.271293402,dynamic,115,unmatched_detection,,10,0,no GT within 1.5 m
+1789354331.271293402,dynamic,115,unmatched_detection,,8,1,no GT within 1.5 m
+1789354331.271293402,dynamic,115,unmatched_detection,,11,2,no GT within 1.5 m
+1789354331.271293402,dynamic,115,unmatched_detection,,5,3,no GT within 1.5 m
+1789354331.271293402,dynamic,115,unmatched_detection,,9,4,no GT within 1.5 m
+1789354331.371328115,dynamic,116,unmatched_detection,,10,0,no GT within 1.5 m
+1789354331.371328115,dynamic,116,unmatched_detection,,8,1,no GT within 1.5 m
+1789354331.371328115,dynamic,116,unmatched_detection,,11,2,no GT within 1.5 m
+1789354331.371328115,dynamic,116,unmatched_detection,,5,3,no GT within 1.5 m
+1789354331.371328115,dynamic,116,unmatched_detection,,9,4,no GT within 1.5 m
+1789354331.471298218,dynamic,117,unmatched_detection,,10,0,no GT within 1.5 m
+1789354331.471298218,dynamic,117,unmatched_detection,,8,1,no GT within 1.5 m
+1789354331.471298218,dynamic,117,unmatched_detection,,11,2,no GT within 1.5 m
+1789354331.471298218,dynamic,117,unmatched_detection,,5,3,no GT within 1.5 m
+1789354331.471298218,dynamic,117,unmatched_detection,,9,4,no GT within 1.5 m
+1789354331.571436167,dynamic,118,unmatched_detection,,10,0,no GT within 1.5 m
+1789354331.571436167,dynamic,118,unmatched_detection,,8,1,no GT within 1.5 m
+1789354331.571436167,dynamic,118,unmatched_detection,,11,2,no GT within 1.5 m
+1789354331.571436167,dynamic,118,unmatched_detection,,5,3,no GT within 1.5 m
+1789354331.571436167,dynamic,118,unmatched_detection,,9,4,no GT within 1.5 m
+1789354331.671295166,dynamic,119,unmatched_detection,,10,0,no GT within 1.5 m
+1789354331.671295166,dynamic,119,unmatched_detection,,8,1,no GT within 1.5 m
+1789354331.671295166,dynamic,119,unmatched_detection,,11,2,no GT within 1.5 m
+1789354331.671295166,dynamic,119,unmatched_detection,,5,3,no GT within 1.5 m
+1789354331.671295166,dynamic,119,unmatched_detection,,9,4,no GT within 1.5 m
+1789354331.771307707,dynamic,120,unmatched_detection,,10,0,no GT within 1.5 m
+1789354331.771307707,dynamic,120,unmatched_detection,,8,1,no GT within 1.5 m
+1789354331.771307707,dynamic,120,unmatched_detection,,11,2,no GT within 1.5 m
+1789354331.771307707,dynamic,120,unmatched_detection,,5,3,no GT within 1.5 m
+1789354331.771307707,dynamic,120,unmatched_detection,,9,4,no GT within 1.5 m
+1789354331.871305227,dynamic,121,unmatched_detection,,10,0,no GT within 1.5 m
+1789354331.871305227,dynamic,121,unmatched_detection,,8,1,no GT within 1.5 m
+1789354331.871305227,dynamic,121,unmatched_detection,,11,2,no GT within 1.5 m
+1789354331.871305227,dynamic,121,unmatched_detection,,5,3,no GT within 1.5 m
+1789354331.871305227,dynamic,121,unmatched_detection,,9,4,no GT within 1.5 m
+1789354331.971301794,dynamic,122,unmatched_detection,,10,0,no GT within 1.5 m
+1789354331.971301794,dynamic,122,unmatched_detection,,8,1,no GT within 1.5 m
+1789354331.971301794,dynamic,122,unmatched_detection,,11,2,no GT within 1.5 m
+1789354331.971301794,dynamic,122,unmatched_detection,,5,3,no GT within 1.5 m
+1789354331.971301794,dynamic,122,unmatched_detection,,9,4,no GT within 1.5 m
+1789354332.071336269,dynamic,123,unmatched_detection,,10,0,no GT within 1.5 m
+1789354332.071336269,dynamic,123,unmatched_detection,,8,1,no GT within 1.5 m
+1789354332.071336269,dynamic,123,unmatched_detection,,11,2,no GT within 1.5 m
+1789354332.071336269,dynamic,123,unmatched_detection,,5,3,no GT within 1.5 m
+1789354332.071336269,dynamic,123,unmatched_detection,,9,4,no GT within 1.5 m
+1789354332.171308279,dynamic,124,unmatched_detection,,10,0,no GT within 1.5 m
+1789354332.171308279,dynamic,124,unmatched_detection,,8,1,no GT within 1.5 m
+1789354332.171308279,dynamic,124,unmatched_detection,,11,2,no GT within 1.5 m
+1789354332.171308279,dynamic,124,unmatched_detection,,5,3,no GT within 1.5 m
+1789354332.171308279,dynamic,124,unmatched_detection,,9,4,no GT within 1.5 m
+1789354332.271347284,dynamic,125,unmatched_detection,,10,0,no GT within 1.5 m
+1789354332.271347284,dynamic,125,unmatched_detection,,8,1,no GT within 1.5 m
+1789354332.271347284,dynamic,125,unmatched_detection,,11,2,no GT within 1.5 m
+1789354332.271347284,dynamic,125,unmatched_detection,,5,3,no GT within 1.5 m
+1789354332.271347284,dynamic,125,unmatched_detection,,9,4,no GT within 1.5 m
+1789354332.371269703,dynamic,126,unmatched_detection,,10,0,no GT within 1.5 m
+1789354332.371269703,dynamic,126,unmatched_detection,,8,1,no GT within 1.5 m
+1789354332.371269703,dynamic,126,unmatched_detection,,11,2,no GT within 1.5 m
+1789354332.371269703,dynamic,126,unmatched_detection,,5,3,no GT within 1.5 m
+1789354332.371269703,dynamic,126,unmatched_detection,,9,4,no GT within 1.5 m
+1789354332.471672773,dynamic,127,unmatched_detection,,10,0,no GT within 1.5 m
+1789354332.471672773,dynamic,127,unmatched_detection,,8,1,no GT within 1.5 m
+1789354332.471672773,dynamic,127,unmatched_detection,,11,2,no GT within 1.5 m
+1789354332.471672773,dynamic,127,unmatched_detection,,5,3,no GT within 1.5 m
+1789354332.471672773,dynamic,127,unmatched_detection,,9,4,no GT within 1.5 m
+1789354332.571621180,dynamic,128,unmatched_detection,,10,0,no GT within 1.5 m
+1789354332.571621180,dynamic,128,unmatched_detection,,8,1,no GT within 1.5 m
+1789354332.571621180,dynamic,128,unmatched_detection,,11,2,no GT within 1.5 m
+1789354332.571621180,dynamic,128,unmatched_detection,,5,3,no GT within 1.5 m
+1789354332.571621180,dynamic,128,unmatched_detection,,9,4,no GT within 1.5 m
+1789354332.671718597,dynamic,129,unmatched_detection,,10,0,no GT within 1.5 m
+1789354332.671718597,dynamic,129,unmatched_detection,,8,1,no GT within 1.5 m
+1789354332.671718597,dynamic,129,unmatched_detection,,11,2,no GT within 1.5 m
+1789354332.671718597,dynamic,129,unmatched_detection,,5,3,no GT within 1.5 m
+1789354332.671718597,dynamic,129,unmatched_detection,,9,4,no GT within 1.5 m
+1789354332.771714211,dynamic,130,unmatched_detection,,10,0,no GT within 1.5 m
+1789354332.771714211,dynamic,130,unmatched_detection,,8,1,no GT within 1.5 m
+1789354332.771714211,dynamic,130,unmatched_detection,,11,2,no GT within 1.5 m
+1789354332.771714211,dynamic,130,unmatched_detection,,5,3,no GT within 1.5 m
+1789354332.771714211,dynamic,130,unmatched_detection,,9,4,no GT within 1.5 m
+1789354332.871363640,dynamic,131,unmatched_detection,,10,0,no GT within 1.5 m
+1789354332.871363640,dynamic,131,unmatched_detection,,8,1,no GT within 1.5 m
+1789354332.871363640,dynamic,131,unmatched_detection,,11,2,no GT within 1.5 m
+1789354332.871363640,dynamic,131,unmatched_detection,,5,3,no GT within 1.5 m
+1789354332.871363640,dynamic,131,unmatched_detection,,9,4,no GT within 1.5 m
+1789354332.971321344,dynamic,132,unmatched_detection,,10,0,no GT within 1.5 m
+1789354332.971321344,dynamic,132,unmatched_detection,,8,1,no GT within 1.5 m
+1789354332.971321344,dynamic,132,unmatched_detection,,11,2,no GT within 1.5 m
+1789354332.971321344,dynamic,132,unmatched_detection,,5,3,no GT within 1.5 m
+1789354332.971321344,dynamic,132,unmatched_detection,,9,4,no GT within 1.5 m
+1789354333.071355343,dynamic,133,unmatched_detection,,10,0,no GT within 1.5 m
+1789354333.071355343,dynamic,133,unmatched_detection,,8,1,no GT within 1.5 m
+1789354333.071355343,dynamic,133,unmatched_detection,,11,2,no GT within 1.5 m
+1789354333.071355343,dynamic,133,unmatched_detection,,5,3,no GT within 1.5 m
+1789354333.071355343,dynamic,133,unmatched_detection,,9,4,no GT within 1.5 m
+1789354333.171714544,dynamic,134,unmatched_detection,,10,0,no GT within 1.5 m
+1789354333.171714544,dynamic,134,unmatched_detection,,8,1,no GT within 1.5 m
+1789354333.171714544,dynamic,134,unmatched_detection,,11,2,no GT within 1.5 m
+1789354333.171714544,dynamic,134,unmatched_detection,,5,3,no GT within 1.5 m
+1789354333.171714544,dynamic,134,unmatched_detection,,9,4,no GT within 1.5 m
+1789354333.271667480,dynamic,135,unmatched_detection,,10,0,no GT within 1.5 m
+1789354333.271667480,dynamic,135,unmatched_detection,,8,1,no GT within 1.5 m
+1789354333.271667480,dynamic,135,unmatched_detection,,11,2,no GT within 1.5 m
+1789354333.271667480,dynamic,135,unmatched_detection,,5,3,no GT within 1.5 m
+1789354333.271667480,dynamic,135,unmatched_detection,,9,4,no GT within 1.5 m
+1789354333.371674776,dynamic,136,unmatched_detection,,10,0,no GT within 1.5 m
+1789354333.371674776,dynamic,136,unmatched_detection,,8,1,no GT within 1.5 m
+1789354333.371674776,dynamic,136,unmatched_detection,,11,2,no GT within 1.5 m
+1789354333.371674776,dynamic,136,unmatched_detection,,5,3,no GT within 1.5 m
+1789354333.371674776,dynamic,136,unmatched_detection,,9,4,no GT within 1.5 m
+1789354333.471862078,dynamic,137,unmatched_detection,,10,0,no GT within 1.5 m
+1789354333.471862078,dynamic,137,unmatched_detection,,8,1,no GT within 1.5 m
+1789354333.471862078,dynamic,137,unmatched_detection,,11,2,no GT within 1.5 m
+1789354333.471862078,dynamic,137,unmatched_detection,,5,3,no GT within 1.5 m
+1789354333.471862078,dynamic,137,unmatched_detection,,9,4,no GT within 1.5 m
+1789354333.571736813,dynamic,138,unmatched_detection,,10,0,no GT within 1.5 m
+1789354333.571736813,dynamic,138,unmatched_detection,,8,1,no GT within 1.5 m
+1789354333.571736813,dynamic,138,unmatched_detection,,11,2,no GT within 1.5 m
+1789354333.571736813,dynamic,138,unmatched_detection,,5,3,no GT within 1.5 m
+1789354333.571736813,dynamic,138,unmatched_detection,,9,4,no GT within 1.5 m
+1789354333.671725988,dynamic,139,unmatched_detection,,10,0,no GT within 1.5 m
+1789354333.671725988,dynamic,139,unmatched_detection,,8,1,no GT within 1.5 m
+1789354333.671725988,dynamic,139,unmatched_detection,,11,2,no GT within 1.5 m
+1789354333.671725988,dynamic,139,unmatched_detection,,5,3,no GT within 1.5 m
+1789354333.671725988,dynamic,139,unmatched_detection,,9,4,no GT within 1.5 m
+1789354333.771789789,dynamic,140,unmatched_detection,,10,0,no GT within 1.5 m
+1789354333.771789789,dynamic,140,unmatched_detection,,8,1,no GT within 1.5 m
+1789354333.771789789,dynamic,140,unmatched_detection,,11,2,no GT within 1.5 m
+1789354333.771789789,dynamic,140,unmatched_detection,,5,3,no GT within 1.5 m
+1789354333.771789789,dynamic,140,unmatched_detection,,9,4,no GT within 1.5 m
+1789354333.871759653,dynamic,141,unmatched_detection,,10,0,no GT within 1.5 m
+1789354333.871759653,dynamic,141,unmatched_detection,,8,1,no GT within 1.5 m
+1789354333.871759653,dynamic,141,unmatched_detection,,11,2,no GT within 1.5 m
+1789354333.871759653,dynamic,141,unmatched_detection,,5,3,no GT within 1.5 m
+1789354333.871759653,dynamic,141,unmatched_detection,,9,4,no GT within 1.5 m
+1789354333.971688271,dynamic,142,unmatched_detection,,10,0,no GT within 1.5 m
+1789354333.971688271,dynamic,142,unmatched_detection,,8,1,no GT within 1.5 m
+1789354333.971688271,dynamic,142,unmatched_detection,,11,2,no GT within 1.5 m
+1789354333.971688271,dynamic,142,unmatched_detection,,5,3,no GT within 1.5 m
+1789354333.971688271,dynamic,142,unmatched_detection,,9,4,no GT within 1.5 m
+1789354334.071777105,dynamic,143,unmatched_detection,,10,0,no GT within 1.5 m
+1789354334.071777105,dynamic,143,unmatched_detection,,8,1,no GT within 1.5 m
+1789354334.071777105,dynamic,143,unmatched_detection,,11,2,no GT within 1.5 m
+1789354334.071777105,dynamic,143,unmatched_detection,,5,3,no GT within 1.5 m
+1789354334.071777105,dynamic,143,unmatched_detection,,9,4,no GT within 1.5 m
+1789354334.171841621,dynamic,144,unmatched_detection,,10,0,no GT within 1.5 m
+1789354334.171841621,dynamic,144,unmatched_detection,,8,1,no GT within 1.5 m
+1789354334.171841621,dynamic,144,unmatched_detection,,11,2,no GT within 1.5 m
+1789354334.171841621,dynamic,144,unmatched_detection,,5,3,no GT within 1.5 m
+1789354334.171841621,dynamic,144,unmatched_detection,,9,4,no GT within 1.5 m
+1789354334.271779299,dynamic,145,unmatched_detection,,10,0,no GT within 1.5 m
+1789354334.271779299,dynamic,145,unmatched_detection,,8,1,no GT within 1.5 m
+1789354334.271779299,dynamic,145,unmatched_detection,,11,2,no GT within 1.5 m
+1789354334.271779299,dynamic,145,unmatched_detection,,5,3,no GT within 1.5 m
+1789354334.271779299,dynamic,145,unmatched_detection,,9,4,no GT within 1.5 m
+1789354334.371333361,dynamic,146,unmatched_detection,,10,0,no GT within 1.5 m
+1789354334.371333361,dynamic,146,unmatched_detection,,8,1,no GT within 1.5 m
+1789354334.371333361,dynamic,146,unmatched_detection,,11,2,no GT within 1.5 m
+1789354334.371333361,dynamic,146,unmatched_detection,,5,3,no GT within 1.5 m
+1789354334.371333361,dynamic,146,unmatched_detection,,9,4,no GT within 1.5 m
+1789354334.471306562,dynamic,147,unmatched_detection,,10,0,no GT within 1.5 m
+1789354334.471306562,dynamic,147,unmatched_detection,,8,1,no GT within 1.5 m
+1789354334.471306562,dynamic,147,unmatched_detection,,11,2,no GT within 1.5 m
+1789354334.471306562,dynamic,147,unmatched_detection,,5,3,no GT within 1.5 m
+1789354334.471306562,dynamic,147,unmatched_detection,,9,4,no GT within 1.5 m
+1789354334.571283817,dynamic,148,unmatched_detection,,10,0,no GT within 1.5 m
+1789354334.571283817,dynamic,148,unmatched_detection,,8,1,no GT within 1.5 m
+1789354334.571283817,dynamic,148,unmatched_detection,,11,2,no GT within 1.5 m
+1789354334.571283817,dynamic,148,unmatched_detection,,5,3,no GT within 1.5 m
+1789354334.571283817,dynamic,148,unmatched_detection,,9,4,no GT within 1.5 m
+1789354334.671348810,dynamic,149,unmatched_detection,,10,0,no GT within 1.5 m
+1789354334.671348810,dynamic,149,unmatched_detection,,8,1,no GT within 1.5 m
+1789354334.671348810,dynamic,149,unmatched_detection,,11,2,no GT within 1.5 m
+1789354334.671348810,dynamic,149,unmatched_detection,,5,3,no GT within 1.5 m
+1789354334.671348810,dynamic,149,unmatched_detection,,9,4,no GT within 1.5 m
+1789354334.771716356,dynamic,150,unmatched_detection,,10,0,no GT within 1.5 m
+1789354334.771716356,dynamic,150,unmatched_detection,,8,1,no GT within 1.5 m
+1789354334.771716356,dynamic,150,unmatched_detection,,11,2,no GT within 1.5 m
+1789354334.771716356,dynamic,150,unmatched_detection,,5,3,no GT within 1.5 m
+1789354334.771716356,dynamic,150,unmatched_detection,,9,4,no GT within 1.5 m
+1789354334.871799231,dynamic,151,unmatched_detection,,10,0,no GT within 1.5 m
+1789354334.871799231,dynamic,151,unmatched_detection,,8,1,no GT within 1.5 m
+1789354334.871799231,dynamic,151,unmatched_detection,,11,2,no GT within 1.5 m
+1789354334.871799231,dynamic,151,unmatched_detection,,5,3,no GT within 1.5 m
+1789354334.871799231,dynamic,151,unmatched_detection,,9,4,no GT within 1.5 m
+1789354334.971344233,dynamic,152,unmatched_detection,,10,0,no GT within 1.5 m
+1789354334.971344233,dynamic,152,unmatched_detection,,8,1,no GT within 1.5 m
+1789354334.971344233,dynamic,152,unmatched_detection,,11,2,no GT within 1.5 m
+1789354334.971344233,dynamic,152,unmatched_detection,,5,3,no GT within 1.5 m
+1789354334.971344233,dynamic,152,unmatched_detection,,9,4,no GT within 1.5 m
+1789354335.071368217,dynamic,153,unmatched_detection,,10,0,no GT within 1.5 m
+1789354335.071368217,dynamic,153,unmatched_detection,,8,1,no GT within 1.5 m
+1789354335.071368217,dynamic,153,unmatched_detection,,11,2,no GT within 1.5 m
+1789354335.071368217,dynamic,153,unmatched_detection,,5,3,no GT within 1.5 m
+1789354335.071368217,dynamic,153,unmatched_detection,,9,4,no GT within 1.5 m
+1789354335.171504974,dynamic,154,unmatched_detection,,10,0,no GT within 1.5 m
+1789354335.171504974,dynamic,154,unmatched_detection,,8,1,no GT within 1.5 m
+1789354335.171504974,dynamic,154,unmatched_detection,,11,2,no GT within 1.5 m
+1789354335.171504974,dynamic,154,unmatched_detection,,5,3,no GT within 1.5 m
+1789354335.171504974,dynamic,154,unmatched_detection,,9,4,no GT within 1.5 m
+1789354335.271314859,dynamic,155,unmatched_detection,,10,0,no GT within 1.5 m
+1789354335.271314859,dynamic,155,unmatched_detection,,8,1,no GT within 1.5 m
+1789354335.271314859,dynamic,155,unmatched_detection,,11,2,no GT within 1.5 m
+1789354335.271314859,dynamic,155,unmatched_detection,,5,3,no GT within 1.5 m
+1789354335.271314859,dynamic,155,unmatched_detection,,9,4,no GT within 1.5 m
+1789354335.371451855,dynamic,156,unmatched_detection,,10,0,no GT within 1.5 m
+1789354335.371451855,dynamic,156,unmatched_detection,,8,1,no GT within 1.5 m
+1789354335.371451855,dynamic,156,unmatched_detection,,11,2,no GT within 1.5 m
+1789354335.371451855,dynamic,156,unmatched_detection,,5,3,no GT within 1.5 m
+1789354335.371451855,dynamic,156,unmatched_detection,,9,4,no GT within 1.5 m
+1789354335.471415043,dynamic,157,unmatched_detection,,10,0,no GT within 1.5 m
+1789354335.471415043,dynamic,157,unmatched_detection,,8,1,no GT within 1.5 m
+1789354335.471415043,dynamic,157,unmatched_detection,,11,2,no GT within 1.5 m
+1789354335.471415043,dynamic,157,unmatched_detection,,5,3,no GT within 1.5 m
+1789354335.471415043,dynamic,157,unmatched_detection,,9,4,no GT within 1.5 m
+1789354335.571449757,dynamic,158,unmatched_detection,,10,0,no GT within 1.5 m
+1789354335.571449757,dynamic,158,unmatched_detection,,8,1,no GT within 1.5 m
+1789354335.571449757,dynamic,158,unmatched_detection,,11,2,no GT within 1.5 m
+1789354335.571449757,dynamic,158,unmatched_detection,,5,3,no GT within 1.5 m
+1789354335.571449757,dynamic,158,unmatched_detection,,9,4,no GT within 1.5 m
+1789354335.671316624,dynamic,159,unmatched_detection,,10,0,no GT within 1.5 m
+1789354335.671316624,dynamic,159,unmatched_detection,,8,1,no GT within 1.5 m
+1789354335.671316624,dynamic,159,unmatched_detection,,11,2,no GT within 1.5 m
+1789354335.671316624,dynamic,159,unmatched_detection,,5,3,no GT within 1.5 m
+1789354335.671316624,dynamic,159,unmatched_detection,,9,4,no GT within 1.5 m
+1789354335.771305323,dynamic,160,unmatched_detection,,10,0,no GT within 1.5 m
+1789354335.771305323,dynamic,160,unmatched_detection,,8,1,no GT within 1.5 m
+1789354335.771305323,dynamic,160,unmatched_detection,,11,2,no GT within 1.5 m
+1789354335.771305323,dynamic,160,unmatched_detection,,5,3,no GT within 1.5 m
+1789354335.771305323,dynamic,160,unmatched_detection,,9,4,no GT within 1.5 m
+1789354335.871805191,dynamic,161,unmatched_detection,,10,0,no GT within 1.5 m
+1789354335.871805191,dynamic,161,unmatched_detection,,8,1,no GT within 1.5 m
+1789354335.871805191,dynamic,161,unmatched_detection,,11,2,no GT within 1.5 m
+1789354335.871805191,dynamic,161,unmatched_detection,,5,3,no GT within 1.5 m
+1789354335.871805191,dynamic,161,unmatched_detection,,9,4,no GT within 1.5 m
+1789354335.971800566,dynamic,162,unmatched_detection,,10,0,no GT within 1.5 m
+1789354335.971800566,dynamic,162,unmatched_detection,,8,1,no GT within 1.5 m
+1789354335.971800566,dynamic,162,unmatched_detection,,11,2,no GT within 1.5 m
+1789354335.971800566,dynamic,162,unmatched_detection,,5,3,no GT within 1.5 m
+1789354335.971800566,dynamic,162,unmatched_detection,,9,4,no GT within 1.5 m
+1789354336.071760654,dynamic,163,unmatched_detection,,10,0,no GT within 1.5 m
+1789354336.071760654,dynamic,163,unmatched_detection,,8,1,no GT within 1.5 m
+1789354336.071760654,dynamic,163,unmatched_detection,,11,2,no GT within 1.5 m
+1789354336.071760654,dynamic,163,unmatched_detection,,5,3,no GT within 1.5 m
+1789354336.071760654,dynamic,163,unmatched_detection,,9,4,no GT within 1.5 m
+1789354336.171745300,dynamic,164,unmatched_detection,,10,0,no GT within 1.5 m
+1789354336.171745300,dynamic,164,unmatched_detection,,8,1,no GT within 1.5 m
+1789354336.171745300,dynamic,164,unmatched_detection,,11,2,no GT within 1.5 m
+1789354336.171745300,dynamic,164,unmatched_detection,,5,3,no GT within 1.5 m
+1789354336.171745300,dynamic,164,unmatched_detection,,9,4,no GT within 1.5 m
+1789354336.271794558,dynamic,165,unmatched_detection,,10,0,no GT within 1.5 m
+1789354336.271794558,dynamic,165,unmatched_detection,,8,1,no GT within 1.5 m
+1789354336.271794558,dynamic,165,unmatched_detection,,11,2,no GT within 1.5 m
+1789354336.271794558,dynamic,165,unmatched_detection,,5,3,no GT within 1.5 m
+1789354336.271794558,dynamic,165,unmatched_detection,,9,4,no GT within 1.5 m
+1789354336.371274471,dynamic,166,unmatched_detection,,10,0,no GT within 1.5 m
+1789354336.371274471,dynamic,166,unmatched_detection,,8,1,no GT within 1.5 m
+1789354336.371274471,dynamic,166,unmatched_detection,,11,2,no GT within 1.5 m
+1789354336.371274471,dynamic,166,unmatched_detection,,5,3,no GT within 1.5 m
+1789354336.371274471,dynamic,166,unmatched_detection,,9,4,no GT within 1.5 m
+1789354336.471280336,dynamic,167,unmatched_detection,,10,0,no GT within 1.5 m
+1789354336.471280336,dynamic,167,unmatched_detection,,8,1,no GT within 1.5 m
+1789354336.471280336,dynamic,167,unmatched_detection,,11,2,no GT within 1.5 m
+1789354336.471280336,dynamic,167,unmatched_detection,,5,3,no GT within 1.5 m
+1789354336.471280336,dynamic,167,unmatched_detection,,9,4,no GT within 1.5 m
+1789354336.571699142,dynamic,168,unmatched_detection,,10,0,no GT within 1.5 m
+1789354336.571699142,dynamic,168,unmatched_detection,,8,1,no GT within 1.5 m
+1789354336.571699142,dynamic,168,unmatched_detection,,11,2,no GT within 1.5 m
+1789354336.571699142,dynamic,168,unmatched_detection,,5,3,no GT within 1.5 m
+1789354336.571699142,dynamic,168,unmatched_detection,,9,4,no GT within 1.5 m
+1789354336.671708822,dynamic,169,unmatched_detection,,10,0,no GT within 1.5 m
+1789354336.671708822,dynamic,169,unmatched_detection,,8,1,no GT within 1.5 m
+1789354336.671708822,dynamic,169,unmatched_detection,,11,2,no GT within 1.5 m
+1789354336.671708822,dynamic,169,unmatched_detection,,5,3,no GT within 1.5 m
+1789354336.671708822,dynamic,169,unmatched_detection,,9,4,no GT within 1.5 m
+1789354336.771265507,dynamic,170,unmatched_detection,,10,0,no GT within 1.5 m
+1789354336.771265507,dynamic,170,unmatched_detection,,8,1,no GT within 1.5 m
+1789354336.771265507,dynamic,170,unmatched_detection,,11,2,no GT within 1.5 m
+1789354336.771265507,dynamic,170,unmatched_detection,,5,3,no GT within 1.5 m
+1789354336.771265507,dynamic,170,unmatched_detection,,9,4,no GT within 1.5 m
+1789354336.871730566,dynamic,171,unmatched_detection,,10,0,no GT within 1.5 m
+1789354336.871730566,dynamic,171,unmatched_detection,,8,1,no GT within 1.5 m
+1789354336.871730566,dynamic,171,unmatched_detection,,11,2,no GT within 1.5 m
+1789354336.871730566,dynamic,171,unmatched_detection,,5,3,no GT within 1.5 m
+1789354336.871730566,dynamic,171,unmatched_detection,,9,4,no GT within 1.5 m
+1789354336.971332788,dynamic,172,unmatched_detection,,10,0,no GT within 1.5 m
+1789354336.971332788,dynamic,172,unmatched_detection,,8,1,no GT within 1.5 m
+1789354336.971332788,dynamic,172,unmatched_detection,,11,2,no GT within 1.5 m
+1789354336.971332788,dynamic,172,unmatched_detection,,5,3,no GT within 1.5 m
+1789354336.971332788,dynamic,172,unmatched_detection,,9,4,no GT within 1.5 m
+1789354337.071308851,dynamic,173,unmatched_detection,,10,0,no GT within 1.5 m
+1789354337.071308851,dynamic,173,unmatched_detection,,8,1,no GT within 1.5 m
+1789354337.071308851,dynamic,173,unmatched_detection,,11,2,no GT within 1.5 m
+1789354337.071308851,dynamic,173,unmatched_detection,,5,3,no GT within 1.5 m
+1789354337.071308851,dynamic,173,unmatched_detection,,9,4,no GT within 1.5 m
+1789354337.171278715,dynamic,174,unmatched_detection,,10,0,no GT within 1.5 m
+1789354337.171278715,dynamic,174,unmatched_detection,,8,1,no GT within 1.5 m
+1789354337.171278715,dynamic,174,unmatched_detection,,11,2,no GT within 1.5 m
+1789354337.171278715,dynamic,174,unmatched_detection,,5,3,no GT within 1.5 m
+1789354337.171278715,dynamic,174,unmatched_detection,,9,4,no GT within 1.5 m
+1789354337.271305323,dynamic,175,unmatched_detection,,10,0,no GT within 1.5 m
+1789354337.271305323,dynamic,175,unmatched_detection,,8,1,no GT within 1.5 m
+1789354337.271305323,dynamic,175,unmatched_detection,,11,2,no GT within 1.5 m
+1789354337.271305323,dynamic,175,unmatched_detection,,5,3,no GT within 1.5 m
+1789354337.271305323,dynamic,175,unmatched_detection,,9,4,no GT within 1.5 m
+1789354337.371286154,dynamic,176,unmatched_detection,,10,0,no GT within 1.5 m
+1789354337.371286154,dynamic,176,unmatched_detection,,8,1,no GT within 1.5 m
+1789354337.371286154,dynamic,176,unmatched_detection,,11,2,no GT within 1.5 m
+1789354337.371286154,dynamic,176,unmatched_detection,,5,3,no GT within 1.5 m
+1789354337.371286154,dynamic,176,unmatched_detection,,9,4,no GT within 1.5 m
+1789354337.471643448,dynamic,177,unmatched_detection,,10,0,no GT within 1.5 m
+1789354337.471643448,dynamic,177,unmatched_detection,,8,1,no GT within 1.5 m
+1789354337.471643448,dynamic,177,unmatched_detection,,11,2,no GT within 1.5 m
+1789354337.471643448,dynamic,177,unmatched_detection,,5,3,no GT within 1.5 m
+1789354337.471643448,dynamic,177,unmatched_detection,,9,4,no GT within 1.5 m
+1789354337.571602345,dynamic,178,unmatched_detection,,10,0,no GT within 1.5 m
+1789354337.571602345,dynamic,178,unmatched_detection,,8,1,no GT within 1.5 m
+1789354337.571602345,dynamic,178,unmatched_detection,,11,2,no GT within 1.5 m
+1789354337.571602345,dynamic,178,unmatched_detection,,5,3,no GT within 1.5 m
+1789354337.571602345,dynamic,178,unmatched_detection,,9,4,no GT within 1.5 m
+1789354337.671819925,dynamic,179,unmatched_detection,,10,0,no GT within 1.5 m
+1789354337.671819925,dynamic,179,unmatched_detection,,8,1,no GT within 1.5 m
+1789354337.671819925,dynamic,179,unmatched_detection,,11,2,no GT within 1.5 m
+1789354337.671819925,dynamic,179,unmatched_detection,,5,3,no GT within 1.5 m
+1789354337.671819925,dynamic,179,unmatched_detection,,9,4,no GT within 1.5 m
+1789354337.771682739,dynamic,180,unmatched_detection,,10,0,no GT within 1.5 m
+1789354337.771682739,dynamic,180,unmatched_detection,,8,1,no GT within 1.5 m
+1789354337.771682739,dynamic,180,unmatched_detection,,11,2,no GT within 1.5 m
+1789354337.771682739,dynamic,180,unmatched_detection,,5,3,no GT within 1.5 m
+1789354337.771682739,dynamic,180,unmatched_detection,,9,4,no GT within 1.5 m
+1789354337.871640205,dynamic,181,unmatched_detection,,10,0,no GT within 1.5 m
+1789354337.871640205,dynamic,181,unmatched_detection,,8,1,no GT within 1.5 m
+1789354337.871640205,dynamic,181,unmatched_detection,,11,2,no GT within 1.5 m
+1789354337.871640205,dynamic,181,unmatched_detection,,5,3,no GT within 1.5 m
+1789354337.871640205,dynamic,181,unmatched_detection,,9,4,no GT within 1.5 m
+1789354337.971649408,dynamic,182,unmatched_detection,,10,0,no GT within 1.5 m
+1789354337.971649408,dynamic,182,unmatched_detection,,8,1,no GT within 1.5 m
+1789354337.971649408,dynamic,182,unmatched_detection,,11,2,no GT within 1.5 m
+1789354337.971649408,dynamic,182,unmatched_detection,,5,3,no GT within 1.5 m
+1789354337.971649408,dynamic,182,unmatched_detection,,9,4,no GT within 1.5 m
+1789354338.071652174,dynamic,183,unmatched_detection,,10,0,no GT within 1.5 m
+1789354338.071652174,dynamic,183,unmatched_detection,,8,1,no GT within 1.5 m
+1789354338.071652174,dynamic,183,unmatched_detection,,11,2,no GT within 1.5 m
+1789354338.071652174,dynamic,183,unmatched_detection,,5,3,no GT within 1.5 m
+1789354338.071652174,dynamic,183,unmatched_detection,,9,4,no GT within 1.5 m
+1789354338.171675920,dynamic,184,unmatched_detection,,10,0,no GT within 1.5 m
+1789354338.171675920,dynamic,184,unmatched_detection,,8,1,no GT within 1.5 m
+1789354338.171675920,dynamic,184,unmatched_detection,,11,2,no GT within 1.5 m
+1789354338.171675920,dynamic,184,unmatched_detection,,5,3,no GT within 1.5 m
+1789354338.171675920,dynamic,184,unmatched_detection,,9,4,no GT within 1.5 m
+1789354338.271619081,dynamic,185,unmatched_detection,,10,0,no GT within 1.5 m
+1789354338.271619081,dynamic,185,unmatched_detection,,8,1,no GT within 1.5 m
+1789354338.271619081,dynamic,185,unmatched_detection,,11,2,no GT within 1.5 m
+1789354338.271619081,dynamic,185,unmatched_detection,,5,3,no GT within 1.5 m
+1789354338.271619081,dynamic,185,unmatched_detection,,9,4,no GT within 1.5 m
+1789354338.371727228,dynamic,186,unmatched_detection,,10,0,no GT within 1.5 m
+1789354338.371727228,dynamic,186,unmatched_detection,,8,1,no GT within 1.5 m
+1789354338.371727228,dynamic,186,unmatched_detection,,11,2,no GT within 1.5 m
+1789354338.371727228,dynamic,186,unmatched_detection,,5,3,no GT within 1.5 m
+1789354338.371727228,dynamic,186,unmatched_detection,,9,4,no GT within 1.5 m
+1789354338.471624136,dynamic,187,unmatched_detection,,10,0,no GT within 1.5 m
+1789354338.471624136,dynamic,187,unmatched_detection,,8,1,no GT within 1.5 m
+1789354338.471624136,dynamic,187,unmatched_detection,,11,2,no GT within 1.5 m
+1789354338.471624136,dynamic,187,unmatched_detection,,5,3,no GT within 1.5 m
+1789354338.471624136,dynamic,187,unmatched_detection,,9,4,no GT within 1.5 m
+1789354338.571709871,dynamic,188,unmatched_detection,,10,0,no GT within 1.5 m
+1789354338.571709871,dynamic,188,unmatched_detection,,8,1,no GT within 1.5 m
+1789354338.571709871,dynamic,188,unmatched_detection,,11,2,no GT within 1.5 m
+1789354338.571709871,dynamic,188,unmatched_detection,,5,3,no GT within 1.5 m
+1789354338.571709871,dynamic,188,unmatched_detection,,9,4,no GT within 1.5 m
+1789354338.671721458,dynamic,189,unmatched_detection,,10,0,no GT within 1.5 m
+1789354338.671721458,dynamic,189,unmatched_detection,,8,1,no GT within 1.5 m
+1789354338.671721458,dynamic,189,unmatched_detection,,11,2,no GT within 1.5 m
+1789354338.671721458,dynamic,189,unmatched_detection,,5,3,no GT within 1.5 m
+1789354338.671721458,dynamic,189,unmatched_detection,,9,4,no GT within 1.5 m
+1789354338.771650791,dynamic,190,unmatched_detection,,10,0,no GT within 1.5 m
+1789354338.771650791,dynamic,190,unmatched_detection,,8,1,no GT within 1.5 m
+1789354338.771650791,dynamic,190,unmatched_detection,,11,2,no GT within 1.5 m
+1789354338.771650791,dynamic,190,unmatched_detection,,5,3,no GT within 1.5 m
+1789354338.771650791,dynamic,190,unmatched_detection,,9,4,no GT within 1.5 m
+1789354338.871711016,dynamic,191,unmatched_detection,,10,0,no GT within 1.5 m
+1789354338.871711016,dynamic,191,unmatched_detection,,8,1,no GT within 1.5 m
+1789354338.871711016,dynamic,191,unmatched_detection,,11,2,no GT within 1.5 m
+1789354338.871711016,dynamic,191,unmatched_detection,,5,3,no GT within 1.5 m
+1789354338.871711016,dynamic,191,unmatched_detection,,9,4,no GT within 1.5 m
+1789354338.971702337,dynamic,192,unmatched_detection,,10,0,no GT within 1.5 m
+1789354338.971702337,dynamic,192,unmatched_detection,,8,1,no GT within 1.5 m
+1789354338.971702337,dynamic,192,unmatched_detection,,11,2,no GT within 1.5 m
+1789354338.971702337,dynamic,192,unmatched_detection,,5,3,no GT within 1.5 m
+1789354338.971702337,dynamic,192,unmatched_detection,,9,4,no GT within 1.5 m
+1789354339.071719408,dynamic,193,unmatched_detection,,10,0,no GT within 1.5 m
+1789354339.071719408,dynamic,193,unmatched_detection,,8,1,no GT within 1.5 m
+1789354339.071719408,dynamic,193,unmatched_detection,,11,2,no GT within 1.5 m
+1789354339.071719408,dynamic,193,unmatched_detection,,5,3,no GT within 1.5 m
+1789354339.071719408,dynamic,193,unmatched_detection,,9,4,no GT within 1.5 m
+1789354339.171707869,dynamic,194,unmatched_detection,,10,0,no GT within 1.5 m
+1789354339.171707869,dynamic,194,unmatched_detection,,8,1,no GT within 1.5 m
+1789354339.171707869,dynamic,194,unmatched_detection,,11,2,no GT within 1.5 m
+1789354339.171707869,dynamic,194,unmatched_detection,,5,3,no GT within 1.5 m
+1789354339.171707869,dynamic,194,unmatched_detection,,9,4,no GT within 1.5 m
+1789354339.271725655,dynamic,195,unmatched_detection,,10,0,no GT within 1.5 m
+1789354339.271725655,dynamic,195,unmatched_detection,,8,1,no GT within 1.5 m
+1789354339.271725655,dynamic,195,unmatched_detection,,11,2,no GT within 1.5 m
+1789354339.271725655,dynamic,195,unmatched_detection,,5,3,no GT within 1.5 m
+1789354339.271725655,dynamic,195,unmatched_detection,,9,4,no GT within 1.5 m
+1789354339.371926546,dynamic,196,unmatched_detection,,10,0,no GT within 1.5 m
+1789354339.371926546,dynamic,196,unmatched_detection,,8,1,no GT within 1.5 m
+1789354339.371926546,dynamic,196,unmatched_detection,,11,2,no GT within 1.5 m
+1789354339.371926546,dynamic,196,unmatched_detection,,5,3,no GT within 1.5 m
+1789354339.371926546,dynamic,196,unmatched_detection,,9,4,no GT within 1.5 m
+1789354339.471662283,dynamic,197,unmatched_detection,,10,0,no GT within 1.5 m
+1789354339.471662283,dynamic,197,unmatched_detection,,8,1,no GT within 1.5 m
+1789354339.471662283,dynamic,197,unmatched_detection,,11,2,no GT within 1.5 m
+1789354339.471662283,dynamic,197,unmatched_detection,,5,3,no GT within 1.5 m
+1789354339.471662283,dynamic,197,unmatched_detection,,9,4,no GT within 1.5 m
+1789354339.571696997,dynamic,198,unmatched_detection,,10,0,no GT within 1.5 m
+1789354339.571696997,dynamic,198,unmatched_detection,,8,1,no GT within 1.5 m
+1789354339.571696997,dynamic,198,unmatched_detection,,11,2,no GT within 1.5 m
+1789354339.571696997,dynamic,198,unmatched_detection,,5,3,no GT within 1.5 m
+1789354339.571696997,dynamic,198,unmatched_detection,,9,4,no GT within 1.5 m
+1789354339.671765804,dynamic,199,unmatched_detection,,10,0,no GT within 1.5 m
+1789354339.671765804,dynamic,199,unmatched_detection,,8,1,no GT within 1.5 m
+1789354339.671765804,dynamic,199,unmatched_detection,,11,2,no GT within 1.5 m
+1789354339.671765804,dynamic,199,unmatched_detection,,5,3,no GT within 1.5 m
+1789354339.671765804,dynamic,199,unmatched_detection,,9,4,no GT within 1.5 m
+1789354339.771840096,dynamic,200,unmatched_detection,,10,0,no GT within 1.5 m
+1789354339.771840096,dynamic,200,unmatched_detection,,8,1,no GT within 1.5 m
+1789354339.771840096,dynamic,200,unmatched_detection,,11,2,no GT within 1.5 m
+1789354339.771840096,dynamic,200,unmatched_detection,,5,3,no GT within 1.5 m
+1789354339.771840096,dynamic,200,unmatched_detection,,9,4,no GT within 1.5 m
+1789354339.871679306,dynamic,201,unmatched_detection,,10,0,no GT within 1.5 m
+1789354339.871679306,dynamic,201,unmatched_detection,,8,1,no GT within 1.5 m
+1789354339.871679306,dynamic,201,unmatched_detection,,11,2,no GT within 1.5 m
+1789354339.871679306,dynamic,201,unmatched_detection,,5,3,no GT within 1.5 m
+1789354339.871679306,dynamic,201,unmatched_detection,,9,4,no GT within 1.5 m
+1789354339.971607924,dynamic,202,unmatched_detection,,10,0,no GT within 1.5 m
+1789354339.971607924,dynamic,202,unmatched_detection,,8,1,no GT within 1.5 m
+1789354339.971607924,dynamic,202,unmatched_detection,,11,2,no GT within 1.5 m
+1789354339.971607924,dynamic,202,unmatched_detection,,5,3,no GT within 1.5 m
+1789354339.971607924,dynamic,202,unmatched_detection,,9,4,no GT within 1.5 m
+1789354340.071655512,dynamic,203,unmatched_detection,,10,0,no GT within 1.5 m
+1789354340.071655512,dynamic,203,unmatched_detection,,8,1,no GT within 1.5 m
+1789354340.071655512,dynamic,203,unmatched_detection,,11,2,no GT within 1.5 m
+1789354340.071655512,dynamic,203,unmatched_detection,,5,3,no GT within 1.5 m
+1789354340.071655512,dynamic,203,unmatched_detection,,9,4,no GT within 1.5 m
+1789354340.171702862,dynamic,204,unmatched_detection,,10,0,no GT within 1.5 m
+1789354340.171702862,dynamic,204,unmatched_detection,,8,1,no GT within 1.5 m
+1789354340.171702862,dynamic,204,unmatched_detection,,11,2,no GT within 1.5 m
+1789354340.171702862,dynamic,204,unmatched_detection,,5,3,no GT within 1.5 m
+1789354340.171702862,dynamic,204,unmatched_detection,,9,4,no GT within 1.5 m
+1789354340.271677494,dynamic,205,unmatched_detection,,10,0,no GT within 1.5 m
+1789354340.271677494,dynamic,205,unmatched_detection,,8,1,no GT within 1.5 m
+1789354340.271677494,dynamic,205,unmatched_detection,,11,2,no GT within 1.5 m
+1789354340.271677494,dynamic,205,unmatched_detection,,5,3,no GT within 1.5 m
+1789354340.271677494,dynamic,205,unmatched_detection,,9,4,no GT within 1.5 m
+1789354340.371723175,dynamic,206,unmatched_detection,,10,0,no GT within 1.5 m
+1789354340.371723175,dynamic,206,unmatched_detection,,8,1,no GT within 1.5 m
+1789354340.371723175,dynamic,206,unmatched_detection,,11,2,no GT within 1.5 m
+1789354340.371723175,dynamic,206,unmatched_detection,,5,3,no GT within 1.5 m
+1789354340.371723175,dynamic,206,unmatched_detection,,9,4,no GT within 1.5 m
+1789354340.471710205,dynamic,207,unmatched_detection,,10,0,no GT within 1.5 m
+1789354340.471710205,dynamic,207,unmatched_detection,,8,1,no GT within 1.5 m
+1789354340.471710205,dynamic,207,unmatched_detection,,11,2,no GT within 1.5 m
+1789354340.471710205,dynamic,207,unmatched_detection,,5,3,no GT within 1.5 m
+1789354340.471710205,dynamic,207,unmatched_detection,,9,4,no GT within 1.5 m
+1789354340.571677208,dynamic,208,unmatched_detection,,10,0,no GT within 1.5 m
+1789354340.571677208,dynamic,208,unmatched_detection,,8,1,no GT within 1.5 m
+1789354340.571677208,dynamic,208,unmatched_detection,,11,2,no GT within 1.5 m
+1789354340.571677208,dynamic,208,unmatched_detection,,5,3,no GT within 1.5 m
+1789354340.571677208,dynamic,208,unmatched_detection,,9,4,no GT within 1.5 m
+1789354340.671661854,dynamic,209,unmatched_detection,,10,0,no GT within 1.5 m
+1789354340.671661854,dynamic,209,unmatched_detection,,8,1,no GT within 1.5 m
+1789354340.671661854,dynamic,209,unmatched_detection,,11,2,no GT within 1.5 m
+1789354340.671661854,dynamic,209,unmatched_detection,,5,3,no GT within 1.5 m
+1789354340.671661854,dynamic,209,unmatched_detection,,9,4,no GT within 1.5 m
+1789354340.771737814,dynamic,210,unmatched_detection,,10,0,no GT within 1.5 m
+1789354340.771737814,dynamic,210,unmatched_detection,,8,1,no GT within 1.5 m
+1789354340.771737814,dynamic,210,unmatched_detection,,11,2,no GT within 1.5 m
+1789354340.771737814,dynamic,210,unmatched_detection,,5,3,no GT within 1.5 m
+1789354340.771737814,dynamic,210,unmatched_detection,,9,4,no GT within 1.5 m
+1789354340.871674538,dynamic,211,unmatched_detection,,10,0,no GT within 1.5 m
+1789354340.871674538,dynamic,211,unmatched_detection,,8,1,no GT within 1.5 m
+1789354340.871674538,dynamic,211,unmatched_detection,,11,2,no GT within 1.5 m
+1789354340.871674538,dynamic,211,unmatched_detection,,5,3,no GT within 1.5 m
+1789354340.871674538,dynamic,211,unmatched_detection,,9,4,no GT within 1.5 m
+1789354340.971674204,dynamic,212,unmatched_detection,,10,0,no GT within 1.5 m
+1789354340.971674204,dynamic,212,unmatched_detection,,8,1,no GT within 1.5 m
+1789354340.971674204,dynamic,212,unmatched_detection,,11,2,no GT within 1.5 m
+1789354340.971674204,dynamic,212,unmatched_detection,,5,3,no GT within 1.5 m
+1789354340.971674204,dynamic,212,unmatched_detection,,9,4,no GT within 1.5 m
+1789354341.071646452,dynamic,213,unmatched_detection,,10,0,no GT within 1.5 m
+1789354341.071646452,dynamic,213,unmatched_detection,,8,1,no GT within 1.5 m
+1789354341.071646452,dynamic,213,unmatched_detection,,11,2,no GT within 1.5 m
+1789354341.071646452,dynamic,213,unmatched_detection,,5,3,no GT within 1.5 m
+1789354341.071646452,dynamic,213,unmatched_detection,,9,4,no GT within 1.5 m
+1789354341.171660662,dynamic,214,unmatched_detection,,10,0,no GT within 1.5 m
+1789354341.171660662,dynamic,214,unmatched_detection,,8,1,no GT within 1.5 m
+1789354341.171660662,dynamic,214,unmatched_detection,,11,2,no GT within 1.5 m
+1789354341.171660662,dynamic,214,unmatched_detection,,5,3,no GT within 1.5 m
+1789354341.171660662,dynamic,214,unmatched_detection,,9,4,no GT within 1.5 m
+1789354341.271640539,dynamic,215,unmatched_detection,,10,0,no GT within 1.5 m
+1789354341.271640539,dynamic,215,unmatched_detection,,8,1,no GT within 1.5 m
+1789354341.271640539,dynamic,215,unmatched_detection,,11,2,no GT within 1.5 m
+1789354341.271640539,dynamic,215,unmatched_detection,,5,3,no GT within 1.5 m
+1789354341.271640539,dynamic,215,unmatched_detection,,9,4,no GT within 1.5 m
+1789354341.371736288,dynamic,216,unmatched_detection,,10,0,no GT within 1.5 m
+1789354341.371736288,dynamic,216,unmatched_detection,,8,1,no GT within 1.5 m
+1789354341.371736288,dynamic,216,unmatched_detection,,11,2,no GT within 1.5 m
+1789354341.371736288,dynamic,216,unmatched_detection,,5,3,no GT within 1.5 m
+1789354341.371736288,dynamic,216,unmatched_detection,,9,4,no GT within 1.5 m
+1789354341.471673727,dynamic,217,unmatched_detection,,10,0,no GT within 1.5 m
+1789354341.471673727,dynamic,217,unmatched_detection,,8,1,no GT within 1.5 m
+1789354341.471673727,dynamic,217,unmatched_detection,,11,2,no GT within 1.5 m
+1789354341.471673727,dynamic,217,unmatched_detection,,5,3,no GT within 1.5 m
+1789354341.471673727,dynamic,217,unmatched_detection,,9,4,no GT within 1.5 m
+1789354341.571666718,dynamic,218,unmatched_detection,,10,0,no GT within 1.5 m
+1789354341.571666718,dynamic,218,unmatched_detection,,8,1,no GT within 1.5 m
+1789354341.571666718,dynamic,218,unmatched_detection,,11,2,no GT within 1.5 m
+1789354341.571666718,dynamic,218,unmatched_detection,,5,3,no GT within 1.5 m
+1789354341.571666718,dynamic,218,unmatched_detection,,9,4,no GT within 1.5 m
+1789354341.671699286,dynamic,219,unmatched_detection,,10,0,no GT within 1.5 m
+1789354341.671699286,dynamic,219,unmatched_detection,,8,1,no GT within 1.5 m
+1789354341.671699286,dynamic,219,unmatched_detection,,11,2,no GT within 1.5 m
+1789354341.671699286,dynamic,219,unmatched_detection,,5,3,no GT within 1.5 m
+1789354341.671699286,dynamic,219,unmatched_detection,,9,4,no GT within 1.5 m
+1789354341.771678925,dynamic,220,unmatched_detection,,10,0,no GT within 1.5 m
+1789354341.771678925,dynamic,220,unmatched_detection,,8,1,no GT within 1.5 m
+1789354341.771678925,dynamic,220,unmatched_detection,,11,2,no GT within 1.5 m
+1789354341.771678925,dynamic,220,unmatched_detection,,5,3,no GT within 1.5 m
+1789354341.771678925,dynamic,220,unmatched_detection,,9,4,no GT within 1.5 m

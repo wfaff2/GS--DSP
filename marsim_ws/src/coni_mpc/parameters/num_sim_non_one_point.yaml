@@ -1,0 +1,231 @@
+# Cost on states
+# Q is a semi-definite matrix, so it's ok to have zero entries
+Q_p_xy:                     100.0 # 200.0       # 适当降低位置权重，缓解速度指令频繁打满的问题
+Q_p_z:                      100.0       # Cost for vertical position error
+Q_v:                        20        # Cost for velocity error
+Q_yaw:                      1.0      # Cost for yaw error
+
+# Cost on Inputs (velocity commands)
+R_v_xy:                     15        # Cost on v_x / v_y command
+R_v_z:                      100         # Cost on v_z command
+R_yaw_rate:                 3         # Cost on yaw-rate command
+
+
+# Exponential scaling: W_i = W * exp(-i/N * cost_scaling).
+# cost_scaling = 0 means no scaling W_i = W. 
+state_cost_exponential:     0.0         # Scaling for state costs
+input_cost_exponential:     0.0         # scaling for input costs
+tracking_trust_time_damping_lambda: 0  # Time-domain damping on planar tracking weight, trust_factor(t)=exp(-0.5*lambda*t), so the squared cost weight decays as exp(-lambda*t).
+ugv_rollout_mode:           frozen
+car_trajectory_mode:        figure_eight   # obstacle_aware | circle | figure_eight
+
+# Limits for commands
+max_v_xy:                   5.0
+max_v_z:                    1.0
+max_yaw_rate:               3.14
+
+# Common simulation/control timing for every Comment 3.4 controller.
+# The MPC prediction grid remains 20 x 0.1 s = 2.0 s.
+sim_system_dt_sec:          0.01
+sim_control_dt_sec:         0.01       # 100 Hz, shared by all baselines
+
+# Simulated first-order velocity tracking constants for the quadrotor plant.
+tau_v_xy:                   0.2
+tau_v_z:                    0.2
+
+num_uavs:                   4
+world_frame_id:             map
+relative_frame_id:          base_link
+topic_prefix:               ""
+
+uav_radius:                 0.15
+car_radius:                 0.15                                                                                                                                                                                                                                                               
+
+dynamic_obs:
+  start_z: 2.0
+
+# non-inertial relative reference height conversion:
+# reference_height_rel = coeff * (dynamic_obs.start_z - car_start_z)
+reference_height_coeff: 1.0
+
+# Optional per-UAV relative hover offsets in the moving frame.
+# Each entry is [x, y] or [x, y, z]. When omitted, the code generates a
+# symmetric default formation from the launch argument r.
+# uav_reference_offsets:
+#   - [-0.5, 0.0]
+#   - [0.0, 0.5]
+#   - [0.0, -0.5]
+#   - [0.5, 0.0]
+
+
+# Print information such as timing to terminal
+print_info:                 true
+
+estimation_noise:
+  position_std: 0.025
+  relative_velocity_std: 0.025
+  orientation_std: 0.0435
+  imu_non_std: 0.025
+  car_linear_velocity_std: 0.025
+  car_angular_velocity_std: 0.0435
+
+# alpha1 / alpha2 are the two second-order CBF poles.
+cbf:
+  enabled: true
+  use_in_sim: true        # 关闭后可完全禁用CBF
+  alpha1: 4
+  alpha2: 4
+  safety_margin: 0.35
+  preview_margin: 0.0
+  preview_steps: 5        # 降低预测步数，减少非惯性系下障碍物"相对高速运动"产生的极长拖尾遮挡
+  obstacle_hysteresis_hold_cycles: 0
+  slack_max: 2   # 适中约束，平衡CBF严格性与QP求解稳定性
+  R_slack: 500   #120  Cost on CBF slack variable
+
+# Comment 3.4 baseline: independent Moving-Goal Polytopic HRVO (MG-PolyHRVO).
+# The node bypasses ACADO MPC/CBF, updates the current formation slot goal at
+# sim_control_dt_sec, and feeds the resulting world-XY preferred velocity into
+# the official-code-derived polytopic VO/HRVO selector. Static obstacles use
+# VO_p; peer UAVs use HRVO_p in world XY.
+external_avoidance:
+  mode: none                  # none | polytopic_hrvo
+  time_horizon: 2.0           # tau in Huang et al. Eq. (4), equals MPC horizon
+  max_neighbors: 0            # 0 = all peer UAVs inside the Eq. (4) region
+  safety_margin: 0.0          # formal VO/HRVO baseline uses physical footprints only
+  polygon_sides: 16           # conservative cylinder/disc approximation
+  velocity_window: 0.5        # source-code per-update vx/vy search window [m/s]
+  candidate_resolution: 0.05  # source-code velocity lattice resolution [m/s]
+  fallback_penalty_weight: 4.0 # phi in the published Table II / Eq. (8)
+  preferred_velocity_mode: slot_velocity_ff # slot_velocity_ff | goal_only
+  goal_gain: 1.0              # proportional moving-goal gain [1/s]
+  velocity_compensation_tau_sec: 0.2 # post-filter compensation for simulated XY velocity lag [s]
+
+debug:
+  check_noninertial_profile_col0: false  # 打印并检查非惯性 profile 第0列是否和 legacy 当前时刻补偿一致，仅用于诊断
+  force_zero_a_car_non_profile: false # 必须关闭：恢复对小车加速度的前馈预判，防止跟踪严重掉队后被障碍物卡住
+  force_legacy_noninertial_constant_profile: false  # 绕过 stage-wise 非惯性 profile，退回 legacy 常值在线数据；开启后上一项不生效
+
+# Keep the node alive for a short time after a collision so RViz can still
+# show the collision markers and the final scene.
+post_collision_hold_sec: 3.0
+# Physical-contact detector only.  Safety-margin violations are reported
+# separately from contact; 0.0 means surfaces must overlap to count as contact.
+failure_distance_margin: 0.0
+
+# Optional Comment 3.4 circle benchmark.  Six fixed cylinders are placed on a
+# world-frame ring at 60-degree intervals.  The ring radius is computed from
+# the UGV circle radius, formation radius, physical radii, and the nominal
+# surface clearance below.  Keep disabled for the legacy obstacle-free circle
+# evidence; the new Comment 3.4 runner enables it explicitly.
+circle_obstacles:
+  enabled: false
+  count: 6
+  radius: 0.40
+  height: 3.0
+  start_angle_deg: 0.0
+  nominal_surface_clearance: 0.25
+
+random_obstacles:
+  count: 0
+  x_range: [-10.0, 10.0]
+  y_range: [-10.0, 10.0]
+  height_range: [2.5, 3.0]
+  radius: 0.45
+  seed: 3
+
+# Strategic obstacles for figure-8 trajectory.
+# Positions use the same Gerono amplitude as figure_eight_geometry:
+#   4 turn-zone obstacles near (±A/sqrt(2), ±turn_y_ratio*A/2)
+#   2 crossing obstacles near (0, ±crossing_y_ratio*A/2)
+figure_eight_obstacles:
+  enabled: true
+  radius: 0.40        # obstacle cylinder radius [m]
+  height: 3.0         # obstacle cylinder height [m] — must cover UAV flight altitude
+  inner_buffer: 0.50  # extra clearance beyond CBF keepout; increase = easier, decrease = harder
+
+# Figure-8 geometry is independent of the requested V/W sweep by default.
+# V and W are treated as UGV speed/yaw-rate limits; the curve size comes from
+# reference_v/reference_w unless amplitude is set explicitly (>0).
+figure_eight_geometry:
+  fixed: true
+  reference_v: 3.0
+  reference_w: 3.0
+  amplitude: 0.0
+  # Gerono phase at t=0. pi/2 starts at the right outer tip (A, 0);
+  # 0.0 starts at the center crossing.
+  start_phase: 1.5707963267948966
+
+ugv_path:
+  a_star_connectivity: 8
+  use_midpoint_guide: false
+  use_last_guide_as_goal: false
+  enable_shortcut_pruning: false
+  enable_endpoint_snapping: true
+  # Base dynamics limits at V=1 m/s and W=1 rad/s.
+  # The simulator scales longitudinal limits by |V| and yaw limits by |W|.
+  longitudinal_accel_max: 2.0
+  longitudinal_decel_max: 2.5
+  longitudinal_jerk_max: 8.0
+  yaw_accel_max: 1.0
+  yaw_jerk_max: 8.0
+  speed_tracking_tau: 0.25
+  yaw_rate_tracking_tau: 0.18
+  along_track_feedback_gain: 1.0
+  heading_feedback_gain: 2.2
+  lateral_feedback_gain: 0.8
+  # When guide_waypoints is omitted, the planner now auto-generates a
+  # seed-aware, collision-free approximate S-bend using two intermediate guide
+  # points. Keeping shortcut pruning disabled preserves that S shape.
+  # guide_waypoints:
+  #   - [-4.0, -7.0]
+  #   - [4.0, 7.0]
+
+non_inertial_predictor:
+  warmup_frames: 5
+  ema_alpha_min: 0.05
+  ema_alpha_max: 0.6
+  mode: adaptive_gamma
+  gamma_a: 0.85
+  gamma_alpha: 0.65
+  a_max: 10.0
+  alpha_max: 10.0
+  exit_history_size: 8
+  debug_log: false
+  trend_window_size: 5
+  trend_alpha: 0.6
+  trend_gamma_min: 0.90
+  trend_gamma_max: 1.08
+  trend_acc_threshold: 0.05
+  trend_acc_floor: 0.10
+  trend_lambda: 3.75
+  trend_window_size_alpha: 5
+  trend_alpha_alpha: 0.45
+  trend_gamma_min_alpha: 0.90
+  trend_gamma_max_alpha: 1.08
+  trend_acc_threshold_alpha: 0.03
+  trend_acc_floor_alpha: 0.05
+  trend_lambda_alpha: 3.75
+  turn_exit_omega_hold: 0.2
+  turn_exit_omega_low: 0.05
+  accel_exit_a_hold: 0.3
+  accel_exit_a_low: 0.1
+  cruise_speed_ratio: 0.92
+  stop_speed_threshold: 0.1
+  # Causal horizon-aware damped rollout used by stage mode for S-bend/figure-8
+  # local maneuvers. It is not an optimal predictor; it damps constant-
+  # derivative over-extrapolation when the current derivative is driving a
+  # non-inertial quantity toward a zero crossing inside the MPC horizon.
+  damped_eta_min: 0.15
+  damped_eps: 1.0e-6
+  damped_lambda_acc: 1.0
+  damped_lambda_omega: 1.0
+  damped_lambda_beta: 0.95
+  enable_acc_damping: true
+  enable_omega_damping: true
+  enable_beta_decay: true
+
+
+
+
+
+ 

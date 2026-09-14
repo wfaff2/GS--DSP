@@ -1,0 +1,13 @@
+std_msgs/Header header
+geometry_msgs/Point query_center_N
+float64[9] A_row_major
+geometry_msgs/Vector3 b
+float64 c
+float64 rmse
+float64 max_abs_error
+float64 condition_number
+int32 rank
+float64 min_singular_value
+float64 max_singular_value
+uint32 query_count
+bool valid

@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC   -shared -Wl,-soname,libpose_utils.so -o /home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/devel/lib/libpose_utils.so CMakeFiles/pose_utils.dir/src/pose_utils.cpp.o 

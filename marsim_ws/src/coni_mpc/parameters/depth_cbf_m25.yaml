@@ -1,0 +1,11 @@
+# M2.5 measurement-only additions. Base filter/regression parameters are loaded
+# from depth_cbf.yaml so the validated M1/M2 algorithm configuration is reused.
+m25:
+  result_root: results/depth_cbf_m25_mid360_min01
+  max_pose_time_offset_sec: 0.025
+  root_max_distance: 4.0
+  root_samples: 160
+  non_conservative_tolerance: 0.001
+  min_raylength: 0.1
+  yaw_fov_deg: 360.0
+  vertical_fov_deg: 90.0

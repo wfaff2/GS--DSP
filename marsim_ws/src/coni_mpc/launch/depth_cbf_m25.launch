@@ -1,0 +1,73 @@
+<launch>
+  <arg name="scene" default="A1_plane" />
+  <arg name="motion" default="front" />
+  <arg name="run_id" default="$(arg scene)_$(arg motion)" />
+  <arg name="map_name" default="$(find coni_mpc)/test_data/depth_cbf_m25/A1_plane.pcd" />
+  <arg name="gt_pcd" default="$(arg map_name)" />
+  <arg name="result_root" default="results/depth_cbf_m25_mid360_min01" />
+  <arg name="duration_sec" default="8.0" />
+  <arg name="warmup_sec" default="2.0" />
+  <arg name="min_raylength" default="0.1" />
+  <arg name="yaw_offset_deg" default="0.0" />
+
+  <node pkg="coni_mpc" name="depth_cbf_m25_map_pub"
+        type="depth_cbf_m25_map_publisher_node" output="screen">
+    <param name="map_name" value="$(arg map_name)" />
+  </node>
+
+  <node pkg="local_sensing_node" type="pcl_render_node"
+        name="quad0_pcl_render_node" output="screen">
+    <remap from="~global_map" to="/map_generator/global_cloud" />
+    <remap from="~odometry" to="/coni_mpc/quad_odom1" />
+    <param name="drone_id" value="0" />
+    <param name="quadrotor_name" value="m25_quad0" />
+    <param name="uav_num" value="1" />
+    <param name="is_360lidar" value="1" />
+    <param name="sensing_horizon" value="15.0" />
+    <param name="sensing_rate" value="10.0" />
+    <param name="estimation_rate" value="10.0" />
+    <param name="polar_resolution" value="0.2" />
+    <param name="yaw_fov" value="360.0" />
+    <param name="vertical_fov" value="90.0" />
+    <param name="min_raylength" value="$(arg min_raylength)" />
+    <param name="livox_linestep" value="1.4" />
+    <param name="curvature_limit" value="100.0" />
+    <param name="hash_cubesize" value="5.0" />
+    <param name="use_avia_pattern" value="0" />
+    <param name="use_vlp32_pattern" value="0" />
+    <param name="use_minicf_pattern" value="1" />
+    <param name="use_os128_pattern" value="0" />
+    <param name="downsample_res" value="0.1" />
+    <param name="dynobj_enable" value="0" />
+    <param name="dynobject_size" value="0.8" />
+    <param name="dynobject_num" value="0" />
+    <param name="dyn_mode" value="0" />
+    <param name="dyn_velocity" value="0.0" />
+    <param name="use_uav_extra_model" value="0" />
+    <param name="collisioncheck_enable" value="0" />
+    <param name="collision_range" value="0.3" />
+    <param name="output_pcd" value="0" />
+  </node>
+
+  <node pkg="coni_mpc" type="depth_cbf_m25_trajectory_node"
+        name="depth_cbf_m25_trajectory" output="screen" required="true">
+    <param name="scene" value="$(arg scene)" />
+    <param name="motion" value="$(arg motion)" />
+    <param name="duration_sec" value="$(arg duration_sec)" />
+    <param name="warmup_sec" value="$(arg warmup_sec)" />
+    <param name="yaw_offset_deg" value="$(arg yaw_offset_deg)" />
+  </node>
+
+  <node pkg="coni_mpc" type="depth_cbf_m25_evaluation_node"
+        name="depth_cbf_m25_evaluator" output="screen">
+    <rosparam command="load" file="$(find coni_mpc)/parameters/depth_cbf.yaml" />
+    <rosparam command="load" file="$(find coni_mpc)/parameters/depth_cbf_m25.yaml" />
+    <param name="m25/scene" value="$(arg scene)" />
+    <param name="m25/motion" value="$(arg motion)" />
+    <param name="m25/run_id" value="$(arg run_id)" />
+    <param name="m25/result_root" value="$(arg result_root)" />
+    <param name="m25/gt_pcd" value="$(arg gt_pcd)" />
+    <param name="m25/min_raylength" value="$(arg min_raylength)" />
+    <param name="filter/min_range" value="$(arg min_raylength)" />
+  </node>
+</launch>

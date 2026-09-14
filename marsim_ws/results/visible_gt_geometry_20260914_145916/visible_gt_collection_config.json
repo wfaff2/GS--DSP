@@ -1,0 +1,282 @@
+{
+  "dropped_frames": 0,
+  "full_gt_center": [
+    5.0,
+    0.0,
+    1.5
+  ],
+  "full_gt_size": [
+    0.8,
+    0.6,
+    1.2
+  ],
+  "gt_coverage_complete": true,
+  "gt_covered_frames": 40,
+  "launch_command_file": "launch_command.txt",
+  "lv_dot_parameters": {
+    "body_to_camera_color": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "body_to_camera_depth": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "body_to_lidar": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "color_image_topic": "/lv_dot/disabled/color",
+    "color_intrinsics": [
+      606.3120727539062,
+      605.92626953125,
+      314.6913146972656,
+      252.1909942626953
+    ],
+    "dbscan_min_points_cluster": 20,
+    "dbscan_search_range_epsilon": 0.05,
+    "depth_filter_margin": 10,
+    "depth_image_topic": "/lv_dot/disabled/depth",
+    "depth_intrinsics": [
+      385.3096008300781,
+      385.3096008300781,
+      324.7971496582031,
+      237.722900390625
+    ],
+    "depth_max_value": 5.0,
+    "depth_min_value": 0.5,
+    "depth_scale_factor": 1000,
+    "depth_skip_pixel": 2,
+    "detected_color_image": {
+      "compressed": {
+        "format": "jpeg",
+        "jpeg_optimize": false,
+        "jpeg_progressive": false,
+        "jpeg_quality": 80,
+        "jpeg_restart_interval": 0,
+        "png_level": 9
+      },
+      "compressedDepth": {
+        "depth_max": 10.0,
+        "depth_quantization": 100.0,
+        "format": "png",
+        "png_level": 1
+      },
+      "theora": {
+        "keyframe_frequency": 64,
+        "optimize_for": 1,
+        "quality": 31,
+        "target_bitrate": 800000
+      }
+    },
+    "detected_depth_map": {
+      "compressed": {
+        "format": "jpeg",
+        "jpeg_optimize": false,
+        "jpeg_progressive": false,
+        "jpeg_quality": 80,
+        "jpeg_restart_interval": 0,
+        "png_level": 9
+      },
+      "compressedDepth": {
+        "depth_max": 10.0,
+        "depth_quantization": 100.0,
+        "format": "png",
+        "png_level": 1
+      },
+      "theora": {
+        "keyframe_frequency": 64,
+        "optimize_for": 1,
+        "quality": 31,
+        "target_bitrate": 800000
+      }
+    },
+    "detected_u_depth_map": {
+      "compressed": {
+        "format": "jpeg",
+        "jpeg_optimize": false,
+        "jpeg_progressive": false,
+        "jpeg_quality": 80,
+        "jpeg_restart_interval": 0,
+        "png_level": 9
+      },
+      "compressedDepth": {
+        "depth_max": 10.0,
+        "depth_quantization": 100.0,
+        "format": "png",
+        "png_level": 1
+      },
+      "theora": {
+        "keyframe_frequency": 64,
+        "optimize_for": 1,
+        "quality": 31,
+        "target_bitrate": 800000
+      }
+    },
+    "downsample_threshold": 3500,
+    "dynamic_consistency_threshold": 5,
+    "dynamic_velocity_threshold": 0.2,
+    "dynamic_voting_threshold": 0.8,
+    "feature_weight": [
+      3.0,
+      3.0,
+      0.1,
+      0.5,
+      0.5,
+      0.05,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "filtering_BBox_IOU_threshold": 0.2,
+    "fix_size_dimension_threshold": 0.4,
+    "fix_size_history_threshold": 3,
+    "frame_skip": 2,
+    "frames_force_dynamic": 3,
+    "frames_force_dynamic_check_range": 10,
+    "gaussian_downsample_rate": 6,
+    "ground_height": 0.2,
+    "history_size": 100,
+    "image_cols": 640,
+    "image_rows": 480,
+    "kalman_filter_averaging_frames": 3,
+    "kalman_filter_param": [
+      0.25,
+      0.01,
+      0.05,
+      0.05,
+      0.04,
+      0.3,
+      0.6
+    ],
+    "lidar_DBSCAN_epsilon": 0.05,
+    "lidar_DBSCAN_min_points": 10,
+    "lidar_pointcloud_topic": "/quad0_pcl_render_node/sensor_cloud",
+    "localization_mode": 1,
+    "max_match_range": 0.5,
+    "max_object_size": [
+      3.0,
+      3.0,
+      3.0
+    ],
+    "max_size_diff_range": 0.5,
+    "odom_topic": "/coni_mpc/quad_odom1",
+    "pose_topic": "/lv_dot/disabled/pose",
+    "roof_height": 3.0,
+    "target_constrain_size": true,
+    "target_object_size": [
+      0.5,
+      0.5,
+      1.5
+    ],
+    "time_step": 0.1,
+    "u_depth_bird_view": {
+      "compressed": {
+        "format": "jpeg",
+        "jpeg_optimize": false,
+        "jpeg_progressive": false,
+        "jpeg_quality": 80,
+        "jpeg_restart_interval": 0,
+        "png_level": 9
+      },
+      "compressedDepth": {
+        "depth_max": 10.0,
+        "depth_quantization": 100.0,
+        "format": "png",
+        "png_level": 1
+      },
+      "theora": {
+        "keyframe_frequency": 64,
+        "optimize_for": 1,
+        "quality": 31,
+        "target_bitrate": 800000
+      }
+    },
+    "voxel_occupied_thresh": 5
+  },
+  "lvdot_matched_frames": 40,
+  "marsim_mid360_parameters": {
+    "collision_range": 0.3,
+    "collisioncheck_enable": 0,
+    "curvature_limit": 100.0,
+    "deterministic_box_mode": false,
+    "downsample_res": 0.1,
+    "drone_id": 0,
+    "dyn_mode": 0,
+    "dyn_velocity": 0.8,
+    "dynobj_enable": 0,
+    "dynobject_num": 8,
+    "dynobject_size": 0.8,
+    "estimation_rate": 10.0,
+    "hash_cubesize": 5.0,
+    "is_360lidar": 1,
+    "livox_linestep": 1.4,
+    "min_raylength": 0.1,
+    "output_pcd": 0,
+    "polar_resolution": 0.2,
+    "quadrotor_name": "lv_dot_quad0",
+    "sensing_horizon": 15.0,
+    "sensing_rate": 10.0,
+    "uav_num": 1,
+    "use_avia_pattern": 0,
+    "use_minicf_pattern": 1,
+    "use_os128_pattern": 0,
+    "use_uav_extra_model": 0,
+    "use_vlp32_pattern": 0,
+    "vertical_fov": 90.0,
+    "visible_gt_debug_enable": true,
+    "yaw_fov": 360.0
+  },
+  "raw_file": "visible_gt_vs_lvdot_box_raw.csv",
+  "roslaunch_exit_code": 0,
+  "sensor_cloud_modified": false,
+  "total_frames": 40,
+  "tracking_id_switches": 0,
+  "valid_visible_gt_frames": 40,
+  "visible_gt_source": "MARSIM final polar ray returns labeled by original map point index",
+  "visible_point_count_max": 462,
+  "visible_point_count_median": 392.0,
+  "visible_point_count_min": 334
+}
