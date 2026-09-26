@@ -1,8 +1,0 @@
-# generated from catkin/cmake/template/pkg.context.pc.in
-CATKIN_PACKAGE_PREFIX = ""
-PROJECT_PKG_CONFIG_INCLUDE_DIRS = "".split(';') if "" != "" else []
-PROJECT_CATKIN_DEPENDS = "".replace(';', ' ')
-PKG_CONFIG_LIBRARIES_WITH_PREFIX = "".split(';') if "" != "" else []
-PROJECT_NAME = "rviz_plugins"
-PROJECT_SPACE_DIR = "/home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/install"
-PROJECT_VERSION = "0.0.0"

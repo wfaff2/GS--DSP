@@ -39,7 +39,10 @@ relative_frame_id:          base_link
 topic_prefix:               ""
 
 uav_radius:                 0.15
-car_radius:                 0.15                                                                                                                                                                                                                                                               
+car_radius:                 0.15
+# Circular UGV trajectory radius override.  Zero preserves radius=v/w;
+# scene-specific launches may increase it to clear known obstacles.
+ugv_circle_radius:          0.0
 
 dynamic_obs:
   start_z: 2.0
@@ -70,17 +73,32 @@ estimation_noise:
   car_angular_velocity_std: 0.0435
 
 # alpha1 / alpha2 are the two second-order CBF poles.
+# Slack is controlled directly by cbf/slack_max. Zero fixes all CBF slacks
+# to zero; a positive value allows bounded slack in the differential CBF.
+# safety_variant is retained only as an experiment label and for the
+# independent A0_no_cbf baseline validation.
+safety_variant: A2_soft_cbf
 cbf:
   enabled: true
   use_in_sim: true        # 关闭后可完全禁用CBF
+  use_field_hocbf: false
+  field_topic: /my_map/future_occupancy_3d
+  field_timeout: 0.3
   alpha1: 4
   alpha2: 4
   safety_margin: 0.35
   preview_margin: 0.0
   preview_steps: 5        # 降低预测步数，减少非惯性系下障碍物"相对高速运动"产生的极长拖尾遮挡
   obstacle_hysteresis_hold_cycles: 0
-  slack_max: 2   # 适中约束，平衡CBF严格性与QP求解稳定性
-  R_slack: 500   #120  Cost on CBF slack variable
+  # A DSP message is valid only while its 2.0 s future horizon still covers
+  # the current time.  Older messages are rejected; using their final stage
+  # as a static obstacle would introduce the timing error seen near contact.
+  risk_regions_timeout: 2.0
+  # Align the DSP stage index with the message age. Set false for an A/B run
+  # that treats the received stage 0 as the current-time region.
+  risk_region_time_alignment: true
+  slack_max: 200   # direct upper bound: 0 = hard, >0 = bounded soft slack
+  R_slack: 500   # quadratic penalty on slack when slack_max > 0
 
 # Comment 3.4 baseline: independent Moving-Goal Polytopic HRVO (MG-PolyHRVO).
 # The node bypasses ACADO MPC/CBF, updates the current formation slot goal at
@@ -109,8 +127,17 @@ debug:
 # show the collision markers and the final scene.
 post_collision_hold_sec: 3.0
 # Physical-contact detector only.  Safety-margin violations are reported
-# separately from contact; 0.0 means surfaces must overlap to count as contact.
+# separately from contact; 0.0 keeps the exact radius-edge contact test.
 failure_distance_margin: 0.0
+
+# Terminal collision check for a world-frame LiDAR/MARSIM point cloud.  The
+# dedicated DSP launch enables this and supplies /quad0_pcl_render_node/cloud;
+# ordinary analytic-obstacle runs keep it disabled.
+lidar_collision:
+  enabled: false
+  cloud_topic: ""
+  timeout_sec: 0.5
+  point_margin: 0.0
 
 # Optional Comment 3.4 circle benchmark.  Six fixed cylinders are placed on a
 # world-frame ring at 60-degree intervals.  The ring radius is computed from

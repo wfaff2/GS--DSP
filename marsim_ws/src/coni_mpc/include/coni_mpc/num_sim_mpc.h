@@ -29,15 +29,20 @@
 #define CONI_MPC_NUM_SIM_MPC_H
 
 #include "coni_mpc/mpc_base.h"
+#include "coni_mpc/RiskRegionArray.h"
+#include "coni_mpc/field_hocbf.h"
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <mutex>
 #include <random>
+#include <memory>
 #include <string>
 #include <vector>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
+#include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <Eigen/StdVector>
 #include <visualization_msgs/Marker.h>
@@ -63,7 +68,12 @@ class NumSimMpc final : public MpcBase
       Eigen::aligned_allocator<Obstacle>>;
   using ObstacleProfile = acado_mpc::MpcWrapper<double>::ObstacleProfile;
   using ObstacleProfileVector = acado_mpc::MpcWrapper<double>::ObstacleProfileVector;
+  using RiskRegion = acado_mpc::MpcWrapper<double>::RiskRegion;
+  using RiskRegionVector = acado_mpc::MpcWrapper<double>::RiskRegionVector;
+  using RiskRegionProfile = acado_mpc::MpcWrapper<double>::RiskRegionProfile;
+  using RiskRegionProfileVector = acado_mpc::MpcWrapper<double>::RiskRegionProfileVector;
   using NonInertialProfile = Eigen::Matrix<double, 3, acado_mpc::kSamples + 1>;
+  using FieldHocbfProfile = acado_mpc::MpcWrapper<double>::FieldHocbfProfile;
 
   struct MetricsSummary {
     double min_h;
@@ -249,6 +259,8 @@ class NumSimMpc final : public MpcBase
   }
   void setCarOdom(const nav_msgs::Odometry &car_odom);
   void setQuadOdom(const nav_msgs::Odometry &quad_odom, int i);
+  void riskRegionCallback(const coni_mpc::RiskRegionArray::ConstPtr& message);
+  void fieldOccupancyCallback(const sensor_msgs::PointCloud2::ConstPtr& message);
   static void setSharedQuadOdom(const nav_msgs::Odometry &quad_odom, int i);
   Eigen::Vector3d getCarPosition() const {
     return Eigen::Vector3d(car_odom_.pose.pose.position.x,
@@ -345,6 +357,30 @@ class NumSimMpc final : public MpcBase
   nav_msgs::Path car_path_;
   nav_msgs::Path quad_path_;
   ros::Publisher quad_radius_marker_pub_;
+  ros::Subscriber risk_region_subscriber_;
+  std::mutex risk_region_mutex_;
+  coni_mpc::RiskRegionArray latest_risk_regions_;
+  bool has_latest_risk_regions_ = false;
+  bool risk_regions_enabled_ = false;
+  // The DSP/risk-region constructor publishes a complete 21-stage horizon
+  // less frequently than the MPC loop.  Keep the last complete horizon for
+  // a bounded processing gap instead of disabling all barriers at 0.5 s;
+  // the profile is shifted by its measured message age before use.
+  double risk_regions_timeout_ = 4.0;
+  struct FieldSnapshot {
+    ros::Time stamp;
+    std::string frame_id;
+    field_hocbf::Points points;
+    std::uint32_t last_occupied_stage = 0;
+  };
+  ros::Subscriber field_occupancy_subscriber_;
+  std::mutex field_snapshot_mutex_;
+  std::shared_ptr<const FieldSnapshot> field_snapshot_;
+  bool field_hocbf_enabled_ = false;
+  // Keep timestamp/stage compensation configurable so the same run can be
+  // compared with and without delay alignment. Enabled by default to retain
+  // the current behavior.
+  bool risk_region_time_alignment_ = true;
   double car_radius_;
   double uav_radius_;
   ObstacleVector last_obstacles_;
@@ -352,7 +388,6 @@ class NumSimMpc final : public MpcBase
   FrameMode frame_mode_;
   std::string frame_mode_effective_;
   std::string safety_variant_;
-  bool zero_slack_required_;
   std::mt19937 noise_rng_;
   std::normal_distribution<double> noise_dist_;
   Eigen::Vector3d measured_car_linear_velocity_;

@@ -84,7 +84,7 @@ T quaternionToYaw(const Eigen::Quaternion<T>& q_in) {
 template <typename T>
 T aggregateObstacleSlack(
     const Eigen::Ref<const Eigen::Matrix<T, kInputSize, 1>>& input) {
-  return input.template segment<kMaxObstacles>(INPUT::kSlack0).sum();
+  return input.template segment<3>(INPUT::kSlack0).sum();
 }
 }  // namespace
 
@@ -97,6 +97,8 @@ MpcController<T>::MpcController(
     mpc_wrapper_(MpcWrapper<T>()),
     timing_feedback_(T(1e-3)),
     timing_preparation_(T(1e-3)),
+    solve_from_scratch_(true),
+    warm_start_(true),
     est_state_(Eigen::Matrix<T, kStateSize, 1>::Zero()),
     reference_states_(Eigen::Matrix<T, kStateSize, kSamples + 1>::Zero()),
     reference_inputs_(Eigen::Matrix<T, kInputSize, kSamples + 1>::Zero()),
@@ -106,9 +108,10 @@ MpcController<T>::MpcController(
     last_feedback_solve_time_sec_(0.0),
     last_preparation_time_sec_(0.0),
     last_solve_ok_(true),
-    warm_start_(true),
     nonfinite_recovery_count_(0u),
-    obstacle_update_fail_count_(0u) {
+    obstacle_update_fail_count_(0u),
+    last_valid_control_(),
+    has_last_valid_control_(false) {
   const std::string predicted_topic =
       acado_mpc_common::resolveTopicName(topic + std::to_string(id));
   const std::string predicted_world_topic =
@@ -173,7 +176,7 @@ void MpcController<T>::buildLegacyCurrentTimeNonInertialData(
   beta_non = state_estimate.beta_non.template cast<T>();
   a_car_non = state_estimate.a_imu.template cast<T>();
   // Legacy current-time path removes gravity just before pushing a_car_non
-  // into ACADO online data.
+  // into the controller's non-inertial profile.
   a_car_non(2) -= static_cast<T>(9.81);
 }
 
@@ -197,16 +200,20 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
 #define GREEN std::string("\033[1;42m")
 #define RST std::string("\033[0m")
 
-  auto makeHoverFallback = []() {
-    acado_mpc_common::ControlCommand hover;
-    hover.velocity_cmd = Eigen::Vector3d::Zero();
-    hover.yaw_rate = 0.0;
-    hover.slack = 0.0;
-    return hover;
+  auto makeFailureFallback = [this](const char* reason) {
+    if (has_last_valid_control_) {
+      ROS_WARN_STREAM_THROTTLE(
+          0.5, "[MpcController] keeping previous valid control after "
+                   << reason);
+      return last_valid_control_;
+    }
+    ROS_WARN_STREAM_THROTTLE(
+        0.5, "[MpcController] no previous valid control after " << reason
+                                                                  << "; using zero command");
+    return acado_mpc_common::ControlCommand();
   };
 
   ros::Time call_time = ros::Time::now();
-  const clock_t start = clock();
   if (params.changed_) {
     params_ = params;
     setNewParams(params_);
@@ -242,11 +249,52 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
   } else {
     mpc_wrapper_.setNonInertialData(omega_non, beta_non, a_car_non);
   }
-  if (!mpc_wrapper_.setObstacles(params.cbf_obstacles_,
-                                 params.cbf_obstacle_profiles_,
-                                 params.cbf_alpha1_,
-                                 params.cbf_alpha2_,
-                                 params.cbf_enabled_)) {
+  const bool field_active = params.cbf_use_field_hocbf_;
+  // A warm feedback step consumes the coefficients installed by the previous
+  // preparation. Preserve that profile before last_field_profile_ is updated
+  // below so diagnostics describe the row that the solver actually used.
+  const typename MpcWrapper<T>::FieldHocbfProfile previous_field_profile =
+      last_field_profile_;
+  const bool previous_field_enabled = last_field_enabled_;
+  const bool obstacle_update_ok = params.cbf_use_risk_regions_
+      ? mpc_wrapper_.setRiskRegions(params.cbf_risk_regions_,
+                                    params.cbf_risk_region_profiles_,
+                                    params.cbf_alpha1_, params.cbf_alpha2_,
+                                    params.cbf_enabled_ && !field_active)
+      : mpc_wrapper_.setObstacles(params.cbf_obstacles_,
+                                   params.cbf_obstacle_profiles_,
+                                   params.cbf_alpha1_, params.cbf_alpha2_,
+                                   params.cbf_enabled_ && !field_active);
+  const bool field_update_ok = mpc_wrapper_.setFieldHocbf(
+      params.cbf_field_hocbf_profile_, field_active);
+  const bool field_mode_changed = field_active != last_field_enabled_;
+  const bool field_changed = field_mode_changed ||
+      !params.cbf_field_hocbf_profile_.isApprox(last_field_profile_, T(1e-12));
+  if (field_changed) {
+    // Honor the configured slack bound in every CBF mode; zero is hard.
+    const T field_slack_limit = params.cbf_slack_max_;
+    if (!mpc_wrapper_.setLimits(params.max_v_xy_, params.max_v_z_,
+                                params.max_yaw_rate_, field_slack_limit)) {
+      ROS_ERROR("MPC: Failed to update Field-HOCBF slack bounds.");
+      ++obstacle_update_fail_count_;
+      solve_from_scratch_ = true;
+      last_solve_ok_ = false;
+      preparationThread();
+      return makeFailureFallback("Field-HOCBF slack-bound update failure");
+    }
+    if (field_mode_changed) {
+      // A mode transition changes the path row and its slack bounds.  One
+      // cold solve installs both atomically; subsequent coefficient updates
+      // follow the normal prepared-for-next-cycle RTI pipeline.
+      solve_from_scratch_ = true;
+    }
+    // Field coefficients are frozen at the latest nominal trajectory; the
+    // preparation pass at the end of this cycle makes them available to the
+    // next feedback step while retaining the current primal warm start.
+    last_field_profile_ = params.cbf_field_hocbf_profile_;
+    last_field_enabled_ = field_active;
+  }
+  if (!obstacle_update_ok || !field_update_ok) {
     ROS_ERROR("MPC: Failed to update CBF obstacles.");
     ++obstacle_update_fail_count_;
     solve_from_scratch_ = true;
@@ -255,13 +303,14 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
     resetPredictionsToSafeState();
     ROS_ERROR("[MPC][RECOVERY] obstacle update failed -> force cold restart next cycle");
     preparationThread();
-    return makeHoverFallback();
+    return makeFailureFallback("CBF online-data update failure");
   }
 
   static const bool do_preparation_step(false);
 
   // Get the feedback from MPC.
   mpc_wrapper_.setTrajectory(reference_states_, reference_inputs_);
+  const clock_t solve_start = clock();
   const bool use_cold_restart = (!warm_start_ || solve_from_scratch_);
   bool solver_status = false;
   if (use_cold_restart) {
@@ -298,12 +347,60 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
         << " | obstacle_update_fail_count=" << obstacle_update_fail_count_
         << " | nonfinite_recovery_count=" << nonfinite_recovery_count_);
     preparationThread();
-    return makeHoverFallback();
+    return makeFailureFallback("MPC solve failure or invalid prediction");
   }
   if (warm_start_) {
     solve_from_scratch_ = false;
   }
   latest_slack_ = aggregateObstacleSlack<T>(predicted_inputs_.col(0));
+  if (field_active || previous_field_enabled) {
+    const typename MpcWrapper<T>::FieldHocbfProfile& feedback_profile =
+        use_cold_restart ? params.cbf_field_hocbf_profile_
+                         : previous_field_profile;
+    const bool feedback_field_enabled =
+        use_cold_restart ? field_active : previous_field_enabled;
+    const bool current_stage0_active =
+        field_active &&
+        params.cbf_field_hocbf_profile_(4, 0) > static_cast<T>(0.5) &&
+        params.cbf_field_hocbf_profile_.col(0).allFinite();
+    const bool feedback_stage0_active =
+        feedback_field_enabled &&
+        feedback_profile(4, 0) > static_cast<T>(0.5) &&
+        feedback_profile.col(0).allFinite();
+    Eigen::Matrix<T, 3, 1> current_A = Eigen::Matrix<T, 3, 1>::Zero();
+    if (current_stage0_active) {
+      current_A = params.cbf_field_hocbf_profile_.template block<3, 1>(0, 0);
+    }
+    const T current_b = current_stage0_active
+        ? params.cbf_field_hocbf_profile_(3, 0) : static_cast<T>(0.0);
+    Eigen::Matrix<T, 3, 1> feedback_A = Eigen::Matrix<T, 3, 1>::Zero();
+    if (feedback_stage0_active) {
+      feedback_A = feedback_profile.template block<3, 1>(0, 0);
+    }
+    const T feedback_b = feedback_stage0_active
+        ? feedback_profile(3, 0) : static_cast<T>(0.0);
+    const Eigen::Matrix<T, 3, 1> raw_u_xyz =
+        predicted_inputs_.template block<3, 1>(0, 0);
+    const T raw_slack0 = predicted_inputs_(INPUT::kSlack0, 0);
+    const T current_residual = current_A.dot(raw_u_xyz) + raw_slack0 - current_b;
+    const T feedback_residual =
+        feedback_A.dot(raw_u_xyz) + raw_slack0 - feedback_b;
+    ROS_DEBUG_STREAM_NAMED(
+        "field_hocbf",
+        "[FIELD_HOCBF_SOLVE] feedback_profile_source="
+            << (use_cold_restart ? "cold_current_prepare"
+                                 : "warm_previous_prepare")
+            << " current_A=" << current_A.transpose()
+            << " current_b=" << current_b
+            << " current_active=" << std::boolalpha << current_stage0_active
+            << " current_residual=" << current_residual
+            << " feedback_A=" << feedback_A.transpose()
+            << " feedback_b=" << feedback_b
+            << " feedback_active=" << feedback_stage0_active
+            << " feedback_residual=" << feedback_residual
+            << " raw_u_xyz=" << raw_u_xyz.transpose()
+            << " raw_slack0=" << raw_slack0);
+  }
   ROS_INFO_STREAM_THROTTLE(
       1.0,
       "[MpcController] pred_x0=(" << predicted_states_(kPosX, 0) << ", "
@@ -322,7 +419,7 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
                                    << predicted_inputs_(INPUT::kSlack1, 0) << ", "
                                    << predicted_inputs_(INPUT::kSlack2, 0) << ")"
                                    << " slack_sum=" << latest_slack_);
-/*   std::cout << GREEN + "ACADO Opt objective value: " << mpc_wrapper_.getObjective() << RST << std::endl;
+/*   std::cout << GREEN + "MPC objective value: " << mpc_wrapper_.getObjective() << RST << std::endl;
   std::cout << GREEN + "State0: " << predicted_states_.col(0) << RST<< std::endl;
     std::cout << GREEN + "State1: " << predicted_states_.col(1) << RST<< std::endl;
       std::cout << GREEN + "State2: " << predicted_states_.col(2) << RST<< std::endl;
@@ -333,29 +430,46 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
 
 
 
-  const clock_t end = clock();
-  last_feedback_solve_time_sec_ = double(end - start) / CLOCKS_PER_SEC;
+  const clock_t solve_end = clock();
+  const double solve_time_sec = double(solve_end - solve_start) / CLOCKS_PER_SEC;
+  last_feedback_solve_time_sec_ = solve_time_sec;
   last_solve_ok_ = true;
 
   // Publish the predicted trajectory.
   publishPrediction(predicted_states_, predicted_inputs_, call_time, W_q_non,
                     W_p_non);
 
-  // Prepare synchronously for the next execution to keep multi-UAV behavior
-  // deterministic while ACADO still relies on global solver memory.
+  // Prepare synchronously for the next execution after the current online
+  // field coefficients have been installed. This is the normal RTI pipeline:
+  // feedback consumes the previous preparation and the next cycle consumes
+  // this one.
   preparationThread();
 
   // Timing
   timing_feedback_ = 0.9 * timing_feedback_ +
-                     0.1 * double(end - start) / CLOCKS_PER_SEC;
+                     0.1 * solve_time_sec;
   if (params_.print_info_)
     ROS_INFO_THROTTLE(1.0, "MPC Timing: Latency: %1.1f ms  |  Total: %1.1f ms",
                       timing_feedback_ * 1000, (timing_feedback_ + timing_preparation_) * 1000);
 
   // Return the input control command.
-  return updateControlCommand(predicted_states_.col(0),
-                              predicted_inputs_.col(0),
-                              call_time);
+  const acado_mpc_common::ControlCommand command =
+      updateControlCommand(predicted_states_.col(0),
+                           predicted_inputs_.col(0),
+                           call_time,
+                           field_active);
+  if (!command.velocity_cmd.allFinite() ||
+      !std::isfinite(command.yaw_rate) || !std::isfinite(command.slack)) {
+    ++nonfinite_recovery_count_;
+    solve_from_scratch_ = true;
+    last_solve_ok_ = false;
+    ROS_ERROR("[MPC][RECOVERY] invalid control command; keeping previous valid control");
+    preparationThread();
+    return makeFailureFallback("invalid control command");
+  }
+  last_valid_control_ = command;
+  has_last_valid_control_ = true;
+  return command;
 #undef GREEN
 #undef RST
 }
@@ -436,7 +550,8 @@ template<typename T>
 acado_mpc_common::ControlCommand MpcController<T>::updateControlCommand(
     const Eigen::Ref<const Eigen::Matrix<T, kStateSize, 1>> state,
     const Eigen::Ref<const Eigen::Matrix<T, kInputSize, 1>> input,
-    ros::Time& time) {
+    ros::Time& time,
+    bool /* field_active */) {
   Eigen::Matrix<T, kInputSize, 1> input_bounded = input.template cast<T>();
 
   // Bound inputs for sanity.
@@ -550,7 +665,9 @@ template<typename T>
 void MpcController<T>::preparationThread() {
   const clock_t start = clock();
 
-  mpc_wrapper_.prepare();
+  if (!mpc_wrapper_.prepare()) {
+    ROS_ERROR("[MpcController] QP preparation failed; next cycle will use the last valid command");
+  }
 
   // Timing
   const clock_t end = clock();
@@ -578,10 +695,22 @@ bool MpcController<T>::setNewParams(MpcParams<T>& params) {
     ROS_ERROR("MPC: Failed to configure input/path limits.");
     return false;
   }
-  if (!mpc_wrapper_.setObstacles(params.cbf_obstacles_,
-      params.cbf_obstacle_profiles_,
-      params.cbf_alpha1_, params.cbf_alpha2_, params.cbf_enabled_)) {
+  const bool field_active = params.cbf_use_field_hocbf_;
+  const bool obstacle_update_ok = params.cbf_use_risk_regions_
+      ? mpc_wrapper_.setRiskRegions(params.cbf_risk_regions_,
+                                    params.cbf_risk_region_profiles_,
+                                    params.cbf_alpha1_, params.cbf_alpha2_,
+                                    params.cbf_enabled_ && !field_active)
+      : mpc_wrapper_.setObstacles(params.cbf_obstacles_,
+                                   params.cbf_obstacle_profiles_,
+                                   params.cbf_alpha1_, params.cbf_alpha2_,
+                                   params.cbf_enabled_ && !field_active);
+  if (!obstacle_update_ok) {
     ROS_ERROR("MPC: Failed to configure CBF obstacles.");
+    return false;
+  }
+  if (!mpc_wrapper_.setFieldHocbf(params.cbf_field_hocbf_profile_, field_active)) {
+    ROS_ERROR("MPC: Failed to configure field HOCBF.");
     return false;
   }
   // mpc_wrapper_.setCameraParameters(params.p_B_C_, params.q_B_C_);

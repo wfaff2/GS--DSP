@@ -1,1 +1,0 @@
-../marsim_ws/src/coni_mpc/scripts/run_depth_cbf_m25.sh

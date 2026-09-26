@@ -24,7 +24,9 @@ find_package(PCL REQUIRED COMPONENTS common filters kdtree io)
 
 add_message_files(
         FILES
-        LocalBarrier.msg)
+        LocalBarrier.msg
+        RiskRegion.msg
+        RiskRegionArray.msg)
 generate_messages(
         DEPENDENCIES
         std_msgs
@@ -59,6 +61,23 @@ include_directories(
         ${PCL_INCLUDE_DIRS}
 )
 add_definitions(${PCL_DEFINITIONS})
+
+add_library(risk_region_constructor
+        STATIC
+        src/risk_region_constructor.cpp)
+target_link_libraries(risk_region_constructor
+        ${catkin_LIBRARIES}
+        Eigen3::Eigen)
+
+add_executable(risk_region_constructor_node
+        src/risk_region_constructor_node.cpp)
+add_dependencies(risk_region_constructor_node
+        ${${PROJECT_NAME}_EXPORTED_TARGETS}
+        ${catkin_EXPORTED_TARGETS})
+target_link_libraries(risk_region_constructor_node
+        risk_region_constructor
+        ${catkin_LIBRARIES}
+        Eigen3::Eigen)
 
 add_library(depth_cbf_preprocessor
         STATIC
@@ -169,11 +188,19 @@ add_library(acado_mpc
         src/acado_mpc/mpc_wrapper.cpp
         src/acado_mpc/mpc_common.cpp
         ${acado_mpc_dep_src})
+# The generated ACADO RTI already owns its preparation/feedback cycle.  The
+# outer field-profile refinement is reserved for the OsqpEigen backend, so
+# downstream controller/simulator code can select the architecture without a
+# runtime guess based on the target name.
+target_compile_definitions(acado_mpc PUBLIC
+        CONI_MPC_EXTERNAL_FIELD_MICRO_ITERATIONS=0)
 target_compile_definitions(acado_mpc PRIVATE ${ACADO_QP_BACKEND_DEFS})
 target_include_directories(acado_mpc PUBLIC
         ${ACADO_CODEGEN_DIR}
         ${ACADO_QP_BACKEND_INCLUDES})
-target_link_libraries(acado_mpc ${catkin_LIBRARIES} Eigen3::Eigen)
+target_link_libraries(acado_mpc
+        ${catkin_LIBRARIES}
+        Eigen3::Eigen)
 
 
 add_library(NumericalCoNiMPC
@@ -182,6 +209,9 @@ add_library(NumericalCoNiMPC
         parameters/non_inertial_predictor.cpp
         src/coni_mpc/num_sim_mpc.cpp
         src/coni_mpc/mpc_base.cpp)
+add_dependencies(NumericalCoNiMPC
+        ${${PROJECT_NAME}_EXPORTED_TARGETS}
+        ${catkin_EXPORTED_TARGETS})
 target_include_directories(NumericalCoNiMPC PUBLIC
         ${PROJECT_SOURCE_DIR}/include/coni_mpc)
 target_link_libraries(NumericalCoNiMPC
@@ -204,6 +234,7 @@ target_link_libraries(num_sim_non_one_point_node
         PolytopicVoHrvoFilter
         gflags
         ${catkin_LIBRARIES}
+        ${PCL_LIBRARIES}
         ${Boost_LIBRARIES}
         Eigen3::Eigen)
 
@@ -247,5 +278,18 @@ if(CATKIN_ENABLE_TESTING)
                         ${catkin_LIBRARIES}
                         ${PCL_LIBRARIES}
                         Eigen3::Eigen)
+        endif()
+        catkin_add_gtest(risk_region_constructor_test
+                test/risk_region_constructor_test.cpp)
+        if(TARGET risk_region_constructor_test)
+                target_link_libraries(risk_region_constructor_test
+                        risk_region_constructor
+                        gtest_main
+                        ${catkin_LIBRARIES}
+                        Eigen3::Eigen)
+        endif()
+        catkin_add_gtest(field_hocbf_test test/field_hocbf_test.cpp)
+        if(TARGET field_hocbf_test)
+                target_link_libraries(field_hocbf_test gtest_main Eigen3::Eigen)
         endif()
 endif()

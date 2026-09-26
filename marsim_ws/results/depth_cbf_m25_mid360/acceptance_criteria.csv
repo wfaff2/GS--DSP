@@ -1,9 +1,0 @@
-criterion,actual,limit,operator,pass
-all_runs_recorded,19.0,19.0,>=,True
-nominal_valid_rate,1.0,0.95,>=,True
-nominal_lidar_P95_m,0.2892741422126995,0.15,<=,False
-nominal_center_fit_P95_m2,0.2571720645087,0.05,<=,False
-nominal_boundary_P95_m,1.0142745198920005,0.1,<=,False
-nominal_gradient_P95_deg,45.58834250102,15.0,<=,False
-nominal_pipeline_P95_ms,2.3550594999999936,20.0,<=,True
-sync_reject_count,0.0,0.0,==,True

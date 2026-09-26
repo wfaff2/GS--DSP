@@ -21,8 +21,11 @@
 #include "coni_mpc/num_sim_mpc.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <chrono>
 #include <cstdlib>
+#include <cstring>
 #include <cmath>
 #include <iomanip>
 #include <limits>
@@ -41,6 +44,13 @@ std::vector<bool> NumSimMpc::shared_position_valid_;
 NumSimMpc::ObstacleVector NumSimMpc::shared_static_obstacles_;
 
 namespace {
+#ifndef CONI_MPC_EXTERNAL_FIELD_MICRO_ITERATIONS
+// Keep source compatibility for standalone users of this translation unit:
+// an OsqpEigen build enables the outer refinement unless its build system
+// explicitly disables it.
+#define CONI_MPC_EXTERNAL_FIELD_MICRO_ITERATIONS 1
+#endif
+
 std::string toLowerCopy(const std::string& text) {
   std::string out = text;
   std::transform(out.begin(), out.end(), out.begin(),
@@ -245,7 +255,6 @@ NumSimMpc::NumSimMpc(const ros::NodeHandle &nh, const ros::NodeHandle &pnh,int i
     frame_mode_(FrameMode::kNonInertial),
     frame_mode_effective_("noninertial"),
     safety_variant_("A2_soft_cbf"),
-    zero_slack_required_(false),
     noise_rng_(1u),
     noise_dist_(0.0, 1.0),
     measured_car_linear_velocity_(Eigen::Vector3d::Zero()),
@@ -415,8 +424,6 @@ relative_est_pub_[quad_id] =
   }
   frame_mode_ = resolveFrameMode(pnh_, frame_mode_effective_);
   pnh_.param("safety_variant", safety_variant_, std::string("A2_soft_cbf"));
-  zero_slack_required_ =
-      (safety_variant_ == "A0_no_cbf" || safety_variant_ == "A1_hard_cbf");
   int noise_seed = 1;
   pnh_.param("noise_seed", noise_seed, 1);
   if (noise_seed <= 0) {
@@ -426,6 +433,38 @@ relative_est_pub_[quad_id] =
       static_cast<uint32_t>(noise_seed + std::max(0, quad_id) * 10007);
   noise_rng_.seed(noise_seed_effective);
   pnh_.param("cbf/use_in_sim", cbf_use_in_sim_, mpc_params_.cbf_enabled_);
+  pnh_.param("cbf/use_risk_regions", risk_regions_enabled_, false);
+  pnh_.param("cbf/risk_regions_timeout", risk_regions_timeout_, 4.0);
+  pnh_.param("cbf/risk_region_time_alignment",
+             risk_region_time_alignment_, true);
+  pnh_.param("cbf/use_field_hocbf", field_hocbf_enabled_, false);
+  if (field_hocbf_enabled_) {
+    std::string field_topic = "/my_map/future_occupancy_3d";
+    pnh_.param("cbf/field_topic", field_topic, field_topic);
+    field_occupancy_subscriber_ = nh_.subscribe(
+        field_topic, 1, &NumSimMpc::fieldOccupancyCallback, this);
+    ROS_INFO_STREAM("[MPC UAV " << quad_id << "] using field-HOCBF topic "
+                    << field_topic << ", retaining the latest DSP snapshot");
+    ROS_INFO_STREAM("[MPC UAV " << quad_id << "] field-HOCBF config: "
+                    << "sigma=" << field_hocbf::kSigma
+                    << " Vmax=" << field_hocbf::kVmax
+                    << " d_safe=" << field_hocbf::kDSafe
+                    << " gamma1=" << field_hocbf::kGamma1
+                    << " gamma2=" << field_hocbf::kGamma2
+                    << " prune_radius=" << field_hocbf::kPruneRadius
+                    << " (=3sigma) seed=10 max=35 separation=0.15");
+  }
+  if (risk_regions_enabled_) {
+    std::string risk_region_topic = "/coni_mpc/risk_regions";
+    pnh_.param("cbf/risk_region_topic", risk_region_topic, risk_region_topic);
+    risk_region_subscriber_ = nh_.subscribe(
+        risk_region_topic, 1, &NumSimMpc::riskRegionCallback, this);
+    ROS_INFO_STREAM("[MPC UAV " << quad_id << "] using risk-region topic "
+                    << risk_region_topic
+                    << ", time_alignment="
+                    << (risk_region_time_alignment_ ? "on" : "off")
+                    << ", timeout=" << risk_regions_timeout_);
+  }
   pnh_.param("estimation_noise/position_std",
              estimation_position_noise_std_, estimation_position_noise_std_);
   pnh_.param("estimation_noise/relative_velocity_std",
@@ -460,7 +499,7 @@ relative_est_pub_[quad_id] =
   ROS_INFO_STREAM("[" << pnh_.getNamespace() << "] frame_mode_effective="
                   << frame_mode_effective_
                   << " safety_variant_effective=" << safety_variant_
-                  << " zero_slack_required=" << (zero_slack_required_ ? "true" : "false")
+                  << " cbf_slack_max=" << mpc_params_.cbf_slack_max_
                   << " inter_uav_priority_enabled="
                   << (inter_uav_priority_enabled_ ? "true" : "false")
                   << " obstacle_hysteresis_hold_cycles="
@@ -514,6 +553,116 @@ void NumSimMpc::setCarOdom(const nav_msgs::Odometry &car_odom)
       Eigen::Vector3d(car_odom.twist.twist.angular.x,
                       car_odom.twist.twist.angular.y,
                       car_odom.twist.twist.angular.z);
+}
+
+void NumSimMpc::riskRegionCallback(
+    const coni_mpc::RiskRegionArray::ConstPtr& message) {
+  if (!message) {
+    return;
+  }
+  std::lock_guard<std::mutex> lock(risk_region_mutex_);
+  latest_risk_regions_ = *message;
+  has_latest_risk_regions_ = true;
+}
+
+void NumSimMpc::fieldOccupancyCallback(
+    const sensor_msgs::PointCloud2::ConstPtr& message) {
+  if (!message) return;
+  if (message->header.stamp.isZero()) {
+    ROS_WARN_STREAM_THROTTLE(1.0, "[MPC UAV " << quad_id
+        << "] rejecting field cloud with zero timestamp");
+    return;
+  }
+  std::string frame = message->header.frame_id;
+  if (!frame.empty() && frame.front() == '/') frame.erase(frame.begin());
+  if (frame != "map") {
+    ROS_WARN_STREAM_THROTTLE(1.0, "[MPC UAV " << quad_id
+        << "] rejecting field cloud in frame '" << message->header.frame_id
+        << "' (expected map)");
+    return;
+  }
+  // The DSP publisher provides x/y/z, vx/vy/vz, occupancy and stage_index.
+  // prediction_time is accepted when present for backward compatibility, but
+  // it is not required to construct the stage-indexed snapshot.
+  const char* required[] = {"x", "y", "z", "vx", "vy", "vz",
+                            "occupancy", "stage_index"};
+  std::array<const sensor_msgs::PointField*, 8> fields{};
+  for (std::size_t i = 0; i < fields.size(); ++i) {
+    const auto it = std::find_if(message->fields.begin(), message->fields.end(),
+        [&](const sensor_msgs::PointField& field) { return field.name == required[i]; });
+    if (it == message->fields.end() || it->count != 1) {
+      ROS_WARN_STREAM_THROTTLE(1.0, "[MPC UAV " << quad_id
+          << "] field cloud missing scalar field " << required[i]);
+      return;
+    }
+    fields[i] = &*it;
+  }
+  const sensor_msgs::PointField* prediction_time_field = nullptr;
+  const auto prediction_time_it = std::find_if(
+      message->fields.begin(), message->fields.end(),
+      [](const sensor_msgs::PointField& field) {
+        return field.name == "prediction_time" && field.count == 1;
+      });
+  if (prediction_time_it != message->fields.end()) {
+    prediction_time_field = &*prediction_time_it;
+  }
+  auto read = [](const std::uint8_t* ptr, std::uint8_t datatype,
+                 double& value) -> bool {
+    switch (datatype) {
+      case sensor_msgs::PointField::FLOAT32: { float v; std::memcpy(&v, ptr, 4); value = v; return true; }
+      case sensor_msgs::PointField::FLOAT64: { double v; std::memcpy(&v, ptr, 8); value = v; return true; }
+      case sensor_msgs::PointField::UINT8: { std::uint8_t v; std::memcpy(&v, ptr, 1); value = v; return true; }
+      case sensor_msgs::PointField::UINT16: { std::uint16_t v; std::memcpy(&v, ptr, 2); value = v; return true; }
+      case sensor_msgs::PointField::UINT32: { std::uint32_t v; std::memcpy(&v, ptr, 4); value = v; return true; }
+      case sensor_msgs::PointField::INT8: { std::int8_t v; std::memcpy(&v, ptr, 1); value = v; return true; }
+      case sensor_msgs::PointField::INT16: { std::int16_t v; std::memcpy(&v, ptr, 2); value = v; return true; }
+      case sensor_msgs::PointField::INT32: { std::int32_t v; std::memcpy(&v, ptr, 4); value = v; return true; }
+      default: return false;
+    }
+  };
+  auto snapshot = std::make_shared<FieldSnapshot>();
+  snapshot->stamp = message->header.stamp;
+  snapshot->frame_id = frame;
+  const std::size_t count = static_cast<std::size_t>(message->width) * message->height;
+  snapshot->points.reserve(count);
+  for (std::size_t i = 0; i < count; ++i) {
+    const std::size_t base = i * message->point_step;
+    if (base + message->point_step > message->data.size()) break;
+    double values[8]{};
+    bool valid = true;
+    for (std::size_t f = 0; f < fields.size(); ++f) {
+      if (fields[f]->offset >= message->point_step ||
+          !read(message->data.data() + base + fields[f]->offset,
+                fields[f]->datatype, values[f]) || !std::isfinite(values[f])) {
+        valid = false;
+        break;
+      }
+    }
+    double prediction_time = static_cast<double>(values[7]) * 0.1;
+    if (valid && prediction_time_field != nullptr) {
+      if (prediction_time_field->offset >= message->point_step ||
+          !read(message->data.data() + base + prediction_time_field->offset,
+                prediction_time_field->datatype, prediction_time) ||
+          !std::isfinite(prediction_time)) {
+        valid = false;
+      }
+    }
+    const double rounded_stage = std::round(values[7]);
+    if (!valid || values[6] < 0.0 || values[6] > 1.0 ||
+        values[7] < 0.0 || rounded_stage > acado_mpc::kSamples ||
+        std::abs(values[7] - rounded_stage) > 1e-6) continue;
+    field_hocbf::Point point;
+    point.position_world = Eigen::Vector3d(values[0], values[1], values[2]);
+    point.velocity_world = Eigen::Vector3d(values[3], values[4], values[5]);
+    point.occupancy = values[6];
+    point.prediction_time = prediction_time;
+    point.stage_index = static_cast<std::uint32_t>(rounded_stage);
+    snapshot->points.push_back(point);
+    snapshot->last_occupied_stage =
+        std::max(snapshot->last_occupied_stage, point.stage_index);
+  }
+  std::lock_guard<std::mutex> lock(field_snapshot_mutex_);
+  field_snapshot_ = std::move(snapshot);
 }
 
 void NumSimMpc::getSharedPositions(std::vector<Eigen::Vector3d>& positions,
@@ -1249,7 +1398,255 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
   ObstacleVector world_mpc_obstacles;
   std::vector<std::string> selected_keys;
   acado_mpc::MpcWrapper<double>::ObstacleProfileVector mpc_obstacle_profiles;
-  if (!obstacles.empty()) {
+  RiskRegionVector mpc_risk_regions;
+  RiskRegionProfileVector mpc_risk_region_profiles;
+  bool use_mpc_risk_regions = false;
+  if (risk_regions_enabled_) {
+    coni_mpc::RiskRegionArray risk_message;
+    bool have_message = false;
+    {
+      std::lock_guard<std::mutex> lock(risk_region_mutex_);
+      if (has_latest_risk_regions_) {
+        risk_message = latest_risk_regions_;
+        have_message = true;
+      }
+    }
+    const double risk_age_sec =
+        have_message && !risk_message.header.stamp.isZero()
+            ? std::max(0.0, (ros::Time::now() - risk_message.header.stamp).toSec())
+            : 0.0;
+    const double dt = std::max(1.0e-3, mpc_controller_.getPredictionDt());
+    const double prediction_horizon_sec =
+        dt * static_cast<double>(acado_mpc::kSamples);
+    // The message contains a finite [stamp, stamp+T_p] forecast.  Once its
+    // stamp is older than T_p, even the final DSP stage is in the past; using
+    // that stage as a current obstacle creates a time-shifted barrier and can
+    // either force a deadlock or miss the real surface.  After this cutoff the
+    // risk-region HOCBF is disabled until a newly stamped DSP result arrives.
+    const bool fresh = have_message &&
+        (risk_message.header.stamp.isZero() ||
+         (risk_age_sec <= std::max(0.0, risk_regions_timeout_) &&
+          risk_age_sec <= prediction_horizon_sec + 1.0e-6));
+    if (risk_regions_enabled_) {
+      const double risk_age =
+          have_message && !risk_message.header.stamp.isZero()
+              ? risk_age_sec
+              : std::numeric_limits<double>::infinity();
+      ROS_WARN_STREAM_THROTTLE_NAMED(
+          0.2, "risk_region_freshness",
+          "[MPC UAV " << quad_id << "] risk_region_age=" << risk_age
+                       << " timeout=" << risk_regions_timeout_
+                       << " fresh=" << (fresh ? "true" : "false")
+                       << " have_message=" << (have_message ? "true" : "false"));
+    }
+    if (fresh) {
+      std::vector<std::uint32_t> track_ids;
+      for (const auto& message_region : risk_message.regions) {
+        if (!message_region.valid ||
+            std::find(track_ids.begin(), track_ids.end(), message_region.track_id) ==
+                track_ids.end()) {
+          if (message_region.valid) track_ids.push_back(message_region.track_id);
+        }
+      }
+      // A risk message describes stages relative to its own sensor stamp.
+      // If construction took tau seconds, stage zero is already tau seconds
+      // in the past.  Align the message to the current MPC horizon instead
+      // of reusing that old stage as "now".  Clamping at the final DSP stage
+      // is a conservative hold of the last predicted occupied region.
+      // A message is generated at its header stamp.  When alignment is
+      // enabled, stage k in the current MPC horizon consumes the source DSP
+      // stage that is closest to "now + k*dt".  Disabling this parameter keeps
+      // the original stage-0-at-now behavior for an A/B comparison.
+      const int risk_stage_shift = risk_region_time_alignment_
+          ? std::max(0, static_cast<int>(std::llround(risk_age_sec / dt)))
+          : 0;
+      auto carStateAt = [&](std::size_t stage) {
+        if (stage < car_trajectory_window_.size()) {
+          return car_trajectory_window_[stage];
+        }
+        return carStateFromOdom(car_odom_);
+      };
+
+      // Rank risk regions against the UAV trajectory that the controller is
+      // expected to follow.  Prefer the previous successful MPC prediction;
+      // before the first solve, fall back to the current reference window and
+      // finally to the current estimated position.  The resulting points are
+      // expressed in the same (possibly non-inertial) solver frame as the
+      // risk-region profiles below.
+      std::vector<Eigen::Vector3d> uav_predicted_solver(
+          static_cast<std::size_t>(acado_mpc::kSamples + 1),
+          state_estimate_.position);
+      if (has_last_predicted_world_positions_ &&
+          last_predicted_world_positions_.size() == uav_predicted_solver.size()) {
+        for (std::size_t stage = 0; stage < uav_predicted_solver.size(); ++stage) {
+          const CarState_t car_state = carStateAt(stage);
+          if (isInertialFrame()) {
+            uav_predicted_solver[stage] = last_predicted_world_positions_[stage];
+          } else {
+            Eigen::Quaterniond world_q_non(car_state(6), car_state(7),
+                                            car_state(8), car_state(9));
+            world_q_non.normalize();
+            const Eigen::Vector3d car_position(car_state(0), car_state(1),
+                                               car_state(2));
+            uav_predicted_solver[stage] =
+                world_q_non.inverse() *
+                (last_predicted_world_positions_[stage] - car_position);
+          }
+        }
+      } else if (!reference_window_.points.empty()) {
+        const std::size_t last_ref_idx = reference_window_.points.size() - 1;
+        for (std::size_t stage = 0; stage < uav_predicted_solver.size(); ++stage) {
+          uav_predicted_solver[stage] =
+              reference_window_.points[std::min(stage, last_ref_idx)].position;
+        }
+      }
+
+      struct RankedRiskRegion {
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+        std::uint32_t track_id = 0;
+        RiskRegionProfile profile = RiskRegionProfile::Zero();
+        double trajectory_margin = std::numeric_limits<double>::infinity();
+      };
+      std::vector<RankedRiskRegion,
+                  Eigen::aligned_allocator<RankedRiskRegion>> ranked_regions;
+      ranked_regions.reserve(track_ids.size());
+
+      for (const std::uint32_t track_id : track_ids) {
+        RiskRegionProfile profile = RiskRegionProfile::Zero();
+        std::vector<Eigen::Vector3d> centers(acado_mpc::kSamples + 1,
+                                             Eigen::Vector3d::Zero());
+        std::vector<bool> active(acado_mpc::kSamples + 1, false);
+        for (int stage = 0; stage <= acado_mpc::kSamples; ++stage) {
+          const int source_stage = std::min(
+              acado_mpc::kSamples, stage + risk_stage_shift);
+          const coni_mpc::RiskRegion* selected = nullptr;
+          for (const auto& message_region : risk_message.regions) {
+            if (message_region.valid && message_region.track_id == track_id &&
+                message_region.stage_index ==
+                    static_cast<std::uint32_t>(source_stage)) {
+              selected = &message_region;
+              break;
+            }
+          }
+          if (selected == nullptr) continue;
+          const CarState_t car_state = carStateAt(static_cast<std::size_t>(stage));
+          Eigen::Quaterniond world_q_non(car_state(6), car_state(7), car_state(8),
+                                         car_state(9));
+          world_q_non.normalize();
+          const Eigen::Matrix3d R_nw =
+              isInertialFrame() ? Eigen::Matrix3d::Identity()
+                                : world_q_non.inverse().toRotationMatrix();
+          const Eigen::Vector3d car_position(car_state(0), car_state(1), car_state(2));
+          const Eigen::Vector3d world_center(selected->center.x,
+                                              selected->center.y,
+                                              selected->center.z);
+          centers[stage] = isInertialFrame() ? world_center
+                                             : R_nw * (world_center - car_position);
+          Eigen::Matrix3d Q_world(
+              Eigen::Quaterniond(selected->orientation.w,
+                                 selected->orientation.x,
+                                 selected->orientation.y,
+                                 selected->orientation.z));
+          const Eigen::Matrix3d Q_solver =
+              isInertialFrame() ? Q_world : R_nw * Q_world;
+          profile(0, stage) = centers[stage].x();
+          profile(1, stage) = centers[stage].y();
+          profile(2, stage) = centers[stage].z();
+          profile(3, stage) = std::max(1.0e-3, static_cast<double>(selected->semi_axes.x));
+          profile(4, stage) = std::max(1.0e-3, static_cast<double>(selected->semi_axes.y));
+          profile(5, stage) = std::max(1.0e-3, static_cast<double>(selected->semi_axes.z));
+          for (int row = 0; row < 3; ++row) {
+            for (int col = 0; col < 3; ++col) {
+              profile(6 + 3 * row + col, stage) = Q_solver(row, col);
+            }
+          }
+          active[stage] = true;
+          profile(21, stage) = 1.0;
+        }
+        for (int stage = 0; stage <= acado_mpc::kSamples; ++stage) {
+          if (!active[stage]) continue;
+          const int previous = std::max(0, stage - 1);
+          const int next = std::min(acado_mpc::kSamples, stage + 1);
+          profile(15, stage) =
+              (centers[next].x() - centers[previous].x()) /
+              (std::max(1, next - previous) * dt);
+          profile(16, stage) =
+              (centers[next].y() - centers[previous].y()) /
+              (std::max(1, next - previous) * dt);
+          profile(17, stage) =
+              (centers[next].z() - centers[previous].z()) /
+              (std::max(1, next - previous) * dt);
+          if (stage > 0 && stage < acado_mpc::kSamples && active[previous] && active[next]) {
+            profile(18, stage) = (centers[next].x() - 2.0 * centers[stage].x() +
+                                  centers[previous].x()) / (dt * dt);
+            profile(19, stage) = (centers[next].y() - 2.0 * centers[stage].y() +
+                                  centers[previous].y()) / (dt * dt);
+            profile(20, stage) = (centers[next].z() - 2.0 * centers[stage].z() +
+                                  centers[previous].z()) / (dt * dt);
+          }
+        }
+        if (active[0]) {
+          // rho_j = min_k [g_j,k(p_uav,k) - 1].  Smaller values mean that
+          // the predicted UAV trajectory is closer to, or already inside,
+          // that risk region.  This is the ranking rule specified by the
+          // risk-region design instead of sorting by arbitrary track ID.
+          double trajectory_margin = std::numeric_limits<double>::infinity();
+          for (int stage = 0; stage <= acado_mpc::kSamples; ++stage) {
+            if (!active[stage]) continue;
+            const Eigen::Vector3d center(profile(0, stage), profile(1, stage),
+                                         profile(2, stage));
+            const Eigen::Vector3d axes(
+                std::max(1.0e-6, static_cast<double>(profile(3, stage))),
+                std::max(1.0e-6, static_cast<double>(profile(4, stage))),
+                std::max(1.0e-6, static_cast<double>(profile(5, stage))));
+            Eigen::Matrix3d orientation;
+            for (int row = 0; row < 3; ++row) {
+              for (int col = 0; col < 3; ++col) {
+                orientation(row, col) = profile(6 + 3 * row + col, stage);
+              }
+            }
+            const Eigen::Vector3d local =
+                orientation.transpose() * (uav_predicted_solver[stage] - center);
+            const double g = std::pow(local.x() / axes.x(), 4.0) +
+                             std::pow(local.y() / axes.y(), 4.0) +
+                             std::pow(local.z() / axes.z(), 4.0);
+            trajectory_margin = std::min(trajectory_margin, g - 1.0);
+          }
+
+          RankedRiskRegion ranked;
+          ranked.track_id = track_id;
+          ranked.profile = profile;
+          ranked.trajectory_margin = trajectory_margin;
+          ranked_regions.push_back(ranked);
+        }
+      }
+
+      std::sort(ranked_regions.begin(), ranked_regions.end(),
+                [](const RankedRiskRegion& lhs, const RankedRiskRegion& rhs) {
+                  if (lhs.trajectory_margin != rhs.trajectory_margin) {
+                    return lhs.trajectory_margin < rhs.trajectory_margin;
+                  }
+                  return lhs.track_id < rhs.track_id;
+                });
+      const std::size_t max_tracks = std::min<std::size_t>(
+          ranked_regions.size(), static_cast<std::size_t>(acado_mpc::kMaxObstacles));
+      for (std::size_t track_index = 0; track_index < max_tracks; ++track_index) {
+        mpc_risk_regions.push_back(ranked_regions[track_index].profile.col(0));
+        mpc_risk_region_profiles.push_back(ranked_regions[track_index].profile);
+      }
+      use_mpc_risk_regions = !mpc_risk_regions.empty();
+      if (use_mpc_risk_regions) {
+          ROS_INFO_STREAM_THROTTLE(1.0, "[MPC UAV " << quad_id
+                                 << "] using " << mpc_risk_regions.size()
+                                 << " DSP risk-region tracks ranked by predicted UAV trajectory"
+                                 << " age=" << risk_age_sec
+                                 << " time_alignment="
+                                 << (risk_region_time_alignment_ ? "on" : "off")
+                                 << " stage_shift=" << risk_stage_shift);
+      }
+    }
+  }
+  if (!obstacles.empty() && !use_mpc_risk_regions) {
     const Eigen::Vector3d uav_position_world(
         quad_odom_.pose.pose.position.x,
         quad_odom_.pose.pose.position.y,
@@ -1554,7 +1951,8 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
       active_obstacle_key = active_key_stream.str();
     }
     // Diagnostic-only barrier stats stay on the nearest obstacle; solver-side
-    // metrics are evaluated separately on the selected obstacles passed to ACADO.
+    // Metrics are evaluated separately on the selected obstacles passed to the
+    // controller backend.
     if (nearest_any_idx < obstacles.size()) {
       world_metric_obstacles.push_back(obstacles[nearest_any_idx]);
     }
@@ -1725,7 +2123,8 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
   bool cbf_enabled_param = mpc_params_.cbf_enabled_;
   pnh_.param("cbf/enabled", cbf_enabled_param, cbf_enabled_param);
   const bool enable_cbf = cbf_enabled_param && cbf_use_in_sim_;
-  const bool cbf_active = enable_cbf && !mpc_obstacles.empty();
+  const bool cbf_active = enable_cbf &&
+      (use_mpc_risk_regions ? !mpc_risk_regions.empty() : !mpc_obstacles.empty());
   const std::string effective_active_obstacle_key =
       cbf_active ? active_obstacle_key : "none";
   if (cbf_active && !mpc_obstacle_profiles.empty()) {
@@ -1736,6 +2135,9 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
   }
   mpc_params_.cbf_obstacles_ = mpc_obstacles;
   mpc_params_.cbf_obstacle_profiles_ = mpc_obstacle_profiles;
+  mpc_params_.cbf_risk_regions_ = mpc_risk_regions;
+  mpc_params_.cbf_risk_region_profiles_ = mpc_risk_region_profiles;
+  mpc_params_.cbf_use_risk_regions_ = use_mpc_risk_regions;
   mpc_params_.cbf_enabled_ = enable_cbf;
   mpc_params_.changed_ = false;
   last_obstacles_ = all_solver_obstacles;
@@ -1768,6 +2170,153 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
   buildNonInertialDataProfile(omega_non_profile,
                               beta_non_profile,
                               a_car_non_profile);
+  std::shared_ptr<const FieldSnapshot> field_snapshot;
+  {
+    std::lock_guard<std::mutex> lock(field_snapshot_mutex_);
+    field_snapshot = field_snapshot_;
+  }
+  const ros::Time field_now = ros::Time::now();
+  const double field_dt = std::max(1.0e-3, mpc_controller_.getPredictionDt());
+  const double field_age = field_snapshot && !field_snapshot->stamp.isZero()
+      ? std::max(0.0, (field_now - field_snapshot->stamp).toSec()) : 0.0;
+  const bool field_available = field_hocbf_enabled_ && field_snapshot &&
+      !field_snapshot->stamp.isZero() &&
+      !field_snapshot->points.empty();
+  if (field_available && field_age > field_dt * acado_mpc::kSamples) {
+    ROS_WARN_STREAM_THROTTLE(1.0, "[MPC UAV " << quad_id
+        << "] DSP prediction age=" << field_age
+        << " s exceeds its horizon; extrapolating the last voxel stage");
+  }
+  using FieldNominalPrediction =
+      Eigen::Matrix<double, acado_mpc::kStateSize, acado_mpc::kSamples + 1>;
+  const auto buildFieldProfile =
+      [&](const FieldNominalPrediction* nominal_prediction,
+          bool& profile_active_out) {
+        FieldHocbfProfile profile = FieldHocbfProfile::Zero();
+        profile_active_out = false;
+        if (!field_available) return profile;
+
+        // If the last published DSP stage is empty, reuse its latest occupied
+        // stage after the prediction horizon rather than losing all barriers.
+        const int source_horizon = field_age > field_dt * acado_mpc::kSamples
+            ? static_cast<int>(field_snapshot->last_occupied_stage)
+            : acado_mpc::kSamples;
+        const int source_shift = std::max(
+            0, static_cast<int>(std::min(
+                static_cast<double>(source_horizon),
+                std::floor(field_age / field_dt + 0.5))));
+        auto carStateAt = [&](std::size_t stage) {
+          return stage < car_trajectory_window_.size()
+              ? car_trajectory_window_[stage] : carStateFromOdom(car_odom_);
+        };
+        for (int stage = 0; stage <= acado_mpc::kSamples; ++stage) {
+          const int source_stage = std::min(
+              source_horizon, stage + source_shift);
+          // Once the DSP horizon is exhausted, retain its final voxel slice
+          // and project it to this MPC stage using the published velocity.
+          const double extrapolation_time =
+              field_age + static_cast<double>(stage - source_stage) * field_dt;
+          const CarState_t car_state =
+              carStateAt(static_cast<std::size_t>(stage));
+          Eigen::Quaterniond world_q_non(car_state(6), car_state(7),
+                                          car_state(8), car_state(9));
+          if (world_q_non.norm() > 1e-9) world_q_non.normalize();
+          else world_q_non = Eigen::Quaterniond::Identity();
+          const Eigen::Matrix3d R_nw = world_q_non.inverse().toRotationMatrix();
+          const Eigen::Vector3d car_position = car_state.segment<3>(0);
+          const Eigen::Vector3d car_velocity = car_state.segment<3>(3);
+          const Eigen::Vector3d omega_non = omega_non_profile.col(stage);
+          const Eigen::Vector3d beta_non = beta_non_profile.col(stage);
+          const Eigen::Vector3d a_car_non = a_car_non_profile.col(stage);
+
+          Eigen::Vector3d nominal_position = state_estimate_.position;
+          Eigen::Vector3d nominal_velocity = state_estimate_.velocity;
+          if (nominal_prediction != nullptr &&
+              nominal_prediction->allFinite()) {
+            // The second micro-iteration uses the rollout produced by the
+            // first QP in this same control cycle.
+            nominal_position = nominal_prediction->block<3, 1>(
+                acado_mpc::kPosX, stage);
+            nominal_velocity = nominal_prediction->block<3, 1>(
+                acado_mpc::kVelX, stage);
+          } else if (has_last_predicted_world_positions_ &&
+                     last_predicted_world_positions_.size() ==
+                         static_cast<std::size_t>(acado_mpc::kSamples + 1)) {
+            // First iteration: use the previous cycle's predicted horizon.
+            const auto& last_prediction = mpc_controller_.getPredictedStates();
+            nominal_position = last_prediction.block<3, 1>(
+                acado_mpc::kPosX, stage);
+            nominal_velocity = last_prediction.block<3, 1>(
+                acado_mpc::kVelX, stage);
+          } else {
+            // Startup fallback remains stage-wise and does not reuse p0 at
+            // every stage.
+            nominal_position = state_estimate_.position +
+                static_cast<double>(stage) * field_dt * state_estimate_.velocity;
+            nominal_velocity = state_estimate_.velocity;
+          }
+
+          field_hocbf::KinematicPoints candidates;
+          for (const auto& point : field_snapshot->points) {
+            if (point.stage_index != static_cast<std::uint32_t>(source_stage)) {
+              continue;
+            }
+            const Eigen::Vector3d world_position =
+                point.position_world + point.velocity_world * extrapolation_time;
+            field_hocbf::KinematicPoint transformed;
+            transformed.occupancy = point.occupancy;
+            if (isInertialFrame()) {
+              transformed.position = world_position;
+              transformed.velocity = point.velocity_world;
+              transformed.acceleration.setZero();
+            } else {
+              transformed.position = R_nw * (world_position - car_position);
+              transformed.velocity =
+                  R_nw * (point.velocity_world - car_velocity) -
+                  omega_non.cross(transformed.position);
+              transformed.acceleration =
+                  -a_car_non - 2.0 * omega_non.cross(transformed.velocity) -
+                  beta_non.cross(transformed.position) -
+                  omega_non.cross(omega_non.cross(transformed.position));
+            }
+            candidates.push_back(transformed);
+          }
+          const auto selected =
+              field_hocbf::prune(candidates, nominal_position);
+          Eigen::Vector3d nominal_a_non = Eigen::Vector3d::Zero();
+          if (!isInertialFrame()) {
+            nominal_a_non =
+                -a_car_non - 2.0 * omega_non.cross(nominal_velocity) -
+                beta_non.cross(nominal_position) -
+                omega_non.cross(omega_non.cross(nominal_position));
+          }
+          const auto constraint = field_hocbf::computeConstraint(
+              selected, nominal_position, nominal_velocity, nominal_a_non);
+          if (!constraint.active) continue;
+          profile.block<3, 1>(0, stage) = constraint.A;
+          profile(3, stage) = constraint.b;
+          profile(4, stage) = 1.0;
+          profile(5, stage) =
+              500.0 * constraint.max_occupancy * constraint.max_occupancy;
+        }
+        profile_active_out = (profile.row(4).array() > 0.5).any();
+        return profile;
+      };
+
+  bool field_profile_active = false;
+  FieldHocbfProfile field_profile = buildFieldProfile(
+      nullptr, field_profile_active);
+  mpc_params_.cbf_field_hocbf_profile_ = field_profile;
+  // The latest nonempty field owns the safety path even when pruning leaves a
+  // stage inactive. This prevents legacy risk regions from being mixed with
+  // a valid field snapshot. A new empty snapshot relinquishes priority.
+  mpc_params_.cbf_use_field_hocbf_ = enable_cbf && field_available;
+  if (field_hocbf_enabled_) {
+    ROS_INFO_STREAM_THROTTLE(1.0, "[MPC UAV " << quad_id
+        << "] field_hocbf available=" << (field_available ? "true" : "false")
+        << " active=" << (field_profile_active ? "true" : "false")
+        << " age=" << field_age);
+  }
   if (debug_check_noninertial_profile_col0_) {
     Eigen::Vector3d legacy_omega_non = Eigen::Vector3d::Zero();
     Eigen::Vector3d legacy_beta_non = Eigen::Vector3d::Zero();
@@ -1837,10 +2386,123 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
   const NonInertialProfile* a_car_profile_arg =
       debug_force_legacy_noninertial_constant_profile ? nullptr
                                                       : &a_car_non_profile;
+#if CONI_MPC_EXTERNAL_FIELD_MICRO_ITERATIONS
+  // Save the applied-input anchor before the first solve.  The second
+  // OsqpEigen refinement must use the same anchor as the first QP.
+  const auto slew_anchor_before_cycle = mpc_controller_.getSlewRateAnchor();
+  const auto micro_iteration_start = std::chrono::steady_clock::now();
+#endif
   auto command = mpc_controller_.run(
       state_estimate_, reference_window_, mpc_params_, world_q_model,
       world_p_model, omega_profile_arg, beta_profile_arg,
       a_car_profile_arg);
+#if CONI_MPC_EXTERNAL_FIELD_MICRO_ITERATIONS
+  // The OsqpEigen field controller performs two outer solves and restores
+  // the anchor before the refinement solve.
+  if (field_hocbf_enabled_ && field_available &&
+      mpc_controller_.getLastSolveOk()) {
+    // Rebuild the field from the first QP's rollout, then solve the refined
+    // QP in the same control cycle.  The point cloud, car profile, and time
+    // alignment are captured above and therefore remain fixed across both
+    // micro-iterations.
+    const auto first_prediction = mpc_controller_.getPredictedStates();
+    const auto first_inputs = mpc_controller_.getPredictedInputs();
+    const double first_slack = mpc_controller_.getLatestSlack();
+    bool refined_field_active = false;
+    const FieldHocbfProfile refined_field_profile = buildFieldProfile(
+        &first_prediction, refined_field_active);
+    const double profile_delta =
+        (refined_field_profile - field_profile).norm();
+    mpc_params_.cbf_field_hocbf_profile_ = refined_field_profile;
+    mpc_params_.cbf_use_field_hocbf_ = enable_cbf && field_available;
+    mpc_params_.changed_ = false;
+    if (!mpc_controller_.setSlewRateAnchor(slew_anchor_before_cycle)) {
+      ROS_ERROR_STREAM("[FIELD_HOCBF_MICRO] failed to restore slew-rate anchor");
+    }
+    const auto refined_command = mpc_controller_.run(
+        state_estimate_, reference_window_, mpc_params_, world_q_model,
+        world_p_model, omega_profile_arg, beta_profile_arg,
+        a_car_profile_arg);
+    if (mpc_controller_.getLastSolveOk()) {
+      command = refined_command;
+    } else {
+      // The first solve is a valid feasible fallback.  Restore its rollout
+      // and slew anchor so a failed refinement cannot publish half-updated
+      // solver state or poison the next cycle's rate penalty.
+      mpc_controller_.restoreSuccessfulPrediction(
+          first_prediction, first_inputs, first_slack);
+      ROS_WARN_STREAM_THROTTLE(
+          0.5, "[FIELD_HOCBF_MICRO] refinement solve failed; keeping first QP command");
+    }
+    const double micro_elapsed_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - micro_iteration_start).count();
+    ROS_INFO_STREAM_THROTTLE(
+        1.0, "[FIELD_HOCBF_MICRO] iterations=2 first_active="
+                 << (field_profile_active ? "true" : "false")
+                 << " refined_active="
+                 << (refined_field_active ? "true" : "false")
+                 << " profile_delta=" << profile_delta
+                 << " total_time_ms=" << micro_elapsed_ms);
+  }
+#else
+  // ACADO's preparationStep/feedbackStep and qpOASES solve are the complete
+  // backend iteration.  Do not run the OsqpEigen-style outer profile
+  // refinement on top of that baseline.
+  if (field_hocbf_enabled_ && field_available) {
+    ROS_INFO_STREAM_THROTTLE(
+        1.0, "[FIELD_HOCBF_MICRO] backend=ACADO iterations=1 "
+             "external profile refinement disabled");
+  }
+#endif
+  // Risk-region CBFs do not use the legacy spherical-obstacle diagnostic
+  // vectors below.  Report the actual stage-0 p=4 barrier separately so a
+  // collision can be distinguished from a stale/incorrect profile or from a
+  // solver fallback.  This is evaluated in the same solver frame and with
+  // the same Q^T convention as the condensed controller model.
+  if (use_mpc_risk_regions && !mpc_risk_region_profiles.empty()) {
+    std::ostringstream risk_state_log;
+    risk_state_log << "[MPC UAV " << quad_id
+                   << "] risk_region_stage0_state";
+    for (std::size_t region_idx = 0;
+         region_idx < mpc_risk_region_profiles.size(); ++region_idx) {
+      const auto& profile = mpc_risk_region_profiles[region_idx];
+      if (profile(21, 0) <= 0.5) continue;
+      const Eigen::Vector3d center(profile(0, 0), profile(1, 0), profile(2, 0));
+      const Eigen::Vector3d axes(
+          std::max(1.0e-6, static_cast<double>(profile(3, 0))),
+          std::max(1.0e-6, static_cast<double>(profile(4, 0))),
+          std::max(1.0e-6, static_cast<double>(profile(5, 0))));
+      Eigen::Matrix3d orientation;
+      for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) {
+          orientation(row, col) = profile(6 + 3 * row + col, 0);
+        }
+      }
+      const Eigen::Vector3d local =
+          orientation.transpose() * (state_estimate_.position - center);
+      const Eigen::Vector3d rel_velocity =
+          state_estimate_.velocity -
+          Eigen::Vector3d(profile(15, 0), profile(16, 0), profile(17, 0));
+      const Eigen::Vector3d local_velocity = orientation.transpose() * rel_velocity;
+      const double h = std::pow(local.x() / axes.x(), 4.0) +
+                       std::pow(local.y() / axes.y(), 4.0) +
+                       std::pow(local.z() / axes.z(), 4.0) - 1.0;
+      const double hdot =
+          4.0 * std::pow(local.x(), 3.0) * local_velocity.x() /
+              std::pow(axes.x(), 4.0) +
+          4.0 * std::pow(local.y(), 3.0) * local_velocity.y() /
+              std::pow(axes.y(), 4.0) +
+          4.0 * std::pow(local.z(), 3.0) * local_velocity.z() /
+              std::pow(axes.z(), 4.0);
+      risk_state_log << " | region[" << region_idx << "] active="
+                     << profile(21, 0) << " h=" << h << " hdot=" << hdot
+                     << " center=(" << center.x() << "," << center.y() << ","
+                     << center.z() << ") axes=(" << axes.x() << "," << axes.y()
+                     << "," << axes.z() << ")";
+    }
+    ROS_WARN_STREAM_THROTTLE_NAMED(0.5, "risk_region_stage0_state",
+                                   risk_state_log.str());
+  }
   ROS_INFO_STREAM_THROTTLE(
       1.0,
       "[MPC UAV " << quad_id << "] cmd_rel=(" << command.velocity_cmd.x() << ", "
@@ -1851,6 +2513,59 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
     const auto& predicted_states = mpc_controller_.getPredictedStates();
     const std::size_t horizon_steps =
         static_cast<std::size_t>(acado_mpc::kSamples + 1);
+
+    // Validate the actual condensed OsqpEigen trajectory against the sampled
+    // p=4 risk-region safe-set constraints.  This diagnostic distinguishes a
+    // failed/infeasible solve from a profile, coordinate, or timing mismatch.
+    if (use_mpc_risk_regions && !mpc_risk_region_profiles.empty()) {
+      double min_predicted_h = std::numeric_limits<double>::infinity();
+      std::size_t min_region = 0u;
+      std::size_t min_stage = 0u;
+      for (std::size_t region_idx = 0u;
+           region_idx < mpc_risk_region_profiles.size(); ++region_idx) {
+        const auto& profile = mpc_risk_region_profiles[region_idx];
+        const std::size_t profile_steps =
+            std::min(horizon_steps, static_cast<std::size_t>(profile.cols()));
+        for (std::size_t k = 0u; k < profile_steps; ++k) {
+          if (profile(21, static_cast<int>(k)) <= 0.5) continue;
+          const Eigen::Vector3d center(
+              profile(0, static_cast<int>(k)),
+              profile(1, static_cast<int>(k)),
+              profile(2, static_cast<int>(k)));
+          const Eigen::Vector3d axes(
+              std::max(1.0e-6, static_cast<double>(profile(3, static_cast<int>(k)))),
+              std::max(1.0e-6, static_cast<double>(profile(4, static_cast<int>(k)))),
+              std::max(1.0e-6, static_cast<double>(profile(5, static_cast<int>(k)))));
+          Eigen::Matrix3d orientation;
+          for (int row = 0; row < 3; ++row) {
+            for (int col = 0; col < 3; ++col) {
+              orientation(row, col) =
+                  profile(6 + 3 * row + col, static_cast<int>(k));
+            }
+          }
+          const Eigen::Vector3d position(
+              predicted_states(acado_mpc::kPosX, static_cast<int>(k)),
+              predicted_states(acado_mpc::kPosY, static_cast<int>(k)),
+              predicted_states(acado_mpc::kPosZ, static_cast<int>(k)));
+          const Eigen::Vector3d local = orientation.transpose() * (position - center);
+          const double h = std::pow(local.x() / axes.x(), 4.0) +
+                           std::pow(local.y() / axes.y(), 4.0) +
+                           std::pow(local.z() / axes.z(), 4.0) - 1.0;
+          if (h < min_predicted_h) {
+            min_predicted_h = h;
+            min_region = region_idx;
+            min_stage = k;
+          }
+        }
+      }
+      if (std::isfinite(min_predicted_h)) {
+        ROS_WARN_STREAM_THROTTLE_NAMED(
+            0.2, "risk_predicted_min_h",
+            "[MPC UAV " << quad_id << "] risk_predicted_min_h="
+                         << min_predicted_h << " region=" << min_region
+                         << " stage=" << min_stage);
+      }
+    }
     last_predicted_world_positions_.assign(horizon_steps, Eigen::Vector3d::Zero());
     const CarState_t current_car_state = carStateFromOdom(car_odom_);
     for (std::size_t k = 0; k < horizon_steps; ++k) {
@@ -2016,12 +2731,6 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
       static_cast<double>(mpc_controller_.getLatestSlack());
   const double latest_slack =
       static_cast<double>(command.slack);
-  if (zero_slack_required_ && std::abs(latest_slack) > 1e-9) {
-    ROS_FATAL_STREAM("[" << pnh_.getNamespace() << "] safety_variant="
-                     << safety_variant_ << " requires zero slack but got "
-                     << latest_slack << ". Aborting.");
-    std::abort();
-  }
   metrics_step_slack_.back() = latest_slack;
   const bool update_solver_min_h_witness =
       solver_cbf_active && std::isfinite(step_solver_h) &&

@@ -1,8 +1,0 @@
-prefix=/home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/devel
-
-Name: pose_utils
-Description: Description of pose_utils
-Version: 0.0.0
-Cflags: -I/home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/src/MARSIM/Utils/pose_utils/include
-Libs: -L${prefix}/lib -lpose_utils
-Requires: 

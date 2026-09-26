@@ -1,8 +1,0 @@
-prefix=/home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/devel
-
-Name: test_interface
-Description: Description of test_interface
-Version: 0.0.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 

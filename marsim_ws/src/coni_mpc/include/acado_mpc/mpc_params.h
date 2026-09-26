@@ -70,6 +70,9 @@ class MpcParams {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   using ObstacleVector = typename MpcWrapper<T>::ObstacleVector;
   using ObstacleProfileVector = typename MpcWrapper<T>::ObstacleProfileVector;
+  using RiskRegionVector = typename MpcWrapper<T>::RiskRegionVector;
+  using RiskRegionProfileVector = typename MpcWrapper<T>::RiskRegionProfileVector;
+  using FieldHocbfProfile = typename MpcWrapper<T>::FieldHocbfProfile;
   
   MpcParams() :
     changed_(false),
@@ -91,7 +94,12 @@ class MpcParams {
     P_(Eigen::Matrix<T, kEndRefSize, kEndRefSize>::Zero()),
     R_(Eigen::Matrix<T, kInputSize, kInputSize>::Zero()),
     cbf_obstacles_(),
-    cbf_obstacle_profiles_()
+    cbf_obstacle_profiles_(),
+    cbf_risk_regions_(),
+    cbf_risk_region_profiles_(),
+    cbf_use_risk_regions_(false),
+    cbf_use_field_hocbf_(false),
+    cbf_field_hocbf_profile_(FieldHocbfProfile::Zero())
   {
   }
 
@@ -199,6 +207,8 @@ class MpcParams {
     }
 
     acado_mpc_common::getParam("cbf/enabled", cbf_enabled_, false, pnh);
+    acado_mpc_common::getParam("cbf/use_field_hocbf", cbf_use_field_hocbf_,
+                               false, pnh);
     const bool has_alpha1 = pnh.hasParam("cbf/alpha1");
     const bool has_alpha2 = pnh.hasParam("cbf/alpha2");
     if (has_alpha1) {
@@ -359,6 +369,11 @@ class MpcParams {
   Eigen::Matrix<T, kInputSize, kInputSize> R_;
   ObstacleVector cbf_obstacles_;
   ObstacleProfileVector cbf_obstacle_profiles_;
+  RiskRegionVector cbf_risk_regions_;
+  RiskRegionProfileVector cbf_risk_region_profiles_;
+  bool cbf_use_risk_regions_;
+  bool cbf_use_field_hocbf_;
+  FieldHocbfProfile cbf_field_hocbf_profile_;
 };
 
 

@@ -15,12 +15,27 @@
   <arg name="sim_duration_sec" default=""></arg>
   <arg name="sim_system_dt_sec" default=""></arg>
   <arg name="sim_control_dt_sec" default=""></arg>
+  <arg name="sim_realtime_pacing" default="false"></arg>
+  <arg name="sim_startup_delay_sec" default="0.0"></arg>
   <arg name="trajectory_laps" default="2.0"></arg>
+  <!-- Optional safe radius for the circular UGV trajectory.  Zero keeps
+       radius=v/w for legacy runs. -->
+  <arg name="ugv_circle_radius" default=""></arg>
+  <!-- Optional body-frame UAV reference offsets, encoded as a YAML list. -->
+  <arg name="uav_reference_offsets" default=""></arg>
   <arg name="safety_variant" default=""></arg>
   <arg name="cbf_enabled" default=""></arg>
   <arg name="cbf_use_in_sim" default=""></arg>
+  <arg name="cbf_use_risk_regions" default="false"></arg>
+  <arg name="cbf_risk_region_topic" default="/coni_mpc/risk_regions"></arg>
+  <arg name="cbf_use_field_hocbf" default="false"></arg>
+  <arg name="cbf_field_topic" default="/my_map/future_occupancy_3d"></arg>
   <arg name="cbf_slack_max" default=""></arg>
   <arg name="cbf_r_slack" default=""></arg>
+  <arg name="lidar_collision_enabled" default=""></arg>
+  <arg name="lidar_collision_cloud_topic" default=""></arg>
+  <arg name="lidar_collision_timeout_sec" default=""></arg>
+  <arg name="lidar_collision_point_margin" default=""></arg>
   <arg name="external_avoidance_mode" default=""></arg>
   <arg name="external_avoidance_time_horizon" default=""></arg>
   <arg name="external_avoidance_max_neighbors" default=""></arg>
@@ -59,7 +74,7 @@
   <group if="$(eval arg('instance_ns') != '')" ns="$(arg instance_ns)">
     <node pkg="coni_mpc" type="num_sim_non_one_point_node" name="$(arg node_name)" output="screen" clear_params="true"
       args="-r $(arg r) -v $(arg v) -w $(arg w)">
-      <rosparam file="$(find coni_mpc)/parameters/num_sim_non_one_point.yaml" />
+      <rosparam file="$(dirname)/../parameters/num_sim_non_one_point.yaml" />
       <param if="$(eval arg('obstacle_count') != '')"
              name="random_obstacles/count"
              value="$(arg obstacle_count)" />
@@ -80,6 +95,12 @@
       <param name="use_inertial_frame" value="$(arg use_inertial_frame)" />
       <param name="use_noninertial_frame" value="$(arg use_noninertial_frame)" />
       <param name="use_dynamic_obs" value="$(arg use_dynamic_obs)" />
+      <param if="$(eval arg('ugv_circle_radius') != '')"
+             name="ugv_circle_radius"
+             value="$(arg ugv_circle_radius)" />
+      <rosparam if="$(eval arg('uav_reference_offsets') != '')"
+                param="uav_reference_offsets"
+                subst_value="true">$(arg uav_reference_offsets)</rosparam>
       <param name="warm_start" value="$(arg warm_start)" />
       <param name="metrics_csv" value="$(arg metrics_csv)" />
       <param name="run_tag" value="$(arg run_tag)" />
@@ -92,6 +113,8 @@
       <param if="$(eval arg('sim_control_dt_sec') != '')"
              name="sim_control_dt_sec"
              value="$(arg sim_control_dt_sec)" />
+      <param name="sim_realtime_pacing" value="$(arg sim_realtime_pacing)" />
+      <param name="sim_startup_delay_sec" value="$(arg sim_startup_delay_sec)" />
       <param name="trajectory_laps" value="$(arg trajectory_laps)" />
       <param if="$(eval arg('safety_variant') != '')"
              name="safety_variant"
@@ -102,12 +125,28 @@
       <param if="$(eval arg('cbf_use_in_sim') != '')"
              name="cbf/use_in_sim"
              value="$(arg cbf_use_in_sim)" />
+      <param name="cbf/use_risk_regions" value="$(arg cbf_use_risk_regions)" />
+      <param name="cbf/risk_region_topic" value="$(arg cbf_risk_region_topic)" />
+      <param name="cbf/use_field_hocbf" value="$(arg cbf_use_field_hocbf)" />
+      <param name="cbf/field_topic" value="$(arg cbf_field_topic)" />
       <param if="$(eval arg('cbf_slack_max') != '')"
              name="cbf/slack_max"
              value="$(arg cbf_slack_max)" />
       <param if="$(eval arg('cbf_r_slack') != '')"
              name="cbf/R_slack"
              value="$(arg cbf_r_slack)" />
+      <param if="$(eval arg('lidar_collision_enabled') != '')"
+             name="lidar_collision/enabled"
+             value="$(arg lidar_collision_enabled)" />
+      <param if="$(eval arg('lidar_collision_cloud_topic') != '')"
+             name="lidar_collision/cloud_topic"
+             value="$(arg lidar_collision_cloud_topic)" />
+      <param if="$(eval arg('lidar_collision_timeout_sec') != '')"
+             name="lidar_collision/timeout_sec"
+             value="$(arg lidar_collision_timeout_sec)" />
+      <param if="$(eval arg('lidar_collision_point_margin') != '')"
+             name="lidar_collision/point_margin"
+             value="$(arg lidar_collision_point_margin)" />
       <param if="$(eval arg('external_avoidance_mode') != '')"
              name="external_avoidance/mode"
              value="$(arg external_avoidance_mode)" />
@@ -178,7 +217,7 @@
   <group unless="$(eval arg('instance_ns') != '')">
     <node pkg="coni_mpc" type="num_sim_non_one_point_node" name="$(arg node_name)" output="screen" clear_params="true"
       args="-r $(arg r) -v $(arg v) -w $(arg w)">
-      <rosparam file="$(find coni_mpc)/parameters/num_sim_non_one_point.yaml" />
+      <rosparam file="$(dirname)/../parameters/num_sim_non_one_point.yaml" />
       <param if="$(eval arg('obstacle_count') != '')"
              name="random_obstacles/count"
              value="$(arg obstacle_count)" />
@@ -199,6 +238,12 @@
       <param name="use_inertial_frame" value="$(arg use_inertial_frame)" />
       <param name="use_noninertial_frame" value="$(arg use_noninertial_frame)" />
       <param name="use_dynamic_obs" value="$(arg use_dynamic_obs)" />
+      <param if="$(eval arg('ugv_circle_radius') != '')"
+             name="ugv_circle_radius"
+             value="$(arg ugv_circle_radius)" />
+      <rosparam if="$(eval arg('uav_reference_offsets') != '')"
+                param="uav_reference_offsets"
+                subst_value="true">$(arg uav_reference_offsets)</rosparam>
       <param name="warm_start" value="$(arg warm_start)" />
       <param name="metrics_csv" value="$(arg metrics_csv)" />
       <param name="run_tag" value="$(arg run_tag)" />
@@ -211,6 +256,8 @@
       <param if="$(eval arg('sim_control_dt_sec') != '')"
              name="sim_control_dt_sec"
              value="$(arg sim_control_dt_sec)" />
+      <param name="sim_realtime_pacing" value="$(arg sim_realtime_pacing)" />
+      <param name="sim_startup_delay_sec" value="$(arg sim_startup_delay_sec)" />
       <param name="trajectory_laps" value="$(arg trajectory_laps)" />
       <param if="$(eval arg('safety_variant') != '')"
              name="safety_variant"
@@ -221,12 +268,28 @@
       <param if="$(eval arg('cbf_use_in_sim') != '')"
              name="cbf/use_in_sim"
              value="$(arg cbf_use_in_sim)" />
+      <param name="cbf/use_risk_regions" value="$(arg cbf_use_risk_regions)" />
+      <param name="cbf/risk_region_topic" value="$(arg cbf_risk_region_topic)" />
+      <param name="cbf/use_field_hocbf" value="$(arg cbf_use_field_hocbf)" />
+      <param name="cbf/field_topic" value="$(arg cbf_field_topic)" />
       <param if="$(eval arg('cbf_slack_max') != '')"
              name="cbf/slack_max"
              value="$(arg cbf_slack_max)" />
       <param if="$(eval arg('cbf_r_slack') != '')"
              name="cbf/R_slack"
              value="$(arg cbf_r_slack)" />
+      <param if="$(eval arg('lidar_collision_enabled') != '')"
+             name="lidar_collision/enabled"
+             value="$(arg lidar_collision_enabled)" />
+      <param if="$(eval arg('lidar_collision_cloud_topic') != '')"
+             name="lidar_collision/cloud_topic"
+             value="$(arg lidar_collision_cloud_topic)" />
+      <param if="$(eval arg('lidar_collision_timeout_sec') != '')"
+             name="lidar_collision/timeout_sec"
+             value="$(arg lidar_collision_timeout_sec)" />
+      <param if="$(eval arg('lidar_collision_point_margin') != '')"
+             name="lidar_collision/point_margin"
+             value="$(arg lidar_collision_point_margin)" />
       <param if="$(eval arg('external_avoidance_mode') != '')"
              name="external_avoidance/mode"
              value="$(arg external_avoidance_mode)" />
@@ -296,11 +359,11 @@
   </group>
   <group if="$(eval arg('use_rviz') and arg('rviz_view') != 'world')">
     <node type="rviz" name="rviz_non" pkg="rviz"
-          args="-d '$(find coni_mpc)/rviz/non_inertial.rviz'" />
+          args="-d '$(dirname)/../rviz/non_inertial.rviz'" />
   </group>
   <group if="$(eval arg('use_rviz') and arg('rviz_view') != 'non')">
     <node type="rviz" name="rviz_world" pkg="rviz"
-          args="-d '$(find coni_mpc)/rviz/world.rviz'" />
+          args="-d '$(dirname)/../rviz/world.rviz'" />
   </group>
 
 </launch>

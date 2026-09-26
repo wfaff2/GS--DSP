@@ -1,4 +1,0 @@
-min_raylength,distance_bin,frames,lidar_return_rate,valid_rate
-1,"[-inf, 0.5)",19,1.0,1.0
-1,"[0.5, 1.0)",16,1.0,1.0
-1,"[1.0, 1.5)",36,1.0,1.0

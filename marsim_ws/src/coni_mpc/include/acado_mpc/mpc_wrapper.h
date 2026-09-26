@@ -77,6 +77,12 @@ static constexpr int kMaxObstacles = 3;
 static constexpr int kAccelerationConstraintSize = 3;
 static constexpr int kCbfConstraintOffset = kAccelerationConstraintSize;
 static constexpr int kCbfConstraintSize = kMaxObstacles;
+static constexpr int kSafeSetConstraintOffset =
+    kCbfConstraintOffset + kCbfConstraintSize;
+static constexpr int kSafeSetConstraintSize = kMaxObstacles;
+static constexpr int kFieldConstraintOffset =
+    kSafeSetConstraintOffset + kSafeSetConstraintSize;
+static constexpr int kFieldConstraintSize = 1;
 // Must match the discretization and first-order tracking constants exported by
 // acado_model/quadrotor_model_thrustrates.cpp.
 static constexpr double kModelDt = 0.1;
@@ -86,15 +92,17 @@ static constexpr double kModelTauVz = 0.2;
 // acado_model/quadrotor_model_thrustrates.cpp.
 static constexpr double kModelMaxAccXy = 6.0;
 static constexpr double kModelMaxAccZ = 4.0;
-static_assert(kPathConstraintSize ==
-                  kAccelerationConstraintSize + kCbfConstraintSize,
+static_assert(kPathConstraintSize == kAccelerationConstraintSize +
+                  kCbfConstraintSize + kSafeSetConstraintSize +
+                  kFieldConstraintSize,
               "MPC: Path-constraint size does not match the model layout.");
 // Must match the model-side online-data layout exported by
 // acado_model/quadrotor_model_thrustrates.cpp:
-// [0..23] obstacle state for 3 obstacles, [24..25] alpha1/alpha2,
-// [26..28] omega_non, [29..31] beta_non, [32..34] a_car_non,
-// [35..37] ref_x, ref_y, trust_factor.
-static constexpr int kOdObstacleStride = 8;
+// Each obstacle occupies center(3), axes(3), rotation(9), velocity(3),
+// acceleration(3), active(1) = 22 entries.  The generated model then stores
+// alpha1/alpha2, non-inertial data, planar tracking data, and the one affine
+// field-HOCBF row.
+static constexpr int kOdObstacleStride = 22;
 static constexpr int kOdObstacleOffset = 0;
 static constexpr int kOdAlpha1Index =
     kOdObstacleOffset + kMaxObstacles * kOdObstacleStride;
@@ -105,8 +113,11 @@ static constexpr int kOdCarAccOffset = kOdBetaNonOffset + 3;
 static constexpr int kOdRefXIndex = kOdCarAccOffset + 3;
 static constexpr int kOdRefYIndex = kOdRefXIndex + 1;
 static constexpr int kOdTrustFactorIndex = kOdRefYIndex + 1;
+static constexpr int kOdFieldOffset = kOdTrustFactorIndex + 1;
 static_assert(kOdTrustFactorIndex < kOdSize,
               "MPC: ACADO online data size does not match model layout.");
+static_assert(kOdFieldOffset + 5 <= kOdSize,
+              "MPC: ACADO field online-data layout does not fit ACADO_NOD.");
 
 /**
  * @brief Wrapper for the ACADO MPC implementation
@@ -127,6 +138,15 @@ class MpcWrapper
   using Vec3Profile = Eigen::Matrix<T, 3, kSamples + 1>;
   using ObstacleProfileVector =
       std::vector<ObstacleProfile, Eigen::aligned_allocator<ObstacleProfile>>;
+  using RiskRegion = Eigen::Matrix<T, 22, 1>;
+  using RiskRegionVector =
+      std::vector<RiskRegion, Eigen::aligned_allocator<RiskRegion>>;
+  using RiskRegionProfile = Eigen::Matrix<T, 22, kSamples + 1>;
+  using RiskRegionProfileVector =
+      std::vector<RiskRegionProfile,
+                  Eigen::aligned_allocator<RiskRegionProfile>>;
+  // Ax, Ay, Az, b, active, diagnostic slack weight.
+  using FieldHocbfProfile = Eigen::Matrix<T, 6, kSamples + 1>;
 
   MpcWrapper();
   MpcWrapper(
@@ -149,6 +169,11 @@ class MpcWrapper
     const ObstacleVector& obstacles,
     const ObstacleProfileVector& obstacle_profiles,
     T alpha1, T alpha2, bool enabled);
+  bool setRiskRegions(
+      const RiskRegionVector& risk_regions,
+      const RiskRegionProfileVector& risk_region_profiles,
+      T alpha1, T alpha2, bool enabled);
+  bool setFieldHocbf(const FieldHocbfProfile& profile, bool enabled);
   bool setNonInertialData(
     const Eigen::Ref<const Eigen::Matrix<T, 3, 1>>& omega_non,
     const Eigen::Ref<const Eigen::Matrix<T, 3, 1>>& beta_non,
@@ -186,6 +211,15 @@ class MpcWrapper
     Eigen::Ref<Eigen::Matrix<T, kInputSize, 1>> return_input);
   void getInputs(
     Eigen::Ref<Eigen::Matrix<T, kInputSize, kSamples>> return_input);
+  Eigen::Matrix<T, kInputSize, 1> getPreviousInput() const {
+    return previous_input_;
+  }
+  bool setPreviousInput(
+      const Eigen::Ref<const Eigen::Matrix<T, kInputSize, 1>>& input) {
+    if (!input.allFinite()) return false;
+    previous_input_ = input;
+    return true;
+  }
   T getTimestep() const { return dt_; }
 
  private:
@@ -265,6 +299,11 @@ class MpcWrapper
   AcadoScalar cached_objective_{std::numeric_limits<AcadoScalar>::quiet_NaN()};
   Eigen::Matrix<AcadoScalar, kStateSize, kSamples + 1> reference_state_guess_;
   Eigen::Matrix<AcadoScalar, kInputSize, kSamples> reference_input_guess_;
+
+  FieldHocbfProfile field_profile_ = FieldHocbfProfile::Zero();
+  bool field_enabled_{false};
+  Eigen::Matrix<T, kInputSize, 1> previous_input_ =
+      Eigen::Matrix<T, kInputSize, 1>::Zero();
 
   Eigen::Matrix<T, kRefSize, kRefSize> W_ = (Eigen::Matrix<T, kRefSize, 1>() <<
     200, 200, 200,

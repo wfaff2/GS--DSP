@@ -1,0 +1,38 @@
+<launch>
+  <node pkg="coni_mpc" type="risk_region_constructor_node"
+        name="risk_region_constructor" output="screen">
+    <param name="input_topic" value="/my_map/future_occupancy_3d" />
+    <param name="output_topic" value="/coni_mpc/risk_regions" />
+    <param name="prediction_stages" value="21" />
+    <param name="prediction_dt" value="0.1" />
+    <param name="voxel_resolution" value="0.15" />
+    <param name="retained_mass" value="0.95" />
+    <!-- Support-aware connected mass growth. These are normalized graph
+         scores, not additional occupancy probabilities. -->
+    <param name="neighbor_support_fraction" value="0.15" />
+    <param name="neighbor_support_weight" value="0.5" />
+    <!-- Persistence across the DSP prediction slices; high-confidence new
+         regions are still admitted immediately. -->
+    <param name="minimum_persistent_stages" value="2" />
+    <param name="persistence_high_confidence" value="0.65" />
+    <param name="temporal_confirmation_frames" value="2" />
+    <!-- The fit runs in a latest-sample worker.  Keep a track through the
+         measured 1 to 2 s fit latency so temporal confirmation is not reset on
+         every worker result. -->
+    <param name="temporal_track_timeout" value="3.0" />
+    <!-- The DSP forecast spans 2 s; an older cloud no longer covers the
+         controller's current horizon and must not be fitted as if it were now.
+         The callback itself is non-blocking, so this is not a queue-delay
+         control knob. -->
+    <param name="max_input_age_sec" value="2.0" />
+    <!-- Recursive PCA-axis split for non-convex components. -->
+    <param name="split_volume_ratio" value="2.0" />
+    <param name="split_min_volume_reduction" value="0.15" />
+    <param name="max_split_depth" value="2" />
+    <!-- r_safe = uav_radius + control_margin + perception_margin. -->
+    <param name="uav_radius" value="0.15" />
+    <param name="control_margin" value="0.35" />
+    <!-- No independent perception calibration is available yet. -->
+    <param name="perception_margin" value="0.0" />
+  </node>
+</launch>

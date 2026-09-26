@@ -31,6 +31,7 @@
 #include <opencv2/core/eigen.hpp>
 #include <deque>
 #include <numeric>
+#include <mutex>
 #include <local_sensing_node/DynamicObstacleStateArray.h>
 
 // #define DEBUG
@@ -76,6 +77,7 @@ sensor_msgs::PointCloud2 local_depth_pcl;
 
 ros::Subscriber odom_sub, UAV_odom_sub;
 ros::Subscriber global_map_sub, local_map_sub;
+ros::Subscriber external_obstacle_sub;
 
 ros::Timer local_sensing_timer, pose_timer, dynobj_timer;
 
@@ -83,6 +85,10 @@ bool has_global_map(false);
 bool has_local_map(false);
 bool has_odom(false);
 bool has_dyn_map(false);
+bool external_obstacle_state_mode(false);
+bool sensor_pose_body_flu(false);
+std::mutex external_obstacle_mutex;
+local_sensing_node::DynamicObstacleStateArray external_obstacle_states;
 
 nav_msgs::Odometry odom_;
 Eigen::Matrix4d sensor2body, sensor2world;
@@ -294,6 +300,81 @@ pcl::PointCloud<PointType> generate_box_cloud(double size)
   return generate_box_cloud(size, size, size);
 }
 
+#include <local_sensing_node/pedestrian_geometry.h>
+
+pcl::PointCloud<PointType> generate_pedestrian_cloud(double height)
+{
+  pcl::PointCloud<PointType> cloud;
+  for (const auto& part : local_sensing_node::pedestrianParts(height)) {
+    const double diameter = std::max(part.sx, std::max(part.sy, part.sz));
+    const int rings = std::max(8, static_cast<int>(std::ceil(M_PI * diameter / downsample_res)));
+    for (int j = 0; j <= rings; ++j) {
+      const double phi = M_PI * j / rings;
+      for (int k = 0; k < 2 * rings; ++k) {
+        const double theta = M_PI * k / rings;
+        PointType point;
+        point.x = part.x + 0.5 * part.sx * std::sin(phi) * std::cos(theta);
+        point.y = part.y + 0.5 * part.sy * std::sin(phi) * std::sin(theta);
+        point.z = part.z + 0.5 * part.sz * std::cos(phi);
+        point.intensity = MAX_INTENSITY;
+        cloud.push_back(point);
+      }
+    }
+  }
+  return cloud;
+}
+
+pcl::PointCloud<PointType> generate_cylinder_cloud(double diameter,
+                                                   double height)
+{
+  pcl::PointCloud<PointType> cloud;
+  const double radius = 0.5 * std::max(diameter, downsample_res);
+  const double safe_height = std::max(height, downsample_res);
+  const int angular_count = std::max(
+      12, static_cast<int>(std::ceil(2.0 * M_PI * radius / downsample_res)));
+  const int height_count = std::max(
+      1, static_cast<int>(std::ceil(safe_height / downsample_res)));
+  const int radial_count = std::max(
+      1, static_cast<int>(std::ceil(radius / downsample_res)));
+  PointType point;
+  point.intensity = MAX_INTENSITY;
+  for (int zi = 0; zi <= height_count; ++zi)
+  {
+    const double z = -0.5 * safe_height +
+                     safe_height * static_cast<double>(zi) / height_count;
+    for (int ai = 0; ai < angular_count; ++ai)
+    {
+      const double angle = 2.0 * M_PI * static_cast<double>(ai) / angular_count;
+      point.x = radius * std::cos(angle);
+      point.y = radius * std::sin(angle);
+      point.z = z;
+      cloud.push_back(point);
+    }
+  }
+  for (int ri = 0; ri <= radial_count; ++ri)
+  {
+    const double r = radius * static_cast<double>(ri) / radial_count;
+    for (int ai = 0; ai < angular_count; ++ai)
+    {
+      const double angle = 2.0 * M_PI * static_cast<double>(ai) / angular_count;
+      point.x = r * std::cos(angle);
+      point.y = r * std::sin(angle);
+      point.z = -0.5 * safe_height;
+      cloud.push_back(point);
+      point.z = 0.5 * safe_height;
+      cloud.push_back(point);
+    }
+  }
+  return cloud;
+}
+
+void externalObstacleStateCallback(
+    const local_sensing_node::DynamicObstacleStateArrayConstPtr &msg)
+{
+  std::lock_guard<std::mutex> lock(external_obstacle_mutex);
+  external_obstacle_states = *msg;
+}
+
 void generate_ptclouds_by_pos(Eigen::Vector3d obs_pos, int obs_type, pcl::PointCloud<PointType> &obs_cloud, vector<PointType> &obs_points, int obstacle_index = -1)
 {
   // 0 for using uav model, 1 for using sphere model, 2 for using box model
@@ -351,6 +432,55 @@ void dynobjGenerate(const ros::TimerEvent &event)
     Eigen::Vector3d gravity_vec;
     gravity_vec<<0,0,-1;
     Eigen::Vector3d dyntemp_dir_polar;    
+
+    if (external_obstacle_state_mode)
+    {
+      local_sensing_node::DynamicObstacleStateArray source;
+      {
+        std::lock_guard<std::mutex> lock(external_obstacle_mutex);
+        source = external_obstacle_states;
+      }
+      int point_count = 0;
+      for (const auto &state : source.obstacles)
+      {
+        const double lx = std::max(0.01, state.size.x);
+        const double ly = std::max(0.01, state.size.y);
+        const double lz = std::max(0.01, state.size.z);
+        pcl::PointCloud<PointType> obstacle_cloud;
+        if (state.geometry_type == "cylinder")
+          obstacle_cloud = generate_cylinder_cloud(std::max(lx, ly), lz);
+        else if (state.geometry_type == "pedestrian")
+          obstacle_cloud = generate_pedestrian_cloud(lz);
+        else if (state.geometry_type == "sphere")
+          obstacle_cloud = generate_sphere_cloud(std::max(lx, std::max(ly, lz)));
+        else
+          obstacle_cloud = generate_box_cloud(lx, ly, lz);
+
+        for (auto &point : obstacle_cloud.points)
+        {
+          point.x += state.position.x;
+          point.y += state.position.y;
+          point.z += state.position.z;
+          dynobj_points.push_back(point);
+          dynobj_pointsindex.push_back(point_count + origin_mapptcount);
+          ++point_count;
+        }
+        dynobj_points_vis += obstacle_cloud;
+      }
+      dynobj_points_vis.width = dynobj_points_vis.points.size();
+      dynobj_points_vis.height = 1;
+      dynobj_points_vis.is_dense = true;
+      pcl::toROSMsg(dynobj_points_vis, dynobj_points_pcd);
+      dynobj_points_pcd.header = source.header;
+      dynobj_points_pcd.header.frame_id = "map";
+      pub_dyncloud.publish(dynobj_points_pcd);
+      source.header.stamp = ros::Time::now();
+      source.header.frame_id = "map";
+      pub_dynstate.publish(source);
+      kdtree_dyn.setInputCloud(dynobj_points_vis.makeShared());
+      has_dyn_map = true;
+      return;
+    }
 
     // rewrite generate dynamic obstacles
     for (int n = 0; n < dynobject_num; n++)
@@ -1844,7 +1974,7 @@ void renderSensedPoints(const ros::TimerEvent &event)
 
   pcl::toROSMsg(local_map_filled, local_map_pcd);
   local_map_pcd.header = odom_.header;
-  local_map_pcd.header.frame_id = "world";
+  local_map_pcd.header.frame_id = "map";
   pub_cloud.publish(local_map_pcd);
 
   if (visible_gt_debug_enable)
@@ -1859,12 +1989,15 @@ void renderSensedPoints(const ros::TimerEvent &event)
   }
 
   // transform
-  std::string sensor_frame_id_ = "/sensor";
+  // A leading slash is invalid in tf2 frame IDs, and a shared "sensor" frame
+  // makes multiple renderers overwrite each other. quad_name is unique in the
+  // MF-MPSC launch (mf_mpsc_uav1, ...).
+  const std::string sensor_frame_id_ = quad_name + "_sensor";
   static tf2_ros::TransformBroadcaster br;
   geometry_msgs::TransformStamped transform;
   ros::Time time_stamp_ = odom_.header.stamp;
   transform.header.stamp = time_stamp_;
-  transform.header.frame_id = "world";
+  transform.header.frame_id = "map";
   transform.child_frame_id = sensor_frame_id_;
 
   transform.transform.translation.x = pos.x();
@@ -1918,7 +2051,7 @@ void renderSensedPoints(const ros::TimerEvent &event)
 
   cv_bridge::CvImage out_msg;
   out_msg.header.stamp = time_stamp_;
-  out_msg.header.frame_id = "/sensor";
+  out_msg.header.frame_id = sensor_frame_id_;
   out_msg.encoding = sensor_msgs::image_encodings::TYPE_32FC1;
   out_msg.image = img.clone();
   depth_img_pub_.publish(out_msg.toImageMsg());
@@ -1949,14 +2082,30 @@ void renderSensedPoints(const ros::TimerEvent &event)
 void pubSensorPose(const ros::TimerEvent &e)
 {
   Eigen::Quaterniond q;
-  q = sensor2world.block<3, 3>(0, 0);
+  Eigen::Vector3d position;
+  if (sensor_pose_body_flu)
+  {
+    q.x() = odom_.pose.pose.orientation.x;
+    q.y() = odom_.pose.pose.orientation.y;
+    q.z() = odom_.pose.pose.orientation.z;
+    q.w() = odom_.pose.pose.orientation.w;
+    position << odom_.pose.pose.position.x,
+                odom_.pose.pose.position.y,
+                odom_.pose.pose.position.z;
+  }
+  else
+  {
+    // Preserve the historical camera-optical pose contract by default.
+    q = sensor2world.block<3, 3>(0, 0);
+    position = sensor2world.block<3, 1>(0, 3);
+  }
 
   geometry_msgs::PoseStamped sensor_pose;
   sensor_pose.header = odom_.header;
-  sensor_pose.header.frame_id = "/map";
-  sensor_pose.pose.position.x = sensor2world(0, 3);
-  sensor_pose.pose.position.y = sensor2world(1, 3);
-  sensor_pose.pose.position.z = sensor2world(2, 3);
+  sensor_pose.header.frame_id = "map";
+  sensor_pose.pose.position.x = position.x();
+  sensor_pose.pose.position.y = position.y();
+  sensor_pose.pose.position.z = position.z();
   sensor_pose.pose.orientation.w = q.w();
   sensor_pose.pose.orientation.x = q.x();
   sensor_pose.pose.orientation.y = q.y();
@@ -1992,6 +2141,8 @@ int main(int argc, char **argv)
   nh.getParam("dynobject_num", dynobject_num);
   nh.getParam("dyn_mode", dyn_mode);
   nh.getParam("dyn_velocity", dyn_velocity);
+  nh.param("external_obstacle_state_mode", external_obstacle_state_mode, false);
+  nh.param("sensor_pose_body_flu", sensor_pose_body_flu, false);
   nh.param("visible_gt_debug_enable", visible_gt_debug_enable, false);
   if (visible_gt_debug_enable)
   {
@@ -2105,6 +2256,9 @@ int main(int argc, char **argv)
   // subscribe point cloud
   global_map_sub = nh.subscribe("global_map", 1, rcvGlobalPointCloudCallBack);
   odom_sub = nh.subscribe("odometry", 50, rcvOdometryCallbck);
+  if (external_obstacle_state_mode)
+    external_obstacle_sub = nh.subscribe(
+        "external_obstacle_states", 10, externalObstacleStateCallback);
 
   // publisher depth image and color image
   pub_dyncloud = nh.advertise<sensor_msgs::PointCloud2>("dyn_cloud", 10);

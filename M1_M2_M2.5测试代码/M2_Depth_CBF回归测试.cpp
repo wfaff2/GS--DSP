@@ -1,1 +1,0 @@
-../marsim_ws/src/coni_mpc/test/depth_cbf_regressor_test.cpp

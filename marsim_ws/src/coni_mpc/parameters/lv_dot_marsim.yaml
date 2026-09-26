@@ -43,7 +43,7 @@ dbscan_min_points_cluster: 20
 dbscan_search_range_epsilon: 0.05
 lidar_DBSCAN_min_points: 10
 lidar_DBSCAN_epsilon: 0.05
-downsample_threshold: 3500
+downsample_threshold: 20000
 gaussian_downsample_rate: 6
 filtering_BBox_IOU_threshold: 0.2
 

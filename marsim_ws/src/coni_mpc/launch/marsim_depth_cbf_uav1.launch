@@ -1,16 +1,33 @@
 <launch>
-  <!-- M1/M2 integration only: one UAV (UAV1), CPU Livox Mid-360, static PCD. -->
+  <!-- One UAV (UAV1), CPU Livox Mid-360, one static PCD obstacle and an
+       optional deterministic dynamic obstacle rendered into the same cloud. -->
   <arg name="map_name"
        default="$(find map_generator)/resource/small_forest01cutoff.pcd" />
   <arg name="downsample_resolution" default="0.1" />
+  <arg name="uav_odom_topic" default="/coni_mpc/quad_odom1" />
+  <arg name="use_intensity_pcd_publisher" default="false" />
+  <arg name="dynamic_obstacles" default="false" />
+  <arg name="dynamic_obstacle_count" default="0" />
+  <arg name="dynamic_obstacle_size" default="0.8" />
+  <arg name="dynamic_obstacle_velocity" default="1.0" />
+  <arg name="deterministic_box_mode" default="false" />
+  <arg name="box_config"
+       default="$(dirname)/../parameters/lv_dot_box_collection.yaml" />
   <arg name="start_marsim" default="true" />
   <!-- Preserved legacy path. Disabled by default now that LV-DOT is the
        active perception-development path. Set true only for old M1/M2 runs. -->
   <arg name="start_depth_cbf" default="false" />
   <arg name="start_rviz" default="false" />
+  <arg name="sensor_pose_body_flu" default="false" />
+
+  <!-- In deterministic mode the renderer reads the exact initial position,
+       size and velocity from /box_validation/dynamic. -->
+  <rosparam if="$(arg deterministic_box_mode)" command="load"
+            file="$(arg box_config)" ns="/box_validation" />
 
   <group if="$(arg start_marsim)">
-    <node pkg="map_generator" name="depth_cbf_map_pub" type="map_pub"
+    <node unless="$(arg use_intensity_pcd_publisher)"
+          pkg="map_generator" name="depth_cbf_map_pub" type="map_pub"
           output="screen" args="$(arg map_name)">
       <param name="add_boundary" value="0" />
       <param name="is_bridge" value="0" />
@@ -20,12 +37,20 @@
       <param name="map_offset_z" value="0.0" />
     </node>
 
+    <!-- The compact one-obstacle validation PCD requires an XYZI message;
+         the generic map_pub drops intensity and MARSIM cannot render it. -->
+    <node if="$(arg use_intensity_pcd_publisher)" pkg="coni_mpc"
+          name="depth_cbf_map_pub" type="depth_cbf_m25_map_publisher_node"
+          output="screen">
+      <param name="map_name" value="$(arg map_name)" />
+    </node>
+
     <!-- Deliberately do not include MARSIM single_drone.xml: it would also
          start MARSIM dynamics/PID. This is the MARSIM CPU Mid-360 renderer only. -->
     <node pkg="local_sensing_node" type="pcl_render_node"
           name="quad0_pcl_render_node" output="screen">
       <remap from="~global_map" to="/map_generator/global_cloud" />
-      <remap from="~odometry" to="/coni_mpc/quad_odom1" />
+      <remap from="~odometry" to="$(arg uav_odom_topic)" />
       <param name="drone_id" value="0" />
       <param name="quadrotor_name" value="uav_1" />
       <param name="uav_num" value="1" />
@@ -45,11 +70,14 @@
       <param name="use_minicf_pattern" value="1" />
       <param name="use_os128_pattern" value="0" />
       <param name="downsample_res" value="$(arg downsample_resolution)" />
-      <param name="dynobj_enable" value="0" />
-      <param name="dynobject_size" value="0.8" />
-      <param name="dynobject_num" value="0" />
+      <param name="dynobj_enable"
+             value="$(eval 1 if arg('dynamic_obstacles') else 0)" />
+      <param name="dynobject_size" value="$(arg dynamic_obstacle_size)" />
+      <param name="dynobject_num" value="$(arg dynamic_obstacle_count)" />
       <param name="dyn_mode" value="0" />
-      <param name="dyn_velocity" value="0.0" />
+      <param name="dyn_velocity" value="$(arg dynamic_obstacle_velocity)" />
+      <param name="deterministic_box_mode" value="$(arg deterministic_box_mode)" />
+      <param name="sensor_pose_body_flu" value="$(arg sensor_pose_body_flu)" />
       <param name="use_uav_extra_model" value="0" />
       <param name="collisioncheck_enable" value="0" />
       <param name="collision_range" value="0.3" />

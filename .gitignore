@@ -1,0 +1,40 @@
+# Local build products and workspace state.
+build/
+devel/
+install/
+cmake-build-*/
+.catkin_tools/
+.cache/
+.ros/
+.vscode/
+.idea/
+.agents/
+.claude/
+.codex/
+__pycache__/
+*.py[cod]
+*.o
+*.a
+*.so
+*.so.*
+CMakeCache.txt
+CMakeFiles/
+
+# Recorded experiments and sensor streams; source maps remain versioned.
+log/
+logs/
+results/
+Testing/
+*.log
+*.bag
+*.bag.active
+
+# Machine-local credentials.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Rebuild these generators from their adjacent sources.
+/marsim_ws/src/coni_mpc/acado_model/quadrotor_model_codegen

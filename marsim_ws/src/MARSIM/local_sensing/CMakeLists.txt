@@ -51,6 +51,7 @@ add_definitions(-DROOT_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/\")
   )
 
   catkin_package(
+      INCLUDE_DIRS include
       DEPENDS Eigen
       CATKIN_DEPENDS roscpp roslib pcl_ros image_transport message_runtime
   )

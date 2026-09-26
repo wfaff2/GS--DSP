@@ -1,8 +1,0 @@
-prefix=/home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/devel
-
-Name: coni_mpc
-Description: Description of coni_mpc
-Version: 0.0.0
-Cflags: -I/home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/devel/include -I/home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/src/coni_mpc/include
-Libs: -L${prefix}/lib 
-Requires: message_runtime std_msgs geometry_msgs sensor_msgs

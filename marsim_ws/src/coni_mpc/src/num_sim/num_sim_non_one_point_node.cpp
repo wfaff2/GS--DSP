@@ -35,6 +35,7 @@
 #include <array>
 #include <algorithm>
 #include <atomic>
+#include <cstdint>
 #include <cctype>
 #include <chrono>
 #include <fstream>
@@ -52,7 +53,12 @@
 #include <ros/ros.h>
 #include <gflags/gflags.h>
 #include <geometry_msgs/TransformStamped.h>
+#include <sensor_msgs/PointCloud2.h>
 #include <std_msgs/ColorRGBA.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl/kdtree/kdtree_flann.h>
+#include <pcl_conversions/pcl_conversions.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <visualization_msgs/Marker.h>
@@ -74,6 +80,128 @@ struct StaticObstacle {
   Eigen::Vector3d velocity;
   double radius;
   double height;
+};
+
+// Collision monitor for the active MARSIM/LiDAR point-cloud scene.  The
+// point cloud is expected to be expressed in the same world frame as the
+// simulator (normally `map`).  This monitor is deliberately separate from
+// the DSP occupancy prediction: prediction drives avoidance, while this
+// point cloud is only a terminal physical-contact check.
+class LidarCollisionMonitor {
+ public:
+  void configure(ros::NodeHandle& nh,
+                 bool enabled,
+                 const std::string& topic,
+                 const std::string& expected_frame,
+                 double timeout_sec,
+                 double point_margin) {
+    enabled_ = enabled && !topic.empty();
+    topic_ = topic;
+    expected_frame_ = expected_frame;
+    timeout_sec_ = std::max(0.0, timeout_sec);
+    point_margin_ = std::max(0.0, point_margin);
+    if (!enabled_) {
+      if (enabled && topic.empty()) {
+        ROS_WARN("LiDAR collision monitor requested but cloud_topic is empty; disabled.");
+      }
+      return;
+    }
+    subscriber_ = nh.subscribe(topic_, 1, &LidarCollisionMonitor::callback, this);
+    ROS_INFO_STREAM("LiDAR collision monitor enabled: topic=" << topic_
+                    << " frame=" << expected_frame_
+                    << " timeout=" << timeout_sec_ << " s"
+                    << " point_margin=" << point_margin_ << " m");
+  }
+
+  bool enabled() const { return enabled_; }
+
+  bool nearestPoint(const Eigen::Vector3d& position,
+                    double& distance,
+                    Eigen::Vector3d& point) const {
+    if (!enabled_ || !has_cloud_ || !position.allFinite()) {
+      return false;
+    }
+    if (timeout_sec_ > 0.0 &&
+        (ros::WallTime::now() - last_receipt_wall_).toSec() > timeout_sec_) {
+      return false;
+    }
+    pcl::PointXYZ query;
+    query.x = static_cast<float>(position.x());
+    query.y = static_cast<float>(position.y());
+    query.z = static_cast<float>(position.z());
+    std::vector<int> indices;
+    std::vector<float> squared_distances;
+    if (kdtree_.nearestKSearch(query, 1, indices, squared_distances) != 1 ||
+        squared_distances.empty() || indices.empty() ||
+        !std::isfinite(squared_distances.front()) ||
+        squared_distances.front() < 0.0f) {
+      return false;
+    }
+    const pcl::PointXYZ& nearest = cloud_->points[indices.front()];
+    distance = std::sqrt(static_cast<double>(squared_distances.front()));
+    point = Eigen::Vector3d(nearest.x, nearest.y, nearest.z);
+    return point.allFinite() && std::isfinite(distance);
+  }
+
+  double pointMargin() const { return point_margin_; }
+
+ private:
+  void callback(const sensor_msgs::PointCloud2ConstPtr& message) {
+    if (!message) {
+      return;
+    }
+    const std::string frame = message->header.frame_id;
+    if (!expected_frame_.empty() && frame != expected_frame_) {
+      has_cloud_ = false;
+      ROS_WARN_THROTTLE(2.0,
+                        "LiDAR collision cloud frame '%s' does not match expected world frame '%s'; ignoring it.",
+                        frame.c_str(), expected_frame_.c_str());
+      return;
+    }
+
+    pcl::PointCloud<pcl::PointXYZ> converted;
+    try {
+      pcl::fromROSMsg(*message, converted);
+    } catch (const std::exception& error) {
+      has_cloud_ = false;
+      ROS_WARN_THROTTLE(2.0, "Failed to decode LiDAR collision cloud: %s",
+                        error.what());
+      return;
+    }
+
+    pcl::PointCloud<pcl::PointXYZ>::Ptr filtered(
+        new pcl::PointCloud<pcl::PointXYZ>());
+    filtered->reserve(converted.points.size());
+    for (const pcl::PointXYZ& candidate : converted.points) {
+      if (std::isfinite(candidate.x) && std::isfinite(candidate.y) &&
+          std::isfinite(candidate.z)) {
+        filtered->push_back(candidate);
+      }
+    }
+    filtered->width = static_cast<std::uint32_t>(filtered->points.size());
+    filtered->height = 1;
+    filtered->is_dense = true;
+    cloud_ = filtered;
+    if (cloud_->empty()) {
+      has_cloud_ = false;
+      return;
+    }
+    kdtree_.setInputCloud(cloud_);
+    last_receipt_wall_ = ros::WallTime::now();
+    has_cloud_ = true;
+  }
+
+  bool enabled_ = false;
+  bool has_cloud_ = false;
+  std::string topic_;
+  std::string expected_frame_;
+  double timeout_sec_ = 0.5;
+  double point_margin_ = 0.0;
+  ros::Subscriber subscriber_;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_{
+      new pcl::PointCloud<pcl::PointXYZ>()};
+  mutable pcl::KdTreeFLANN<pcl::PointXYZ> kdtree_;
+  ros::WallTime last_receipt_wall_;
 };
 
 struct RandomObstacleConfig {
@@ -1752,6 +1880,11 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
     return last_applied_control_world_;
   }
 
+  Eigen::Vector3d getWorldPosition() {
+    const State_t state = getStateSnapshot();
+    return Eigen::Vector3d(state(0), state(1), state(2));
+  }
+
   double getTruthMinPlanarSurfaceClearance() {
     const State_t state = getStateSnapshot();
     const Eigen::Vector2d position(state(0), state(1));
@@ -3012,7 +3145,9 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
         if (static_cast<int>(idx) == vehicle_index_) continue;
         if (idx >= peer_valid.size() || !peer_valid[idx]) continue;
         const double dist = (quad_position.head<2>() - peer_positions[idx].head<2>()).norm();
-        if (dist < 2.0 * uav_radius_) {
+        // Tangency counts as contact: the UAV footprint edge touching the
+        // peer footprint is already a collision for the terminal detector.
+        if (dist <= 2.0 * uav_radius_) {
           if (!collision_detected_.exchange(true)) {
             stop();
             if (collision_callback_) {
@@ -3037,7 +3172,9 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
       const double distance = (quad_position.head<2>() - obstacle.position.head<2>()).norm();
       const double collision_threshold =
           uav_radius_ + obstacle.radius + failure_distance_margin_;
-      if (distance < collision_threshold) {
+      // Tangency counts as contact: the UAV radius edge touching the obstacle
+      // surface is considered a collision, not merely a near miss.
+      if (distance <= collision_threshold) {
         if (!collision_detected_.exchange(true)) {
           stop();
           if (collision_callback_) {
@@ -3388,6 +3525,7 @@ GenerateCarTrajectory(size_t sample_num,
                       const UgvPathPlannerConfig& planner_cfg,
                       const std::vector<StaticObstacle>& obstacles,
                       double uav_radius,
+                      double car_radius,
                       const std::vector<Eigen::Vector2d>& uav_start_offsets_xy,
                       double safety_margin,
                       double& trajectory_duration_out)
@@ -3428,7 +3566,12 @@ GenerateCarTrajectory(size_t sample_num,
   const double clearance_scale = 1.0;
 
   auto requiredClearance = [&](const StaticObstacle& obstacle) {
-    return clearance_scale * (uav_radius + obstacle.radius);
+    // The generated path is the UGV center path.  Its keep-out must include
+    // the UGV footprint as well as the UAV footprint used by the formation;
+    // otherwise an obstacle can be avoided by the UAV center while the car
+    // body still cuts through it.
+    const double vehicle_radius = std::max(uav_radius, car_radius);
+    return clearance_scale * (vehicle_radius + obstacle.radius);
   };
 
   auto pointIsFree = [&](const Eigen::Vector2d& point) {
@@ -4634,6 +4777,7 @@ GenerateCircularCarTrajectory(size_t sample_num,
                               double trajectory_laps,
                               double desired_speed,
                               double yaw_rate,
+                              double radius_override,
                               double& trajectory_duration_out) {
   std::vector<QuadrotorSimulator::CarState_t> result;
   trajectory_duration_out = 0.0;
@@ -4647,10 +4791,18 @@ GenerateCircularCarTrajectory(size_t sample_num,
     return result;
   }
 
-  const double radius = speed / omega;
+  // Keep v = R * omega consistent when a scene-specific safe radius is
+  // requested.  A zero/non-positive override preserves the historical
+  // radius=v/omega behavior.
+  const double radius = (radius_override > 1e-6)
+                            ? radius_override
+                            : (speed / omega);
+  const double effective_omega = speed / radius;
   const double lap_count = std::max(1.0, trajectory_laps);
   const double trajectory_duration =
-      (duration_hint > 1e-6) ? duration_hint : (lap_count * 2.0 * M_PI / omega);
+      (duration_hint > 1e-6)
+          ? duration_hint
+          : (lap_count * 2.0 * M_PI / effective_omega);
   const double dt = trajectory_duration / static_cast<double>(sample_num - 1);
   trajectory_duration_out = trajectory_duration;
   result.reserve(sample_num);
@@ -4660,15 +4812,15 @@ GenerateCircularCarTrajectory(size_t sample_num,
   // default relative reference (-r, 0, z).
   for (size_t i = 0; i < sample_num; ++i) {
     const double t = static_cast<double>(i) * dt;
-    const double theta = omega * t;
+    const double theta = effective_omega * t;
     const double sin_theta = std::sin(theta);
     const double cos_theta = std::cos(theta);
     const double x = radius * sin_theta;
     const double y = -radius * cos_theta;
     const double vx = speed * cos_theta;
     const double vy = speed * sin_theta;
-    const double ax = -speed * omega * sin_theta;
-    const double ay = speed * omega * cos_theta;
+    const double ax = -speed * effective_omega * sin_theta;
+    const double ay = speed * effective_omega * cos_theta;
     const Eigen::AngleAxisd yaw_rot(theta, Eigen::Vector3d::UnitZ());
     Eigen::Quaterniond q_WB(yaw_rot);
     q_WB.normalize();
@@ -4690,7 +4842,7 @@ GenerateCircularCarTrajectory(size_t sample_num,
     point(12) = 0.0;
     point(13) = 0.0;
     point(14) = 0.0;
-    point(15) = omega;
+    point(15) = effective_omega;
     result.push_back(point);
   }
 
@@ -5179,6 +5331,29 @@ int main(int argc, char **argv)
     post_collision_hold_sec = 0.0;
   }
 
+  bool lidar_collision_enabled = false;
+  pnh.param("lidar_collision/enabled", lidar_collision_enabled, false);
+  std::string lidar_collision_cloud_topic;
+  pnh.param("lidar_collision/cloud_topic", lidar_collision_cloud_topic,
+            std::string(""));
+  double lidar_collision_timeout_sec = 0.5;
+  pnh.param("lidar_collision/timeout_sec", lidar_collision_timeout_sec, 0.5);
+  double lidar_collision_point_margin = 0.0;
+  pnh.param("lidar_collision/point_margin", lidar_collision_point_margin, 0.0);
+  if (lidar_collision_timeout_sec < 0.0) {
+    ROS_WARN("lidar_collision/timeout_sec should be non-negative; using zero.");
+    lidar_collision_timeout_sec = 0.0;
+  }
+  if (lidar_collision_point_margin < 0.0) {
+    ROS_WARN("lidar_collision/point_margin should be non-negative; using zero.");
+    lidar_collision_point_margin = 0.0;
+  }
+  LidarCollisionMonitor lidar_collision_monitor;
+  lidar_collision_monitor.configure(
+      nh, lidar_collision_enabled, lidar_collision_cloud_topic,
+      acado_mpc_common::worldFrameId(), lidar_collision_timeout_sec,
+      lidar_collision_point_margin);
+
   ros::Publisher obstacle_marker_pub =
       nh.advertise<visualization_msgs::MarkerArray>(
           acado_mpc_common::resolveTopicName("coni_mpc/static_obstacles"), 1,
@@ -5471,16 +5646,32 @@ for (int i = 0; i < num_uavs; i++) {
                     << " is invalid; clamping to 1 lap.");
     trajectory_laps = 1.0;
   }
+  double ugv_circle_radius = 0.0;
+  pnh.param("ugv_circle_radius", ugv_circle_radius, ugv_circle_radius);
+  if (ugv_circle_radius < 0.0) {
+    ROS_WARN("ugv_circle_radius should be non-negative; using the radius implied by v/w.");
+    ugv_circle_radius = 0.0;
+  }
   const double periodic_duration_hint = (sim_duration_sec > 0.0) ? sim_duration_sec : -1.0;
   const double effective_duration = (sim_duration_sec > 0.0) ? sim_duration_sec : DURATION;
   std::vector<QuadrotorSimulator::CarState_t> car_trajectory;
   if (car_trajectory_mode == "circle" || car_trajectory_mode == "circular") {
     car_trajectory = GenerateCircularCarTrajectory(
-        10000, periodic_duration_hint, trajectory_laps, v, w, car_trajectory_duration);
+        10000, periodic_duration_hint, trajectory_laps, v, w,
+        ugv_circle_radius, car_trajectory_duration);
+    const double generated_circle_radius =
+        (ugv_circle_radius > 1e-6)
+            ? ugv_circle_radius
+            : ((std::abs(w) > 1e-6) ? (std::abs(v) / std::abs(w)) : 0.0);
+    const double generated_circle_omega =
+        (generated_circle_radius > 1e-6)
+            ? (std::abs(v) / generated_circle_radius)
+            : 0.0;
     ROS_INFO_STREAM("Using circular car trajectory"
-                    << " radius=" << ((std::abs(w) > 1e-6) ? (std::abs(v) / std::abs(w)) : 0.0)
+                    << " radius=" << generated_circle_radius
                     << " speed=" << std::abs(v)
-                    << " yaw_rate=" << std::abs(w)
+                    << " yaw_rate=" << generated_circle_omega
+                    << " requested_yaw_rate=" << std::abs(w)
                     << " laps=" << trajectory_laps);
   } else if (car_trajectory_mode == "figure_eight" || car_trajectory_mode == "figure8") {
     car_trajectory = GenerateFigureEightCarTrajectory(
@@ -5497,7 +5688,7 @@ for (int i = 0; i < num_uavs; i++) {
   } else {
     car_trajectory = GenerateCarTrajectory(
         10000, effective_duration, v, w, obstacle_cfg, ugv_path_cfg, obstacles, uav_radius,
-        planning_uav_offsets_xy,
+        car_radius, planning_uav_offsets_xy,
         collision_safety_margin, car_trajectory_duration);
   }
   if (car_trajectory.empty()) {
@@ -5740,8 +5931,14 @@ auto collision_handler =
  */
   double sim_system_dt_sec = 0.01;
   double sim_control_dt_sec = 0.01;
+  bool sim_realtime_pacing = false;
+  double sim_startup_delay_sec = 0.0;
   pnh.param("sim_system_dt_sec", sim_system_dt_sec, sim_system_dt_sec);
   pnh.param("sim_control_dt_sec", sim_control_dt_sec, sim_control_dt_sec);
+  pnh.param("sim_realtime_pacing", sim_realtime_pacing, sim_realtime_pacing);
+  pnh.param("sim_startup_delay_sec", sim_startup_delay_sec,
+             sim_startup_delay_sec);
+  sim_startup_delay_sec = std::max(0.0, sim_startup_delay_sec);
   if (sim_system_dt_sec <= 0.0 || sim_control_dt_sec <= 0.0 ||
       sim_system_dt_sec > sim_control_dt_sec) {
     ROS_ERROR_STREAM(
@@ -5760,7 +5957,9 @@ auto collision_handler =
   }
   ROS_INFO_STREAM("Simulation timing: system_dt=" << sim_system_dt_sec
                   << " s, control_dt=" << sim_control_dt_sec << " s ("
-                  << 1.0 / sim_control_dt_sec << " Hz)");
+                  << 1.0 / sim_control_dt_sec << " Hz), realtime_pacing="
+                  << (sim_realtime_pacing ? "true" : "false")
+                  << ", startup_delay=" << sim_startup_delay_sec << " s");
 
 for (int i = 0; i < num_uavs; i++) {
   const std::vector<StaticObstacle> simulator_obstacles =
@@ -5815,6 +6014,19 @@ simulators.push_back(simulator);
 
   for (int idx : active_uavs) {
     start_simulator(idx);
+  }
+
+  // Perception-driven runs need wall time for the renderer and DSP pipeline
+  // to produce the first risk profiles.  Process callbacks while waiting so
+  // a latched/early RiskRegionArray is available to the first MPC iteration.
+  if (sim_startup_delay_sec > 0.0) {
+    const ros::WallTime startup_begin = ros::WallTime::now();
+    while (ros::ok() &&
+           (ros::WallTime::now() - startup_begin).toSec() <
+               sim_startup_delay_sec) {
+      ros::spinOnce();
+      ros::WallDuration(0.01).sleep();
+    }
   }
 
   const double scheduler_dt_sec =
@@ -5900,6 +6112,46 @@ simulators.push_back(simulator);
        !collision_reported.load();
        ++cycle_idx) {
     const auto cycle_start = std::chrono::high_resolution_clock::now();
+    // Deliver risk-region and other ROS callbacks before constructing the
+    // stage-wise OnlineData for this MPC iteration.
+    ros::spinOnce();
+    if (lidar_collision_monitor.enabled() && !collision_reported.load()) {
+      for (const int idx : active_uav_indices) {
+        if (idx < 0 || idx >= static_cast<int>(simulators.size()) ||
+            !simulators[idx]) {
+          continue;
+        }
+        const Eigen::Vector3d quad_position =
+            simulators[idx]->getWorldPosition();
+        Eigen::Vector3d nearest_point = Eigen::Vector3d::Zero();
+        double nearest_distance = std::numeric_limits<double>::infinity();
+        if (!lidar_collision_monitor.nearestPoint(
+                quad_position, nearest_distance, nearest_point)) {
+          continue;
+        }
+        const double collision_threshold =
+            std::max(0.0, uav_radius) + failure_distance_margin +
+            lidar_collision_monitor.pointMargin();
+        // Tangency counts as contact: the UAV radius edge touching a world
+        // point on the obstacle surface terminates the simulation.
+        if (nearest_distance <= collision_threshold) {
+          StaticObstacle lidar_obstacle;
+          lidar_obstacle.position = nearest_point;
+          lidar_obstacle.velocity = Eigen::Vector3d::Zero();
+          // Treat the point-sampling margin as the radius of the synthetic
+          // obstacle so the existing collision marker and threshold log show
+          // the exact world-coordinate test that triggered termination.
+          lidar_obstacle.radius = lidar_collision_monitor.pointMargin();
+          lidar_obstacle.height = 0.0;
+          collision_handler(idx, quad_position, lidar_obstacle,
+                            nearest_distance);
+          break;
+        }
+      }
+    }
+    if (collision_reported.load()) {
+      break;
+    }
     const double sim_time =
         static_cast<double>(cycle_idx) * scheduler_dt_sec;
     const ros::Time cycle_stamp = ros::Time::now();
@@ -6073,6 +6325,9 @@ simulators.push_back(simulator);
                                            << scheduler_dt_sec * 1000.0
                                            << " ms active_uavs="
                                            << active_uav_indices.size());
+    }
+    if (sim_realtime_pacing && cycle_duration_sec < scheduler_dt_sec) {
+      ros::WallDuration(scheduler_dt_sec - cycle_duration_sec).sleep();
     }
   }
 

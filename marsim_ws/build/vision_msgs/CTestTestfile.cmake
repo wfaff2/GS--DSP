@@ -1,7 +1,0 @@
-# CMake generated Testfile for 
-# Source directory: /home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/src/vision_msgs
-# Build directory: /home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/build/vision_msgs
-# 
-# This file includes the relevant testing commands required for 
-# testing this directory and lists subdirectories to be tested as well.
-subdirs("test")

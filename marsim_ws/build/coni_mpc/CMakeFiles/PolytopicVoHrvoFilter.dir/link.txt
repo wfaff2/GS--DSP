@@ -1,2 +1,0 @@
-/usr/bin/ar qc /home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/devel/lib/libPolytopicVoHrvoFilter.a  CMakeFiles/PolytopicVoHrvoFilter.dir/src/num_sim/polytopic_vo_hrvo_filter.cpp.o
-/usr/bin/ranlib /home/jjm/桌面/小样本学习的去中心集群协同跟踪/marsim_ws/devel/lib/libPolytopicVoHrvoFilter.a

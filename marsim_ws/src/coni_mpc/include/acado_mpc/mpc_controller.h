@@ -53,6 +53,7 @@
 #include "acado_mpc/mpc_params.h"
 
 #include <Eigen/Eigen>
+#include <cmath>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PointStamped.h>
 #include <nav_msgs/Path.h>
@@ -138,6 +139,33 @@ public:
   const Eigen::Matrix<T, kStateSize, kSamples + 1>& getPredictedStates() const {
     return predicted_states_;
   }
+  const Eigen::Matrix<T, kInputSize, kSamples>& getPredictedInputs() const {
+    return predicted_inputs_;
+  }
+  Eigen::Matrix<T, kInputSize, 1> getSlewRateAnchor() const {
+    return mpc_wrapper_.getPreviousInput();
+  }
+  bool setSlewRateAnchor(
+      const Eigen::Ref<const Eigen::Matrix<T, kInputSize, 1>>& input) {
+    return mpc_wrapper_.setPreviousInput(input);
+  }
+  // Restore the last successful rollout if a refinement solve fails after a
+  // successful first micro-iteration.
+  void restoreSuccessfulPrediction(
+      const Eigen::Ref<const Eigen::Matrix<T, kStateSize, kSamples + 1>>& states,
+      const Eigen::Ref<const Eigen::Matrix<T, kInputSize, kSamples>>& inputs,
+      T latest_slack) {
+    if (!states.allFinite() || !inputs.allFinite() ||
+        !std::isfinite(static_cast<double>(latest_slack))) {
+      return;
+    }
+    predicted_states_ = states;
+    predicted_inputs_ = inputs;
+    mpc_wrapper_.setPreviousInput(inputs.col(0));
+    latest_slack_ = latest_slack;
+    last_solve_ok_ = true;
+    solve_from_scratch_ = true;
+  }
   void setWarmStart(bool enable);
   void requestSolveFromScratch(const std::string& reason = std::string());
 
@@ -150,7 +178,8 @@ private:
   acado_mpc_common::ControlCommand updateControlCommand(
       const Eigen::Ref<const Eigen::Matrix<T, kStateSize, 1>> state,
       const Eigen::Ref<const Eigen::Matrix<T, kInputSize, 1>> input,
-      ros::Time& time);
+      ros::Time& time,
+      bool field_active);
 
   bool publishPrediction(
       const Eigen::Ref<const Eigen::Matrix<T, kStateSize, kSamples + 1>> states,
@@ -195,6 +224,13 @@ private:
   bool last_solve_ok_;
   std::size_t nonfinite_recovery_count_;
   std::size_t obstacle_update_fail_count_;
+  // The last command that was produced by a successful, finite MPC solve.
+  // Failed/invalid solves must never overwrite this command.
+  acado_mpc_common::ControlCommand last_valid_control_;
+  bool has_last_valid_control_;
+  typename MpcWrapper<T>::FieldHocbfProfile last_field_profile_ =
+      MpcWrapper<T>::FieldHocbfProfile::Zero();
+  bool last_field_enabled_ = false;
 };
 
 

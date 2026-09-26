@@ -1,0 +1,222 @@
+<launch>
+  <arg name="r" default="1.0"></arg>
+  <arg name="v" default="3.0"></arg>
+  <arg name="w" default="0.5"></arg>
+  <!-- If not provided at launch, fall back to YAML values. -->
+  <arg name="obstacle_count" default=""></arg>
+  <arg name="seed" default=""></arg>
+  <arg name="kappa" default="1.0"></arg>
+  <arg name="num_uavs" default="4"></arg>
+  <arg name="active_uavs_csv" default=""></arg>
+  <arg name="use_dynamic_obs" default="false"></arg>
+  <arg name="warm_start" default="true"></arg>
+  <arg name="metrics_csv" default=""></arg>
+  <arg name="run_tag" default=""></arg>
+  <arg name="sim_duration_sec" default=""></arg>
+  <arg name="trajectory_laps" default="2.0"></arg>
+  <arg name="safety_variant" default=""></arg>
+  <arg name="obstacle_sensing_mode" default=""></arg>
+  <arg name="cbf_enabled" default=""></arg>
+  <arg name="cbf_use_in_sim" default=""></arg>
+  <arg name="cbf_slack_max" default=""></arg>
+  <arg name="cbf_r_slack" default=""></arg>
+  <arg name="ugv_rollout_mode" default=""></arg>
+  <arg name="car_trajectory_mode" default=""></arg>
+  <arg name="ugv_longitudinal_accel" default=""></arg>
+  <arg name="ugv_longitudinal_decel" default=""></arg>
+  <arg name="ugv_longitudinal_jerk" default=""></arg>
+  <arg name="ugv_yaw_accel" default=""></arg>
+  <arg name="ugv_yaw_jerk" default=""></arg>
+  <arg name="obstacles_for_car_traj_only" default=""></arg>
+  <arg name="figure_eight_obstacles_enabled" default=""></arg>
+  <arg name="exclude_uav0_from_simulation" default="true"></arg>
+  <arg name="exclude_uav0_from_all_metrics" default="true"></arg>
+  <arg name="world_frame_id" default="map"></arg>
+  <arg name="relative_frame_id" default="base_link"></arg>
+  <arg name="topic_prefix" default=""></arg>
+  <arg name="instance_ns" default=""></arg>
+  <arg name="node_name" default="num_sim_non_one_point_node"></arg>
+  <arg name="frame_mode" default=""></arg>
+  <arg name="use_inertial_frame" default="false"></arg>
+  <arg name="use_noninertial_frame" default="true"></arg>
+  <arg name="use_rviz" default="true"></arg>
+  <!-- world: standard world view, non: non-inertial MPC view in world frame, both: open both -->
+  <arg name="rviz_view" default="world"></arg>
+
+
+  <group if="$(eval arg('instance_ns') != '')" ns="$(arg instance_ns)">
+    <node pkg="coni_mpc" type="num_sim_non_one_point_node" name="$(arg node_name)" output="screen" clear_params="true"
+      args="-r $(arg r) -v $(arg v) -w $(arg w)">
+      <rosparam file="$(find coni_mpc)/parameters/num_sim_non_one_point.yaml" />
+      <param if="$(eval arg('obstacle_count') != '')"
+             name="random_obstacles/count"
+             value="$(arg obstacle_count)" />
+      <param if="$(eval arg('seed') != '')"
+             name="random_obstacles/seed"
+             value="$(arg seed)" />
+      <param name="kappa" value="$(arg kappa)" />
+      <param name="num_uavs" value="$(arg num_uavs)" />
+      <rosparam if="$(eval arg('active_uavs_csv') != '')"
+                param="active_uavs"
+                subst_value="true">[$(arg active_uavs_csv)]</rosparam>
+      <param name="world_frame_id" value="$(arg world_frame_id)" />
+      <param name="relative_frame_id" value="$(arg relative_frame_id)" />
+      <param name="topic_prefix" value="$(arg topic_prefix)" />
+      <param if="$(eval arg('frame_mode') != '')"
+             name="frame_mode"
+             value="$(arg frame_mode)" />
+      <param name="use_inertial_frame" value="$(arg use_inertial_frame)" />
+      <param name="use_noninertial_frame" value="$(arg use_noninertial_frame)" />
+      <param name="use_dynamic_obs" value="$(arg use_dynamic_obs)" />
+      <param name="warm_start" value="$(arg warm_start)" />
+      <param name="metrics_csv" value="$(arg metrics_csv)" />
+      <param name="run_tag" value="$(arg run_tag)" />
+      <param if="$(eval arg('sim_duration_sec') != '')"
+             name="sim_duration_sec"
+             value="$(arg sim_duration_sec)" />
+      <param name="trajectory_laps" value="$(arg trajectory_laps)" />
+      <param if="$(eval arg('safety_variant') != '')"
+             name="safety_variant"
+             value="$(arg safety_variant)" />
+      <param if="$(eval arg('obstacle_sensing_mode') != '')"
+             name="obstacle_sensing/mode"
+             value="$(arg obstacle_sensing_mode)" />
+      <param if="$(eval arg('cbf_enabled') != '')"
+             name="cbf/enabled"
+             value="$(arg cbf_enabled)" />
+      <param if="$(eval arg('cbf_use_in_sim') != '')"
+             name="cbf/use_in_sim"
+             value="$(arg cbf_use_in_sim)" />
+      <param if="$(eval arg('cbf_slack_max') != '')"
+             name="cbf/slack_max"
+             value="$(arg cbf_slack_max)" />
+      <param if="$(eval arg('cbf_r_slack') != '')"
+             name="cbf/R_slack"
+             value="$(arg cbf_r_slack)" />
+      <param name="exclude_uav0_from_simulation"
+             value="$(arg exclude_uav0_from_simulation)" />
+      <param name="exclude_uav0_from_all_metrics"
+             value="$(arg exclude_uav0_from_all_metrics)" />
+      <param if="$(eval arg('ugv_rollout_mode') != '')"
+             name="ugv_rollout_mode"
+             value="$(arg ugv_rollout_mode)" />
+      <param if="$(eval arg('car_trajectory_mode') != '')"
+             name="car_trajectory_mode"
+             value="$(arg car_trajectory_mode)" />
+      <param if="$(eval arg('ugv_longitudinal_accel') != '')"
+             name="ugv_path/longitudinal_accel_max"
+             value="$(arg ugv_longitudinal_accel)" />
+      <param if="$(eval arg('ugv_longitudinal_decel') != '')"
+             name="ugv_path/longitudinal_decel_max"
+             value="$(arg ugv_longitudinal_decel)" />
+      <param if="$(eval arg('ugv_longitudinal_jerk') != '')"
+             name="ugv_path/longitudinal_jerk_max"
+             value="$(arg ugv_longitudinal_jerk)" />
+      <param if="$(eval arg('ugv_yaw_accel') != '')"
+             name="ugv_path/yaw_accel_max"
+             value="$(arg ugv_yaw_accel)" />
+      <param if="$(eval arg('ugv_yaw_jerk') != '')"
+             name="ugv_path/yaw_jerk_max"
+             value="$(arg ugv_yaw_jerk)" />
+      <param if="$(eval arg('obstacles_for_car_traj_only') != '')"
+             name="obstacles_for_car_traj_only"
+             value="$(arg obstacles_for_car_traj_only)" />
+      <param if="$(eval arg('figure_eight_obstacles_enabled') != '')"
+             name="figure_eight_obstacles/enabled"
+             value="$(arg figure_eight_obstacles_enabled)" />
+      <!-- <rosparam file="$(find coni_mpc)/parameters/traj_params.yaml" /> -->
+    </node>
+  </group>
+  <group unless="$(eval arg('instance_ns') != '')">
+    <node pkg="coni_mpc" type="num_sim_non_one_point_node" name="$(arg node_name)" output="screen" clear_params="true"
+      args="-r $(arg r) -v $(arg v) -w $(arg w)">
+      <rosparam file="$(find coni_mpc)/parameters/num_sim_non_one_point.yaml" />
+      <param if="$(eval arg('obstacle_count') != '')"
+             name="random_obstacles/count"
+             value="$(arg obstacle_count)" />
+      <param if="$(eval arg('seed') != '')"
+             name="random_obstacles/seed"
+             value="$(arg seed)" />
+      <param name="kappa" value="$(arg kappa)" />
+      <param name="num_uavs" value="$(arg num_uavs)" />
+      <rosparam if="$(eval arg('active_uavs_csv') != '')"
+                param="active_uavs"
+                subst_value="true">[$(arg active_uavs_csv)]</rosparam>
+      <param name="world_frame_id" value="$(arg world_frame_id)" />
+      <param name="relative_frame_id" value="$(arg relative_frame_id)" />
+      <param name="topic_prefix" value="$(arg topic_prefix)" />
+      <param if="$(eval arg('frame_mode') != '')"
+             name="frame_mode"
+             value="$(arg frame_mode)" />
+      <param name="use_inertial_frame" value="$(arg use_inertial_frame)" />
+      <param name="use_noninertial_frame" value="$(arg use_noninertial_frame)" />
+      <param name="use_dynamic_obs" value="$(arg use_dynamic_obs)" />
+      <param name="warm_start" value="$(arg warm_start)" />
+      <param name="metrics_csv" value="$(arg metrics_csv)" />
+      <param name="run_tag" value="$(arg run_tag)" />
+      <param if="$(eval arg('sim_duration_sec') != '')"
+             name="sim_duration_sec"
+             value="$(arg sim_duration_sec)" />
+      <param name="trajectory_laps" value="$(arg trajectory_laps)" />
+      <param if="$(eval arg('safety_variant') != '')"
+             name="safety_variant"
+             value="$(arg safety_variant)" />
+      <param if="$(eval arg('obstacle_sensing_mode') != '')"
+             name="obstacle_sensing/mode"
+             value="$(arg obstacle_sensing_mode)" />
+      <param if="$(eval arg('cbf_enabled') != '')"
+             name="cbf/enabled"
+             value="$(arg cbf_enabled)" />
+      <param if="$(eval arg('cbf_use_in_sim') != '')"
+             name="cbf/use_in_sim"
+             value="$(arg cbf_use_in_sim)" />
+      <param if="$(eval arg('cbf_slack_max') != '')"
+             name="cbf/slack_max"
+             value="$(arg cbf_slack_max)" />
+      <param if="$(eval arg('cbf_r_slack') != '')"
+             name="cbf/R_slack"
+             value="$(arg cbf_r_slack)" />
+      <param name="exclude_uav0_from_simulation"
+             value="$(arg exclude_uav0_from_simulation)" />
+      <param name="exclude_uav0_from_all_metrics"
+             value="$(arg exclude_uav0_from_all_metrics)" />
+      <param if="$(eval arg('ugv_rollout_mode') != '')"
+             name="ugv_rollout_mode"
+             value="$(arg ugv_rollout_mode)" />
+      <param if="$(eval arg('car_trajectory_mode') != '')"
+             name="car_trajectory_mode"
+             value="$(arg car_trajectory_mode)" />
+      <param if="$(eval arg('ugv_longitudinal_accel') != '')"
+             name="ugv_path/longitudinal_accel_max"
+             value="$(arg ugv_longitudinal_accel)" />
+      <param if="$(eval arg('ugv_longitudinal_decel') != '')"
+             name="ugv_path/longitudinal_decel_max"
+             value="$(arg ugv_longitudinal_decel)" />
+      <param if="$(eval arg('ugv_longitudinal_jerk') != '')"
+             name="ugv_path/longitudinal_jerk_max"
+             value="$(arg ugv_longitudinal_jerk)" />
+      <param if="$(eval arg('ugv_yaw_accel') != '')"
+             name="ugv_path/yaw_accel_max"
+             value="$(arg ugv_yaw_accel)" />
+      <param if="$(eval arg('ugv_yaw_jerk') != '')"
+             name="ugv_path/yaw_jerk_max"
+             value="$(arg ugv_yaw_jerk)" />
+      <param if="$(eval arg('obstacles_for_car_traj_only') != '')"
+             name="obstacles_for_car_traj_only"
+             value="$(arg obstacles_for_car_traj_only)" />
+      <param if="$(eval arg('figure_eight_obstacles_enabled') != '')"
+             name="figure_eight_obstacles/enabled"
+             value="$(arg figure_eight_obstacles_enabled)" />
+      <!-- <rosparam file="$(find coni_mpc)/parameters/traj_params.yaml" /> -->
+    </node>
+  </group>
+  <group if="$(eval arg('use_rviz') and arg('rviz_view') != 'world')">
+    <node type="rviz" name="rviz_non" pkg="rviz"
+          args="-d '$(find coni_mpc)/rviz/non_inertial.rviz'" />
+  </group>
+  <group if="$(eval arg('use_rviz') and arg('rviz_view') != 'non')">
+    <node type="rviz" name="rviz_world" pkg="rviz"
+          args="-d '$(find coni_mpc)/rviz/world.rviz'" />
+  </group>
+
+</launch>

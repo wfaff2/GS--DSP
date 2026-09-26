@@ -92,12 +92,31 @@ int main( ){
   DifferentialEquation  f;
   Function              h, hN;
 
-  OnlineData            obs0_x, obs0_y, obs0_z, obs0_r;
-  OnlineData            obs0_vx, obs0_vy, obs0_vz, obs0_active;
-  OnlineData            obs1_x, obs1_y, obs1_z, obs1_r;
-  OnlineData            obs1_vx, obs1_vy, obs1_vz, obs1_active;
-  OnlineData            obs2_x, obs2_y, obs2_z, obs2_r;
-  OnlineData            obs2_vx, obs2_vy, obs2_vz, obs2_active;
+  // Each risk region is a stage-wise constant p=4 superellipsoid.  The
+  // center velocity/acceleration are supplied separately so the barrier uses
+  // relative kinematics, while axes and orientation remain fixed constants at
+  // the current shooting node.
+  OnlineData            obs0_x, obs0_y, obs0_z;
+  OnlineData            obs0_a, obs0_b, obs0_c;
+  OnlineData            obs0_q00, obs0_q01, obs0_q02;
+  OnlineData            obs0_q10, obs0_q11, obs0_q12;
+  OnlineData            obs0_q20, obs0_q21, obs0_q22;
+  OnlineData            obs0_vx, obs0_vy, obs0_vz;
+  OnlineData            obs0_ax, obs0_ay, obs0_az, obs0_active;
+  OnlineData            obs1_x, obs1_y, obs1_z;
+  OnlineData            obs1_a, obs1_b, obs1_c;
+  OnlineData            obs1_q00, obs1_q01, obs1_q02;
+  OnlineData            obs1_q10, obs1_q11, obs1_q12;
+  OnlineData            obs1_q20, obs1_q21, obs1_q22;
+  OnlineData            obs1_vx, obs1_vy, obs1_vz;
+  OnlineData            obs1_ax, obs1_ay, obs1_az, obs1_active;
+  OnlineData            obs2_x, obs2_y, obs2_z;
+  OnlineData            obs2_a, obs2_b, obs2_c;
+  OnlineData            obs2_q00, obs2_q01, obs2_q02;
+  OnlineData            obs2_q10, obs2_q11, obs2_q12;
+  OnlineData            obs2_q20, obs2_q21, obs2_q22;
+  OnlineData            obs2_vx, obs2_vy, obs2_vz;
+  OnlineData            obs2_ax, obs2_ay, obs2_az, obs2_active;
   OnlineData            cbf_alpha1, cbf_alpha2;
   // Non-inertial frame online data (expressed in non-inertial frame N):
   // omega_non: angular velocity of frame N wrt world.
@@ -108,6 +127,8 @@ int main( ){
   OnlineData            a_car_non_x, a_car_non_y, a_car_non_z;
   // Stage-wise planar reference and trust for discounted UGV tracking.
   OnlineData            ref_x, ref_y, trust_factor;
+  // Frozen-nominal probabilistic field HOCBF affine row.
+  OnlineData            field_Ax, field_Ay, field_Az, field_b, field_active;
 
   // Parameters with exemplary values. These are set/overwritten at runtime.
   const double t_start = 0.0;     // Initial time [s]
@@ -314,9 +335,16 @@ int main( ){
 
   auto addObstacleCbfConstraint =
       [&](const OnlineData& obs_x, const OnlineData& obs_y,
-          const OnlineData& obs_z, const OnlineData& obs_r,
-          const OnlineData& obs_vx, const OnlineData& obs_vy,
-          const OnlineData& obs_vz, const OnlineData& obs_active,
+          const OnlineData& obs_z, const OnlineData& obs_a,
+          const OnlineData& obs_b, const OnlineData& obs_c,
+          const OnlineData& obs_q00, const OnlineData& obs_q01,
+          const OnlineData& obs_q02, const OnlineData& obs_q10,
+          const OnlineData& obs_q11, const OnlineData& obs_q12,
+          const OnlineData& obs_q20, const OnlineData& obs_q21,
+          const OnlineData& obs_q22, const OnlineData& obs_vx,
+          const OnlineData& obs_vy, const OnlineData& obs_vz,
+          const OnlineData& obs_ax, const OnlineData& obs_ay,
+          const OnlineData& obs_az, const OnlineData& obs_active,
           const Control& slack) {
         Expression rel_px = p_x - obs_x;
         Expression rel_py = p_y - obs_y;
@@ -324,70 +352,81 @@ int main( ){
         Expression rel_vx = v_x - obs_vx;
         Expression rel_vy = v_y - obs_vy;
         Expression rel_vz = v_z - obs_vz;
-        
-        // --- 重新计算基于"相对状态"的非惯性系虚拟加速度 ---
-        
-        // 1. 相对科里奥利加速度 (Relative Coriolis): -2 * omega x v_rel
-        Expression rel_omega_cross_v_x = omega_non_y * rel_vz - omega_non_z * rel_vy;
-        Expression rel_omega_cross_v_y = omega_non_z * rel_vx - omega_non_x * rel_vz;
-        Expression rel_omega_cross_v_z = omega_non_x * rel_vy - omega_non_y * rel_vx;
-        
-        // 2. 相对欧拉加速度 (Relative Euler): -beta x p_rel
-        Expression rel_beta_cross_p_x = beta_non_y * rel_pz - beta_non_z * rel_py;
-        Expression rel_beta_cross_p_y = beta_non_z * rel_px - beta_non_x * rel_pz;
-        Expression rel_beta_cross_p_z = beta_non_x * rel_py - beta_non_y * rel_px;
-        
-        // 3. 相对离心加速度 (Relative Centrifugal): -omega x (omega x p_rel)
-        Expression rel_omega_cross_p_x = omega_non_y * rel_pz - omega_non_z * rel_py;
-        Expression rel_omega_cross_p_y = omega_non_z * rel_px - omega_non_x * rel_pz;
-        Expression rel_omega_cross_p_z = omega_non_x * rel_py - omega_non_y * rel_px;
-        Expression rel_centrifugal_x = -(omega_non_y * rel_omega_cross_p_z - omega_non_z * rel_omega_cross_p_y);
-        Expression rel_centrifugal_y = -(omega_non_z * rel_omega_cross_p_x - omega_non_x * rel_omega_cross_p_z);
-        Expression rel_centrifugal_z = -(omega_non_x * rel_omega_cross_p_y - omega_non_y * rel_omega_cross_p_x);
+        Expression rel_ax = acc_x + non_inertial_acc_x - obs_ax;
+        Expression rel_ay = acc_y + non_inertial_acc_y - obs_ay;
+        Expression rel_az = acc_z + non_inertial_acc_z - obs_az;
 
-        // 最终相对加速度 = 无人机控制推力加速度 + 三个相对虚拟加速度 (小车平动加速度 a_car 被完美抵消了)
-        Expression rel_ax = acc_x - 2.0 * rel_omega_cross_v_x - rel_beta_cross_p_x + rel_centrifugal_x;
-        Expression rel_ay = acc_y - 2.0 * rel_omega_cross_v_y - rel_beta_cross_p_y + rel_centrifugal_y;
-        Expression rel_az = acc_z - 2.0 * rel_omega_cross_v_z - rel_beta_cross_p_z + rel_centrifugal_z;
-
-        Expression h =
-            pow(rel_px, 2) + pow(rel_py, 2) + pow(rel_pz, 2) - pow(obs_r, 2);
-        Expression hdot = 2 * rel_px * rel_vx +
-                          2 * rel_py * rel_vy +
-                          2 * rel_pz * rel_vz;
-        Expression hddot = 2 * pow(rel_vx, 2) +
-                           2 * pow(rel_vy, 2) +
-                           2 * pow(rel_vz, 2) +
-                           2 * rel_px * rel_ax +
-                           2 * rel_py * rel_ay +
-                           2 * rel_pz * rel_az;
+        // q = Q^T (p - c), where Q is supplied row-major as the local-to-
+        // solver-frame rotation matrix.
+        Expression xi = obs_q00 * rel_px + obs_q10 * rel_py + obs_q20 * rel_pz;
+        Expression eta = obs_q01 * rel_px + obs_q11 * rel_py + obs_q21 * rel_pz;
+        Expression zeta = obs_q02 * rel_px + obs_q12 * rel_py + obs_q22 * rel_pz;
+        Expression xidot = obs_q00 * rel_vx + obs_q10 * rel_vy + obs_q20 * rel_vz;
+        Expression etadot = obs_q01 * rel_vx + obs_q11 * rel_vy + obs_q21 * rel_vz;
+        Expression zetadot = obs_q02 * rel_vx + obs_q12 * rel_vy + obs_q22 * rel_vz;
+        
+        // p=4 superellipsoid barrier.  Axes and Q are OnlineData constants at
+        // this node, so only the UAV position/velocity/acceleration are
+        // differentiated.
+        Expression inv_a4 = 1.0 / pow(obs_a, 4);
+        Expression inv_b4 = 1.0 / pow(obs_b, 4);
+        Expression inv_c4 = 1.0 / pow(obs_c, 4);
+        Expression h = pow(xi, 4) * inv_a4 +
+                       pow(eta, 4) * inv_b4 +
+                       pow(zeta, 4) * inv_c4 - 1.0;
+        Expression hdot = 4.0 * pow(xi, 3) * xidot * inv_a4 +
+                          4.0 * pow(eta, 3) * etadot * inv_b4 +
+                          4.0 * pow(zeta, 3) * zetadot * inv_c4;
+        Expression hddot =
+            12.0 * pow(xi, 2) * pow(xidot, 2) * inv_a4 +
+            12.0 * pow(eta, 2) * pow(etadot, 2) * inv_b4 +
+            12.0 * pow(zeta, 2) * pow(zetadot, 2) * inv_c4 +
+            4.0 * pow(xi, 3) *
+                (obs_q00 * rel_ax + obs_q10 * rel_ay + obs_q20 * rel_az) * inv_a4 +
+            4.0 * pow(eta, 3) *
+                (obs_q01 * rel_ax + obs_q11 * rel_ay + obs_q21 * rel_az) * inv_b4 +
+            4.0 * pow(zeta, 3) *
+                (obs_q02 * rel_ax + obs_q12 * rel_ay + obs_q22 * rel_az) * inv_c4;
 
         Expression cbf2 = hddot + (cbf_alpha1 + cbf_alpha2) * hdot + (cbf_alpha1 * cbf_alpha2) * h;
         ocp.subjectTo(obs_active * (cbf2 + slack) >= 0.0);
+        // HOCBF is a differential condition.  In sampled MPC, also enforce
+        // membership in the safe set at every shooting node so a warm-started
+        // trajectory cannot jump across the p=4 boundary between nodes.
+        ocp.subjectTo(obs_active * h >= 0.0);
       };
   addObstacleCbfConstraint(
-      obs0_x, obs0_y, obs0_z, obs0_r, obs0_vx, obs0_vy, obs0_vz, obs0_active,
+      obs0_x, obs0_y, obs0_z, obs0_a, obs0_b, obs0_c,
+      obs0_q00, obs0_q01, obs0_q02, obs0_q10, obs0_q11, obs0_q12,
+      obs0_q20, obs0_q21, obs0_q22, obs0_vx, obs0_vy, obs0_vz,
+      obs0_ax, obs0_ay, obs0_az, obs0_active,
       delta0);
   addObstacleCbfConstraint(
-      obs1_x, obs1_y, obs1_z, obs1_r, obs1_vx, obs1_vy, obs1_vz, obs1_active,
+      obs1_x, obs1_y, obs1_z, obs1_a, obs1_b, obs1_c,
+      obs1_q00, obs1_q01, obs1_q02, obs1_q10, obs1_q11, obs1_q12,
+      obs1_q20, obs1_q21, obs1_q22, obs1_vx, obs1_vy, obs1_vz,
+      obs1_ax, obs1_ay, obs1_az, obs1_active,
       delta1);
   addObstacleCbfConstraint(
-      obs2_x, obs2_y, obs2_z, obs2_r, obs2_vx, obs2_vy, obs2_vz, obs2_active,
+      obs2_x, obs2_y, obs2_z, obs2_a, obs2_b, obs2_c,
+      obs2_q00, obs2_q01, obs2_q02, obs2_q10, obs2_q11, obs2_q12,
+      obs2_q20, obs2_q21, obs2_q22, obs2_vx, obs2_vy, obs2_vz,
+      obs2_ax, obs2_ay, obs2_az, obs2_active,
       delta2);
 
+  // Coefficients are assembled outside ACADO at the current nominal
+  // trajectory. Multiplication by field_active makes an empty/stale field a
+  // no-op while preserving one fixed generated path-constraint row.
+  ocp.subjectTo(field_active *
+                (field_Ax * v_cmd_x + field_Ay * v_cmd_y +
+                 field_Az * v_cmd_z + delta0 - field_b) >= 0.0);
+
   // Online data layout (ACADO_NOD):
-  // [0..7]   : obs0_x, obs0_y, obs0_z, obs0_r,
-  //            obs0_vx, obs0_vy, obs0_vz, obs0_active
-  // [8..15]  : obs1_x, obs1_y, obs1_z, obs1_r,
-  //            obs1_vx, obs1_vy, obs1_vz, obs1_active
-  // [16..23] : obs2_x, obs2_y, obs2_z, obs2_r,
-  //            obs2_vx, obs2_vy, obs2_vz, obs2_active
-  // [24..25] : cbf_alpha1, cbf_alpha2
-  // [26..28] : omega_non_x, omega_non_y, omega_non_z
-  // [29..31] : beta_non_x, beta_non_y, beta_non_z
-  // [32..34] : a_car_non_x, a_car_non_y, a_car_non_z
-  // [35..37] : ref_x, ref_y, trust_factor
-  ocp.setNOD(38);
+  // Each region occupies 22 values: center(3), axes(3), Q row-major(9),
+  // center velocity(3), center acceleration(3), active(1).
+  // [66..67] alpha1/alpha2, [68..76] non-inertial data,
+  // [77..79] ref_x/ref_y/trust_factor, [80..84] field Ax/Ay/Az/b/active.
+  ocp.setNOD(85);
 
 
   if(!CODE_GEN)

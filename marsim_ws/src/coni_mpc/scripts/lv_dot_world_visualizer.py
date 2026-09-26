@@ -17,6 +17,7 @@ class WorldVisualizer:
                                          queue_size=2, latch=True)
         self.latest_odom = None
         self.latest_obstacles = []
+        self.latest_tracked_boxes = []
         self.trail = []
         trajectory = rospy.get_param("/box_validation/uav_trajectory", {})
         self.start_position = trajectory.get("start_position", [3.0, -1.0, 1.5])
@@ -24,6 +25,8 @@ class WorldVisualizer:
         rospy.Subscriber("/coni_mpc/quad_odom1", Odometry, self.odom_cb, queue_size=20)
         rospy.Subscriber("/quad0_pcl_render_node/dynamic_obstacle_states",
                          DynamicObstacleStateArray, self.obstacles_cb, queue_size=20)
+        rospy.Subscriber("/onboard_detector/tracked_bboxes", MarkerArray,
+                         self.tracked_boxes_cb, queue_size=20)
         rospy.Timer(rospy.Duration(0.05), self.publish)
 
     def odom_cb(self, message):
@@ -38,6 +41,9 @@ class WorldVisualizer:
 
     def obstacles_cb(self, message):
         self.latest_obstacles = list(message.obstacles)
+
+    def tracked_boxes_cb(self, message):
+        self.latest_tracked_boxes = list(message.markers)
 
     @staticmethod
     def base(marker_id, namespace, marker_type):
@@ -163,6 +169,36 @@ class WorldVisualizer:
             outline.color.r = outline.color.g = outline.color.b = 0.05
             outline.color.a = 0.25
             markers.markers.append(outline)
+
+        # LV-DOT publishes its final tracked boxes as LINE_LIST markers in the
+        # numerically identical map frame. Re-render them in world only for the
+        # independent comparison window; the original LV-DOT topic is untouched.
+        for index, tracked in enumerate(self.latest_tracked_boxes):
+            if tracked.action != Marker.ADD or not tracked.points:
+                continue
+
+            red_outline = self.base(index, "lvdot_tracked_box", Marker.LINE_LIST)
+            red_outline.pose = tracked.pose
+            red_outline.points = list(tracked.points)
+            red_outline.scale.x = max(tracked.scale.x, 0.045)
+            red_outline.color.r, red_outline.color.g = 1.0, 0.0
+            red_outline.color.b, red_outline.color.a = 0.0, 1.0
+            markers.markers.append(red_outline)
+
+            x_values = [point.x for point in tracked.points]
+            y_values = [point.y for point in tracked.points]
+            z_values = [point.z for point in tracked.points]
+            size_x = max(x_values) - min(x_values)
+            size_y = max(y_values) - min(y_values)
+            size_z = max(z_values) - min(z_values)
+            if size_x > 0.0 and size_y > 0.0 and size_z > 0.0:
+                red_solid = self.base(index, "lvdot_tracked_solid", Marker.CUBE)
+                red_solid.pose = tracked.pose
+                red_solid.scale.x, red_solid.scale.y, red_solid.scale.z = (
+                    size_x, size_y, size_z)
+                red_solid.color.r, red_solid.color.g = 1.0, 0.0
+                red_solid.color.b, red_solid.color.a = 0.0, 0.22
+                markers.markers.append(red_solid)
 
         self.publisher.publish(markers)
 

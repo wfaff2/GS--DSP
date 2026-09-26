@@ -1,0 +1,9 @@
+uint32 track_id
+uint32 stage_index
+float64 prediction_time
+geometry_msgs/Point center
+geometry_msgs/Quaternion orientation
+geometry_msgs/Vector3 semi_axes
+geometry_msgs/Vector3 velocity
+geometry_msgs/Vector3 acceleration
+bool valid

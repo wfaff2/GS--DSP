@@ -1,0 +1,15 @@
+# Dedicated perception-driven MPC scene.
+#
+# The static obstacles are supplied separately by A2_three_cylinders_l_wall.pcd.
+# This file defines exactly two deterministic moving boxes for the MARSIM LiDAR
+# renderer.  Box 0 reaches the UAV's nominal second-lap bottom point; box 1
+# reaches the nominal left-side point during the first lap.  Both remain 1.5 m
+# from the UGV centerline at their designed encounter points.
+dynamic:
+  count: 2
+  initial: [[0.0, 8.63, 1.5], [-8.7, 0.0, 1.5]]
+  size: [[0.8, 0.6, 1.2], [0.8, 0.6, 1.2]]
+  velocity: [[0.0, -0.8, 0.0], [0.23, 0.0, 0.0]]
+  initial_flat: [0.0, 8.63, 1.5, -8.7, 0.0, 1.5]
+  size_flat: [0.8, 0.6, 1.2, 0.8, 0.6, 1.2]
+  velocity_flat: [0.0, -0.8, 0.0, 0.23, 0.0, 0.0]

@@ -181,18 +181,14 @@ bool MpcWrapper<T>::setLimits(T max_v_xy, T max_v_z, T max_yaw_rate,
                   static_cast<T>(0.0), static_cast<T>(0.0), static_cast<T>(0.0);
   upper_bounds << max_v_xy, max_v_xy, max_v_z, max_yaw_rate,
                   slack_upper, slack_upper, slack_upper;
-  path_lower_bounds << static_cast<T>(-kModelMaxAccXy),
-      static_cast<T>(-kModelMaxAccXy),
-      static_cast<T>(-kModelMaxAccZ),
-      static_cast<T>(0.0),
-      static_cast<T>(0.0),
-      static_cast<T>(0.0);
-  path_upper_bounds << static_cast<T>(kModelMaxAccXy),
-      static_cast<T>(kModelMaxAccXy),
-      static_cast<T>(kModelMaxAccZ),
-      static_cast<T>(1.0e12),
-      static_cast<T>(1.0e12),
-      static_cast<T>(1.0e12);
+  path_lower_bounds.setZero();
+  path_upper_bounds.setConstant(static_cast<T>(1.0e12));
+  path_lower_bounds(0) = static_cast<T>(-kModelMaxAccXy);
+  path_lower_bounds(1) = static_cast<T>(-kModelMaxAccXy);
+  path_lower_bounds(2) = static_cast<T>(-kModelMaxAccZ);
+  path_upper_bounds(0) = static_cast<T>(kModelMaxAccXy);
+  path_upper_bounds(1) = static_cast<T>(kModelMaxAccXy);
+  path_upper_bounds(2) = static_cast<T>(kModelMaxAccZ);
 
   acado_lower_bounds_ = lower_bounds.replicate(1, kSamples).template cast<AcadoScalar>();
   acado_upper_bounds_ = upper_bounds.replicate(1, kSamples).template cast<AcadoScalar>();
@@ -209,7 +205,7 @@ bool MpcWrapper<T>::setObstacles(const ObstacleVector& obstacles,
                                  T alpha1, T alpha2, bool enabled) {
   ScopedContext context(*this);
 
-  for (int row = kOdObstacleOffset; row <= kOdAlpha2Index; ++row) {
+  for (int row = kOdObstacleOffset; row < kOdAlpha1Index; ++row) {
     acado_online_data_.row(row).setZero();
   }
 
@@ -222,25 +218,76 @@ bool MpcWrapper<T>::setObstacles(const ObstacleVector& obstacles,
       std::min<int>(static_cast<int>(obstacles.size()), kMaxObstacles);
   for (int i = 0; i < kMaxObstacles; ++i) {
     const int row_offset = kOdObstacleOffset + i * kOdObstacleStride;
+    // The generated p=4 barrier contains inverse fourth powers of the
+    // semi-axes.  Keep inactive slots numerically neutral instead of zero:
+    // 1 / 0^4 would create Inf and the subsequent active(0) multiplication
+    // would still propagate NaN into ACADO's condensed QP.
+    for (int dim = 0; dim < kOdObstacleStride; ++dim) {
+      acado_online_data_.row(row_offset + dim).setZero();
+    }
+    acado_online_data_.row(row_offset + 3).setConstant(
+        static_cast<AcadoScalar>(1.0));
+    acado_online_data_.row(row_offset + 4).setConstant(
+        static_cast<AcadoScalar>(1.0));
+    acado_online_data_.row(row_offset + 5).setConstant(
+        static_cast<AcadoScalar>(1.0));
+    for (int q = 0; q < 9; ++q) {
+      acado_online_data_.row(row_offset + 6 + q).setConstant(
+          static_cast<AcadoScalar>((q == 0 || q == 4 || q == 8) ? 1.0 : 0.0));
+    }
     if (enabled && i < obstacle_count) {
       const Obstacle& obs = obstacles.at(i);
       if (i < static_cast<int>(obstacle_profiles.size())) {
         const ObstacleProfile& profile = obstacle_profiles.at(i);
-        for (int dim = 0; dim < 7; ++dim) {
-          acado_online_data_.row(row_offset + dim) =
-              profile.row(dim).template cast<AcadoScalar>();
+        acado_online_data_.row(row_offset + 0) =
+            profile.row(0).template cast<AcadoScalar>();
+        acado_online_data_.row(row_offset + 1) =
+            profile.row(1).template cast<AcadoScalar>();
+        acado_online_data_.row(row_offset + 2) =
+            profile.row(2).template cast<AcadoScalar>();
+        // Legacy obstacles are planar cylinders.  Represent them as a
+        // superellipsoid with a very large vertical semi-axis.
+        acado_online_data_.row(row_offset + 3) =
+            profile.row(3).template cast<AcadoScalar>();
+        acado_online_data_.row(row_offset + 4) =
+            profile.row(3).template cast<AcadoScalar>();
+        acado_online_data_.row(row_offset + 5).setConstant(
+            static_cast<AcadoScalar>(100.0));
+        for (int q = 0; q < 9; ++q) {
+          acado_online_data_.row(row_offset + 6 + q).setConstant(
+              static_cast<AcadoScalar>((q == 0 || q == 4 || q == 8) ? 1.0 : 0.0));
         }
-        acado_online_data_.row(row_offset + 7).setConstant(static_cast<AcadoScalar>(1.0));
+        for (int axis = 0; axis < 3; ++axis) {
+          acado_online_data_.row(row_offset + 15 + axis) =
+              profile.row(4 + axis).template cast<AcadoScalar>();
+          acado_online_data_.row(row_offset + 18 + axis).setZero();
+        }
+        acado_online_data_.row(row_offset + 21).setConstant(
+            static_cast<AcadoScalar>(1.0));
       } else {
-        for (int dim = 0; dim < 7; ++dim) {
-          acado_online_data_.row(row_offset + dim)
-              .setConstant(static_cast<AcadoScalar>(obs(dim)));
+        acado_online_data_.row(row_offset + 0).setConstant(
+            static_cast<AcadoScalar>(obs(0)));
+        acado_online_data_.row(row_offset + 1).setConstant(
+            static_cast<AcadoScalar>(obs(1)));
+        acado_online_data_.row(row_offset + 2).setConstant(
+            static_cast<AcadoScalar>(obs(2)));
+        acado_online_data_.row(row_offset + 3).setConstant(
+            static_cast<AcadoScalar>(obs(3)));
+        acado_online_data_.row(row_offset + 4).setConstant(
+            static_cast<AcadoScalar>(obs(3)));
+        acado_online_data_.row(row_offset + 5).setConstant(
+            static_cast<AcadoScalar>(100.0));
+        for (int q = 0; q < 9; ++q) {
+          acado_online_data_.row(row_offset + 6 + q).setConstant(
+              static_cast<AcadoScalar>((q == 0 || q == 4 || q == 8) ? 1.0 : 0.0));
         }
-        acado_online_data_.row(row_offset + 7).setConstant(static_cast<AcadoScalar>(1.0));
-      }
-    } else {
-      for (int dim = 0; dim < kOdObstacleStride; ++dim) {
-        acado_online_data_.row(row_offset + dim).setZero();
+        for (int axis = 0; axis < 3; ++axis) {
+          acado_online_data_.row(row_offset + 15 + axis).setConstant(
+              static_cast<AcadoScalar>(obs(4 + axis)));
+          acado_online_data_.row(row_offset + 18 + axis).setZero();
+        }
+        acado_online_data_.row(row_offset + 21).setConstant(
+            static_cast<AcadoScalar>(1.0));
       }
     }
   }
@@ -249,6 +296,116 @@ bool MpcWrapper<T>::setObstacles(const ObstacleVector& obstacles,
       enabled ? static_cast<AcadoScalar>(alpha1) : static_cast<AcadoScalar>(0.0));
   acado_online_data_.row(kOdAlpha2Index).setConstant(
       enabled ? static_cast<AcadoScalar>(alpha2) : static_cast<AcadoScalar>(0.0));
+  return true;
+}
+
+template <typename T>
+bool MpcWrapper<T>::setRiskRegions(
+    const RiskRegionVector& risk_regions,
+    const RiskRegionProfileVector& risk_region_profiles,
+    T alpha1, T alpha2, bool enabled) {
+  ScopedContext context(*this);
+  for (int row = kOdObstacleOffset; row < kOdAlpha1Index; ++row) {
+    acado_online_data_.row(row).setZero();
+  }
+  if (risk_regions.size() > static_cast<std::size_t>(kMaxObstacles)) {
+    ROS_WARN("MPC: Received %zu risk regions, ACADO uses only %d.",
+             risk_regions.size(), kMaxObstacles);
+  }
+  const int count = std::min<int>(static_cast<int>(risk_regions.size()),
+                                  kMaxObstacles);
+  for (int i = 0; i < kMaxObstacles; ++i) {
+    const int row_offset = kOdObstacleOffset + i * kOdObstacleStride;
+    // See setObstacles(): inactive p=4 slots must retain positive axes and a
+    // finite rotation matrix even though their active bit is zero.
+    for (int dim = 0; dim < kOdObstacleStride; ++dim) {
+      acado_online_data_.row(row_offset + dim).setZero();
+    }
+    acado_online_data_.row(row_offset + 3).setConstant(
+        static_cast<AcadoScalar>(1.0));
+    acado_online_data_.row(row_offset + 4).setConstant(
+        static_cast<AcadoScalar>(1.0));
+    acado_online_data_.row(row_offset + 5).setConstant(
+        static_cast<AcadoScalar>(1.0));
+    for (int q = 0; q < 9; ++q) {
+      acado_online_data_.row(row_offset + 6 + q).setConstant(
+          static_cast<AcadoScalar>((q == 0 || q == 4 || q == 8) ? 1.0 : 0.0));
+    }
+    if (!enabled || i >= count) continue;
+    if (i < static_cast<int>(risk_region_profiles.size())) {
+      const RiskRegionProfile& profile = risk_region_profiles.at(i);
+      for (int dim = 0; dim < kOdObstacleStride; ++dim) {
+        acado_online_data_.row(row_offset + dim) =
+            profile.row(dim).template cast<AcadoScalar>();
+      }
+    } else {
+      for (int dim = 0; dim < kOdObstacleStride; ++dim) {
+        acado_online_data_.row(row_offset + dim).setConstant(
+            static_cast<AcadoScalar>(risk_regions.at(i)(dim)));
+      }
+      // A single risk-region vector has no stage activity mask; hold it over
+      // the complete horizon as the legacy API specifies.
+      acado_online_data_.row(row_offset + 21).setConstant(
+          static_cast<AcadoScalar>(1.0));
+    }
+
+    // Risk-region profiles may intentionally be sparse in stage time.  Do
+    // not copy zero semi-axes into inactive stages: the generated p=4 model
+    // evaluates inverse fourth powers before applying the active multiplier.
+    for (int stage = 0; stage <= kSamples; ++stage) {
+      const bool stage_active =
+          acado_online_data_(row_offset + 21, stage) >
+          static_cast<AcadoScalar>(0.5);
+      if (!stage_active) {
+        acado_online_data_(row_offset + 3, stage) =
+            static_cast<AcadoScalar>(1.0);
+        acado_online_data_(row_offset + 4, stage) =
+            static_cast<AcadoScalar>(1.0);
+        acado_online_data_(row_offset + 5, stage) =
+            static_cast<AcadoScalar>(1.0);
+        for (int q = 0; q < 9; ++q) {
+          acado_online_data_(row_offset + 6 + q, stage) =
+              static_cast<AcadoScalar>((q == 0 || q == 4 || q == 8) ? 1.0 : 0.0);
+        }
+      } else {
+        for (int axis = 0; axis < 3; ++axis) {
+          acado_online_data_(row_offset + 3 + axis, stage) = std::max(
+              static_cast<AcadoScalar>(1.0e-3),
+              std::abs(acado_online_data_(row_offset + 3 + axis, stage)));
+        }
+      }
+    }
+  }
+  acado_online_data_.row(kOdAlpha1Index).setConstant(
+      enabled ? static_cast<AcadoScalar>(alpha1) : static_cast<AcadoScalar>(0.0));
+  acado_online_data_.row(kOdAlpha2Index).setConstant(
+      enabled ? static_cast<AcadoScalar>(alpha2) : static_cast<AcadoScalar>(0.0));
+  return true;
+}
+
+template <typename T>
+bool MpcWrapper<T>::setFieldHocbf(const FieldHocbfProfile& profile, bool enabled) {
+  if (!profile.allFinite()) {
+    ROS_ERROR("MPC: Field-HOCBF profile contains non-finite values");
+    return false;
+  }
+  ScopedContext context(*this);
+  ROS_INFO_STREAM_THROTTLE(
+      5.0,
+      "[MPC] backend=ACADO field_hocbf=" << (enabled ? "enabled" : "disabled")
+      << " (generated path row " << kFieldConstraintOffset << ")");
+  field_profile_ = profile;
+  field_enabled_ = enabled;
+  for (int k = 0; k < kSamples + 1; ++k) {
+    for (int dim = 0; dim < 4; ++dim) {
+      acado_online_data_(kOdFieldOffset + dim, k) =
+          enabled ? static_cast<AcadoScalar>(profile(dim, k))
+                  : static_cast<AcadoScalar>(0.0);
+    }
+    acado_online_data_(kOdFieldOffset + 4, k) =
+        enabled ? static_cast<AcadoScalar>(profile(4, k))
+                : static_cast<AcadoScalar>(0.0);
+  }
   return true;
 }
 
@@ -414,14 +571,23 @@ bool MpcWrapper<T>::updateLocked(
   }
 
   acado_initial_state_ = state.template cast<AcadoScalar>();
-  acado_feedbackStep();
+  const int feedback_status = acado_feedbackStep();
+  if (feedback_status != 0) {
+    ROS_WARN_STREAM_THROTTLE(
+        1.0, "MPC: ACADO feedbackStep returned status " << feedback_status
+            << " (" << acado_getErrorString(feedback_status) << ")");
+  }
+  // Keep the command that was actually returned by this solve as the
+  // next-cycle slew-rate anchor.  The two-step field refinement restores the
+  // saved value between its feedback passes through setPreviousInput().
+  previous_input_ = acado_inputs_.col(0).template cast<T>();
   acado_is_prepared_ = false;
 
   if (do_preparation) {
     acado_preparationStep();
     acado_is_prepared_ = true;
   }
-  return true;
+  return feedback_status == 0;
 }
 
 template <typename T>

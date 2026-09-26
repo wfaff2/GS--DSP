@@ -5,10 +5,10 @@
   <arg name="duration_sec" default="20.0" />
   <arg name="warmup_sec" default="3.0" />
   <arg name="result_file" default="results/lv_dot_mid360_validation/summary.json" />
-  <arg name="dynamic_obstacles" default="false" />
+  <arg name="dynamic_obstacles" default="true" />
   <arg name="dynamic_obstacle_count" default="8" />
   <arg name="dynamic_obstacle_size" default="0.8" />
-  <arg name="dynamic_obstacle_velocity" default="0.8" />
+  <arg name="dynamic_obstacle_velocity" default="1.0" />
   <arg name="start_validator" default="true" />
   <arg name="start_collector" default="false" />
   <arg name="collection_scenario" default="static" />

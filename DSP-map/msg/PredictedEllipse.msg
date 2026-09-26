@@ -1,0 +1,12 @@
+int64 obstacle_id
+uint32 stage_index
+float64 prediction_time
+geometry_msgs/Point center
+float64 semi_major
+float64 semi_minor
+float64 yaw
+float64 covariance_xx
+float64 covariance_xy
+float64 covariance_yy
+float64 confidence
+bool valid
