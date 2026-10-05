@@ -14,8 +14,10 @@ TEST(FieldHocbf, PruningSeedsThenEnforcesSeparation) {
     point.occupancy = 0.5;
     points.push_back(point);
   }
+  coni_mpc::field_hocbf::Config config;
+  config.seed_count = 2;
   const auto selected = coni_mpc::field_hocbf::prune(
-      points, Eigen::Vector3d::Zero());
+      points, Eigen::Vector3d::Zero(), config);
   ASSERT_EQ(selected.size(), 2u);
   EXPECT_DOUBLE_EQ(selected.front().position.x(), 0.0);
   EXPECT_DOUBLE_EQ(selected.back().position.x(), 0.15);
