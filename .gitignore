@@ -38,3 +38,28 @@ Testing/
 
 # Rebuild these generators from their adjacent sources.
 /marsim_ws/src/coni_mpc/acado_model/quadrotor_model_codegen
+
+# Retired or unrelated local workspaces kept outside this reproducible tree.
+/障碍物感知/
+/osqp/
+/osqp-eigen/
+/quadrotor_mpc_codegen/
+/ACADO依赖代码
+/MARSIM仿真器代码
+/marsim_ws/src/LV-DOT/
+/marsim_ws/src/vision_msgs/
+/marsim_ws/src/MARSIM/cascadePID/
+/marsim_ws/src/MARSIM/mars_drone_sim/
+/marsim_ws/src/MARSIM/test_interface/
+/marsim_ws/src/MARSIM/Utils/odom_visualization/
+/marsim_ws/src/MARSIM/Utils/pose_utils/
+/marsim_ws/src/MARSIM/Utils/rviz_plugins/
+/marsim_ws/src/MARSIM/Utils/uav_utils/
+/marsim_ws/src/MARSIM/Utils/waypoint_generator/
+/marsim_ws/src/MARSIM/figures/
+
+# Local experiment exports and generated reports.
+metrics*.csv
+*_metrics.csv
+/marsim_ws/results/
+/marsim_ws/log/

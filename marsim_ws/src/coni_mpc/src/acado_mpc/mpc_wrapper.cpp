@@ -87,6 +87,10 @@ MpcWrapper<T>::MpcWrapper() {
       kHoverInput_.template cast<T>().replicate(1, kSamples + 1);
 
   acado_initial_state_ = hover_state.template cast<AcadoScalar>();
+  acado_online_data_.row(kOdInvTauVxyIndex).setConstant(
+      static_cast<AcadoScalar>(1.0 / 0.2));
+  acado_online_data_.row(kOdInvTauVzIndex).setConstant(
+      static_cast<AcadoScalar>(1.0 / 0.2));
   setTrajectoryReferenceDataLocked(hover_states, hover_inputs);
   acado_states_ = reference_state_guess_;
   acado_inputs_ = reference_input_guess_;
@@ -156,11 +160,20 @@ bool MpcWrapper<T>::setCosts(
 
 template <typename T>
 bool MpcWrapper<T>::setLimits(T max_v_xy, T max_v_z, T max_yaw_rate,
-                              T slack_max) {
+                              T a_max_xy, T a_max_z, T slack_max) {
   ScopedContext context(*this);
 
-  if (max_v_xy <= 0.0 || max_v_z <= 0.0 || max_yaw_rate <= 0.0) {
-    ROS_ERROR("MPC: Maximal command bounds are not set properly, not changed.");
+  if (!(max_v_xy > static_cast<T>(0.0)) ||
+      !(max_v_z > static_cast<T>(0.0)) ||
+      !(max_yaw_rate > static_cast<T>(0.0)) ||
+      !(a_max_xy > static_cast<T>(0.0)) ||
+      !(a_max_z > static_cast<T>(0.0)) ||
+      !std::isfinite(static_cast<double>(max_v_xy)) ||
+      !std::isfinite(static_cast<double>(max_v_z)) ||
+      !std::isfinite(static_cast<double>(max_yaw_rate)) ||
+      !std::isfinite(static_cast<double>(a_max_xy)) ||
+      !std::isfinite(static_cast<double>(a_max_z))) {
+    ROS_ERROR("MPC: Command/acceleration bounds are not finite positive values, not changed.");
     return false;
   }
 
@@ -183,12 +196,12 @@ bool MpcWrapper<T>::setLimits(T max_v_xy, T max_v_z, T max_yaw_rate,
                   slack_upper, slack_upper, slack_upper;
   path_lower_bounds.setZero();
   path_upper_bounds.setConstant(static_cast<T>(1.0e12));
-  path_lower_bounds(0) = static_cast<T>(-kModelMaxAccXy);
-  path_lower_bounds(1) = static_cast<T>(-kModelMaxAccXy);
-  path_lower_bounds(2) = static_cast<T>(-kModelMaxAccZ);
-  path_upper_bounds(0) = static_cast<T>(kModelMaxAccXy);
-  path_upper_bounds(1) = static_cast<T>(kModelMaxAccXy);
-  path_upper_bounds(2) = static_cast<T>(kModelMaxAccZ);
+  path_lower_bounds(0) = -a_max_xy;
+  path_lower_bounds(1) = -a_max_xy;
+  path_lower_bounds(2) = -a_max_z;
+  path_upper_bounds(0) = a_max_xy;
+  path_upper_bounds(1) = a_max_xy;
+  path_upper_bounds(2) = a_max_z;
 
   acado_lower_bounds_ = lower_bounds.replicate(1, kSamples).template cast<AcadoScalar>();
   acado_upper_bounds_ = upper_bounds.replicate(1, kSamples).template cast<AcadoScalar>();
@@ -196,6 +209,27 @@ bool MpcWrapper<T>::setLimits(T max_v_xy, T max_v_z, T max_yaw_rate,
       path_lower_bounds.replicate(1, kSamples).template cast<AcadoScalar>();
   acado_state_upper_bounds_ =
       path_upper_bounds.replicate(1, kSamples).template cast<AcadoScalar>();
+  return true;
+}
+
+template <typename T>
+bool MpcWrapper<T>::setVelocityTrackingTimeConstants(T tau_v_xy, T tau_v_z) {
+  ScopedContext context(*this);
+
+  if (!(tau_v_xy > static_cast<T>(0.0)) ||
+      !(tau_v_z > static_cast<T>(0.0)) ||
+      !std::isfinite(static_cast<double>(tau_v_xy)) ||
+      !std::isfinite(static_cast<double>(tau_v_z))) {
+    ROS_ERROR("MPC: Velocity tracking time constants must be finite positive values, not changed.");
+    return false;
+  }
+
+  // Store inverse time constants so generated dynamics only multiply online
+  // data and never divide by a runtime value.
+  acado_online_data_.row(kOdInvTauVxyIndex).setConstant(
+      static_cast<AcadoScalar>(static_cast<T>(1.0) / tau_v_xy));
+  acado_online_data_.row(kOdInvTauVzIndex).setConstant(
+      static_cast<AcadoScalar>(static_cast<T>(1.0) / tau_v_z));
   return true;
 }
 
@@ -293,93 +327,9 @@ bool MpcWrapper<T>::setObstacles(const ObstacleVector& obstacles,
   }
 
   acado_online_data_.row(kOdAlpha1Index).setConstant(
-      enabled ? static_cast<AcadoScalar>(alpha1) : static_cast<AcadoScalar>(0.0));
+      static_cast<AcadoScalar>(alpha1));
   acado_online_data_.row(kOdAlpha2Index).setConstant(
-      enabled ? static_cast<AcadoScalar>(alpha2) : static_cast<AcadoScalar>(0.0));
-  return true;
-}
-
-template <typename T>
-bool MpcWrapper<T>::setRiskRegions(
-    const RiskRegionVector& risk_regions,
-    const RiskRegionProfileVector& risk_region_profiles,
-    T alpha1, T alpha2, bool enabled) {
-  ScopedContext context(*this);
-  for (int row = kOdObstacleOffset; row < kOdAlpha1Index; ++row) {
-    acado_online_data_.row(row).setZero();
-  }
-  if (risk_regions.size() > static_cast<std::size_t>(kMaxObstacles)) {
-    ROS_WARN("MPC: Received %zu risk regions, ACADO uses only %d.",
-             risk_regions.size(), kMaxObstacles);
-  }
-  const int count = std::min<int>(static_cast<int>(risk_regions.size()),
-                                  kMaxObstacles);
-  for (int i = 0; i < kMaxObstacles; ++i) {
-    const int row_offset = kOdObstacleOffset + i * kOdObstacleStride;
-    // See setObstacles(): inactive p=4 slots must retain positive axes and a
-    // finite rotation matrix even though their active bit is zero.
-    for (int dim = 0; dim < kOdObstacleStride; ++dim) {
-      acado_online_data_.row(row_offset + dim).setZero();
-    }
-    acado_online_data_.row(row_offset + 3).setConstant(
-        static_cast<AcadoScalar>(1.0));
-    acado_online_data_.row(row_offset + 4).setConstant(
-        static_cast<AcadoScalar>(1.0));
-    acado_online_data_.row(row_offset + 5).setConstant(
-        static_cast<AcadoScalar>(1.0));
-    for (int q = 0; q < 9; ++q) {
-      acado_online_data_.row(row_offset + 6 + q).setConstant(
-          static_cast<AcadoScalar>((q == 0 || q == 4 || q == 8) ? 1.0 : 0.0));
-    }
-    if (!enabled || i >= count) continue;
-    if (i < static_cast<int>(risk_region_profiles.size())) {
-      const RiskRegionProfile& profile = risk_region_profiles.at(i);
-      for (int dim = 0; dim < kOdObstacleStride; ++dim) {
-        acado_online_data_.row(row_offset + dim) =
-            profile.row(dim).template cast<AcadoScalar>();
-      }
-    } else {
-      for (int dim = 0; dim < kOdObstacleStride; ++dim) {
-        acado_online_data_.row(row_offset + dim).setConstant(
-            static_cast<AcadoScalar>(risk_regions.at(i)(dim)));
-      }
-      // A single risk-region vector has no stage activity mask; hold it over
-      // the complete horizon as the legacy API specifies.
-      acado_online_data_.row(row_offset + 21).setConstant(
-          static_cast<AcadoScalar>(1.0));
-    }
-
-    // Risk-region profiles may intentionally be sparse in stage time.  Do
-    // not copy zero semi-axes into inactive stages: the generated p=4 model
-    // evaluates inverse fourth powers before applying the active multiplier.
-    for (int stage = 0; stage <= kSamples; ++stage) {
-      const bool stage_active =
-          acado_online_data_(row_offset + 21, stage) >
-          static_cast<AcadoScalar>(0.5);
-      if (!stage_active) {
-        acado_online_data_(row_offset + 3, stage) =
-            static_cast<AcadoScalar>(1.0);
-        acado_online_data_(row_offset + 4, stage) =
-            static_cast<AcadoScalar>(1.0);
-        acado_online_data_(row_offset + 5, stage) =
-            static_cast<AcadoScalar>(1.0);
-        for (int q = 0; q < 9; ++q) {
-          acado_online_data_(row_offset + 6 + q, stage) =
-              static_cast<AcadoScalar>((q == 0 || q == 4 || q == 8) ? 1.0 : 0.0);
-        }
-      } else {
-        for (int axis = 0; axis < 3; ++axis) {
-          acado_online_data_(row_offset + 3 + axis, stage) = std::max(
-              static_cast<AcadoScalar>(1.0e-3),
-              std::abs(acado_online_data_(row_offset + 3 + axis, stage)));
-        }
-      }
-    }
-  }
-  acado_online_data_.row(kOdAlpha1Index).setConstant(
-      enabled ? static_cast<AcadoScalar>(alpha1) : static_cast<AcadoScalar>(0.0));
-  acado_online_data_.row(kOdAlpha2Index).setConstant(
-      enabled ? static_cast<AcadoScalar>(alpha2) : static_cast<AcadoScalar>(0.0));
+      static_cast<AcadoScalar>(alpha2));
   return true;
 }
 

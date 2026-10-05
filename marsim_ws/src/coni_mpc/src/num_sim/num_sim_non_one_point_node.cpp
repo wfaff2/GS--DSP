@@ -737,15 +737,35 @@ static std::string deriveExternalAvoidanceCsvPath(
   return step_metrics_csv + "_vo_hrvo_steps.csv";
 }
 
+static std::string deriveFieldHocbfCsvPath(
+    const std::string& step_metrics_csv) {
+  if (step_metrics_csv.empty()) {
+    return std::string();
+  }
+  const std::string suffix = "_steps.csv";
+  if (step_metrics_csv.size() >= suffix.size() &&
+      step_metrics_csv.compare(step_metrics_csv.size() - suffix.size(),
+                               suffix.size(), suffix) == 0) {
+    return step_metrics_csv.substr(0, step_metrics_csv.size() - suffix.size()) +
+           "_field_hocbf_steps.csv";
+  }
+  return step_metrics_csv + "_field_hocbf_steps.csv";
+}
+
 static void writeStepMetricsHeader(std::ostream& out) {
   out << "run_tag,uav_idx,step_idx,sim_time,frame_mode_effective,ugv_rollout_mode,safety_variant,"
          "solver_cbf_active,solver_track_only,solve_ok,solver_fail_flag,"
          "solver_active_obstacle_key,solver_h,solver_hdot,solver_cbf,solver_slack,"
          "solver_planar_distance,solver_planar_clearance,solver_planar_surface_distance,"
+         "predicted_obstacle_min_distance,predicted_obstacle_min_clearance,"
          "feedback_time_ms,preparation_time_ms,core_time_ms,"
          "external_filter_time_ms,total_pipeline_time_ms,tracking_error,"
          "position_x,position_y,position_z,"
          "velocity_x,velocity_y,velocity_z,"
+         "nominal_position_x,nominal_position_y,nominal_position_z,"
+         "nominal_velocity_x,nominal_velocity_y,nominal_velocity_z,"
+         "mpc_predicted_position_x,mpc_predicted_position_y,mpc_predicted_position_z,"
+         "mpc_predicted_velocity_x,mpc_predicted_velocity_y,mpc_predicted_velocity_z,"
          "applied_cmd_vx_world,applied_cmd_vy_world,applied_cmd_vz_world,"
          "applied_cmd_yaw_rate_world,truth_min_planar_surface_clearance,"
          "rot_load_position_non_x,rot_load_position_non_y,rot_load_position_non_z,"
@@ -810,6 +830,8 @@ static void writeStepMetricsRow(
       << fmtDouble(step_debug.solver_planar_distance) << ","
       << fmtDouble(step_debug.solver_planar_clearance) << ","
       << fmtDouble(step_debug.solver_planar_surface_distance) << ","
+      << fmtDouble(step_debug.predicted_obstacle_min_distance) << ","
+      << fmtDouble(step_debug.predicted_obstacle_min_clearance) << ","
       << fmtDouble(step_debug.feedback_time_ms) << ","
       << fmtDouble(step_debug.preparation_time_ms) << ","
       << fmtDouble(step_debug.core_time_ms) << ","
@@ -822,6 +844,30 @@ static void writeStepMetricsRow(
       << fmtDouble(step_debug.velocity.x()) << ","
       << fmtDouble(step_debug.velocity.y()) << ","
       << fmtDouble(step_debug.velocity.z()) << ","
+      << fmtDouble(step_debug.nominal_valid ? step_debug.nominal_position.x()
+                                            : std::numeric_limits<double>::quiet_NaN()) << ","
+      << fmtDouble(step_debug.nominal_valid ? step_debug.nominal_position.y()
+                                            : std::numeric_limits<double>::quiet_NaN()) << ","
+      << fmtDouble(step_debug.nominal_valid ? step_debug.nominal_position.z()
+                                            : std::numeric_limits<double>::quiet_NaN()) << ","
+      << fmtDouble(step_debug.nominal_valid ? step_debug.nominal_velocity.x()
+                                            : std::numeric_limits<double>::quiet_NaN()) << ","
+      << fmtDouble(step_debug.nominal_valid ? step_debug.nominal_velocity.y()
+                                            : std::numeric_limits<double>::quiet_NaN()) << ","
+      << fmtDouble(step_debug.nominal_valid ? step_debug.nominal_velocity.z()
+                                            : std::numeric_limits<double>::quiet_NaN()) << ","
+      << fmtDouble(step_debug.mpc_prediction_valid ? step_debug.mpc_predicted_position.x()
+                                                   : std::numeric_limits<double>::quiet_NaN()) << ","
+      << fmtDouble(step_debug.mpc_prediction_valid ? step_debug.mpc_predicted_position.y()
+                                                   : std::numeric_limits<double>::quiet_NaN()) << ","
+      << fmtDouble(step_debug.mpc_prediction_valid ? step_debug.mpc_predicted_position.z()
+                                                   : std::numeric_limits<double>::quiet_NaN()) << ","
+      << fmtDouble(step_debug.mpc_prediction_valid ? step_debug.mpc_predicted_velocity.x()
+                                                   : std::numeric_limits<double>::quiet_NaN()) << ","
+      << fmtDouble(step_debug.mpc_prediction_valid ? step_debug.mpc_predicted_velocity.y()
+                                                   : std::numeric_limits<double>::quiet_NaN()) << ","
+      << fmtDouble(step_debug.mpc_prediction_valid ? step_debug.mpc_predicted_velocity.z()
+                                                   : std::numeric_limits<double>::quiet_NaN()) << ","
       << fmtDouble(applied_control_world.x()) << ","
       << fmtDouble(applied_control_world.y()) << ","
       << fmtDouble(applied_control_world.z()) << ","
@@ -852,6 +898,89 @@ static void writeStepMetricsRow(
       << fmtDouble(step_debug.omega_non.x()) << ","
       << fmtDouble(step_debug.omega_non.y()) << ","
       << fmtDouble(step_debug.omega_non.z()) << "\n";
+}
+
+static void writeFieldHocbfHeader(std::ostream& out) {
+  out << "run_tag,uav_idx,step_idx,sim_time,frame_mode_effective,"
+         "ugv_rollout_mode,solve_ok,horizon_idx,field_valid,field_active,"
+         "field_d_min,field_d_softmin,field_h,field_hdot,field_lf2,"
+         "field_Ax,field_Ay,field_Az,field_b,field_b_profile,"
+         "field_residual,field_slack,"
+         "field_max_occupancy,field_candidate_count,field_eligible_count,"
+         "field_selected_count,field_selected_source_ids,"
+         "field_selected_rel_vx_mean,field_selected_rel_vy_mean,"
+         "field_selected_rel_vz_mean,field_selected_rel_speed_max,"
+         "nominal_position_x,nominal_position_y,nominal_position_z,"
+         "nominal_velocity_x,nominal_velocity_y,nominal_velocity_z,"
+         "mpc_predicted_position_x,mpc_predicted_position_y,"
+         "mpc_predicted_position_z,mpc_predicted_velocity_x,"
+         "mpc_predicted_velocity_y,mpc_predicted_velocity_z,"
+         "actual_position_x,actual_position_y,actual_position_z,"
+         "actual_velocity_x,actual_velocity_y,actual_velocity_z\n";
+}
+
+static void writeFieldHocbfRows(
+    std::ostream& out,
+    const std::string& run_tag,
+    int uav_idx,
+    std::size_t step_idx,
+    double sim_time,
+    const std::string& frame_mode_effective,
+    const std::string& ugv_rollout_mode,
+    const coni_mpc::NumSimMpc::StepDebugSnapshot& step_debug,
+    const coni_mpc::NumSimMpc::FieldHocbfDebugProfile& profile) {
+  for (std::size_t stage = 0; stage < profile.size(); ++stage) {
+    const auto& debug = profile[stage];
+    out << run_tag << ","
+        << uav_idx << ","
+        << step_idx << ","
+        << fmtDouble(sim_time) << ","
+        << frame_mode_effective << ","
+        << ugv_rollout_mode << ","
+        << (step_debug.solve_ok ? 1 : 0) << ","
+        << stage << ","
+        << (debug.valid ? 1 : 0) << ","
+        << (debug.active ? 1 : 0) << ","
+        << fmtDouble(debug.d_min) << ","
+        << fmtDouble(debug.d_softmin) << ","
+        << fmtDouble(debug.h) << ","
+        << fmtDouble(debug.hdot) << ","
+        << fmtDouble(debug.lf2) << ","
+        << fmtDouble(debug.A.x()) << ","
+        << fmtDouble(debug.A.y()) << ","
+        << fmtDouble(debug.A.z()) << ","
+        << fmtDouble(debug.b) << ","
+        << fmtDouble(debug.profile_b) << ","
+        << fmtDouble(debug.residual) << ","
+        << fmtDouble(debug.slack) << ","
+        << fmtDouble(debug.max_occupancy) << ","
+        << debug.candidate_count << ","
+        << debug.eligible_count << ","
+        << debug.selected_count << ","
+        << debug.selected_source_ids << ","
+        << fmtDouble(debug.selected_relative_velocity_mean.x()) << ","
+        << fmtDouble(debug.selected_relative_velocity_mean.y()) << ","
+        << fmtDouble(debug.selected_relative_velocity_mean.z()) << ","
+        << fmtDouble(debug.selected_relative_speed_max) << ","
+        << fmtDouble(debug.nominal_position.x()) << ","
+        << fmtDouble(debug.nominal_position.y()) << ","
+        << fmtDouble(debug.nominal_position.z()) << ","
+        << fmtDouble(debug.nominal_velocity.x()) << ","
+        << fmtDouble(debug.nominal_velocity.y()) << ","
+        << fmtDouble(debug.nominal_velocity.z()) << ","
+        << fmtDouble(debug.mpc_predicted_position.x()) << ","
+        << fmtDouble(debug.mpc_predicted_position.y()) << ","
+        << fmtDouble(debug.mpc_predicted_position.z()) << ","
+        << fmtDouble(debug.mpc_predicted_velocity.x()) << ","
+        << fmtDouble(debug.mpc_predicted_velocity.y()) << ","
+        << fmtDouble(debug.mpc_predicted_velocity.z()) << ","
+        << fmtDouble(step_debug.position.x()) << ","
+        << fmtDouble(step_debug.position.y()) << ","
+        << fmtDouble(step_debug.position.z()) << ","
+        << fmtDouble(step_debug.velocity.x()) << ","
+        << fmtDouble(step_debug.velocity.y()) << ","
+        << fmtDouble(step_debug.velocity.z()) << "\n";
+  }
 }
 
 static void writeUgvHorizonDetailHeader(std::ostream& out) {
@@ -5060,6 +5189,11 @@ int main(int argc, char **argv)
   if (external_avoidance_csv.empty()) {
     external_avoidance_csv = deriveExternalAvoidanceCsvPath(step_metrics_csv);
   }
+  std::string field_hocbf_csv;
+  pnh.param("field_hocbf_csv", field_hocbf_csv, std::string(""));
+  if (field_hocbf_csv.empty()) {
+    field_hocbf_csv = deriveFieldHocbfCsvPath(step_metrics_csv);
+  }
   std::string safety_variant;
   pnh.param("safety_variant", safety_variant, std::string("A2_soft_cbf"));
   bool exclude_uav0_from_simulation = true;
@@ -5233,6 +5367,9 @@ int main(int argc, char **argv)
   }
   if (!solver_obstacle_drift_csv.empty()) {
     ROS_INFO_STREAM("solver_obstacle_drift_csv=" << solver_obstacle_drift_csv);
+  }
+  if (!field_hocbf_csv.empty()) {
+    ROS_INFO_STREAM("field_hocbf_csv=" << field_hocbf_csv);
   }
   ROS_INFO_STREAM("RViz world view uses fixed frame '"
                   << acado_mpc_common::worldFrameId()
@@ -5930,7 +6067,7 @@ auto collision_handler =
   x0(6) = 1.0;
  */
   double sim_system_dt_sec = 0.01;
-  double sim_control_dt_sec = 0.01;
+  double sim_control_dt_sec = 0.02;
   bool sim_realtime_pacing = false;
   double sim_startup_delay_sec = 0.0;
   pnh.param("sim_system_dt_sec", sim_system_dt_sec, sim_system_dt_sec);
@@ -5948,10 +6085,10 @@ auto collision_handler =
     return 2;
   }
   if (external_avoidance_cfg.enabled() &&
-      std::abs(sim_control_dt_sec - 0.01) > 1.0e-12) {
+      std::abs(sim_control_dt_sec - 0.02) > 1.0e-12) {
     ROS_ERROR_STREAM(
         "The formal MG-PolyHRVO baseline updates its moving goal and velocity "
-        "command at 100 Hz (sim_control_dt_sec=0.01); resolved "
+        "command at 50 Hz (sim_control_dt_sec=0.02); resolved "
         << sim_control_dt_sec);
     return 2;
   }
@@ -6104,6 +6241,17 @@ simulators.push_back(simulator);
       writeExternalAvoidanceHeader(external_avoidance_out);
     }
   }
+  std::ofstream field_hocbf_out;
+  if (!field_hocbf_csv.empty()) {
+    const bool need_field_hocbf_header = !fileHasData(field_hocbf_csv);
+    field_hocbf_out.open(field_hocbf_csv.c_str(),
+                         std::ios::out | std::ios::app);
+    if (!field_hocbf_out.good()) {
+      ROS_ERROR_STREAM("Failed to open Field-HOCBF CSV: " << field_hocbf_csv);
+    } else if (need_field_hocbf_header) {
+      writeFieldHocbfHeader(field_hocbf_out);
+    }
+  }
   std::vector<std::size_t> step_row_counts(
       static_cast<std::size_t>(std::max(1, num_uavs)), 0);
   std::size_t ugv_horizon_row_count = 0;
@@ -6230,33 +6378,48 @@ simulators.push_back(simulator);
                                          drift_snapshot);
           }
         }
-        if (step_metrics_out.good() &&
-            idx < static_cast<int>(control_system_ptr.size()) &&
+        if (idx >= 0 && idx < static_cast<int>(control_system_ptr.size()) &&
             control_system_ptr[static_cast<size_t>(idx)]) {
           const auto step_debug =
               control_system_ptr[static_cast<size_t>(idx)]
                   ->getLastStepDebugSnapshot();
           if (step_debug.valid) {
-            writeStepMetricsRow(step_metrics_out,
-                                run_tag_value,
-                                idx,
-                                current_step_idx,
-                                sim_time,
-                                frame_mode_effective,
-                                ugv_rollout_mode,
-                                safety_variant,
-                                step_debug,
-                                simulators[static_cast<size_t>(idx)]
-                                    ->getLastAppliedControlWorld(),
-                                simulators[static_cast<size_t>(idx)]
-                                    ->getTruthMinPlanarSurfaceClearance(),
-                                simulators[static_cast<size_t>(idx)]
-                                        ->getLastExternalAvoidanceSnapshot()
-                                        .valid
-                                    ? simulators[static_cast<size_t>(idx)]
-                                          ->getLastExternalAvoidanceSnapshot()
-                                          .filter_time_ms
-                                    : 0.0);
+            if (step_metrics_out.good()) {
+              writeStepMetricsRow(
+                  step_metrics_out,
+                  run_tag_value,
+                  idx,
+                  current_step_idx,
+                  sim_time,
+                  frame_mode_effective,
+                  ugv_rollout_mode,
+                  safety_variant,
+                  step_debug,
+                  simulators[static_cast<size_t>(idx)]
+                      ->getLastAppliedControlWorld(),
+                  simulators[static_cast<size_t>(idx)]
+                      ->getTruthMinPlanarSurfaceClearance(),
+                  simulators[static_cast<size_t>(idx)]
+                          ->getLastExternalAvoidanceSnapshot()
+                          .valid
+                      ? simulators[static_cast<size_t>(idx)]
+                            ->getLastExternalAvoidanceSnapshot()
+                            .filter_time_ms
+                      : 0.0);
+            }
+            if (field_hocbf_out.good()) {
+              writeFieldHocbfRows(
+                  field_hocbf_out,
+                  run_tag_value,
+                  idx,
+                  current_step_idx,
+                  sim_time,
+                  frame_mode_effective,
+                  ugv_rollout_mode,
+                  step_debug,
+                  control_system_ptr[static_cast<size_t>(idx)]
+                      ->getLastFieldHocbfDebugProfile());
+            }
             step_row_counts[static_cast<size_t>(idx)] += 1;
           }
         }
@@ -6304,6 +6467,19 @@ simulators.push_back(simulator);
             simulators[static_cast<size_t>(idx)]
                 ->getTruthMinPlanarSurfaceClearance(),
             external_snapshot.valid ? external_snapshot.filter_time_ms : 0.0);
+        if (field_hocbf_out.good()) {
+          writeFieldHocbfRows(
+              field_hocbf_out,
+              run_tag_value,
+              idx,
+              step_row_counts[static_cast<size_t>(idx)],
+              terminal_sim_time,
+              frame_mode_effective,
+              ugv_rollout_mode,
+              step_debug,
+              control_system_ptr[static_cast<size_t>(idx)]
+                  ->getLastFieldHocbfDebugProfile());
+        }
         step_row_counts[static_cast<size_t>(idx)] += 1;
       }
     }

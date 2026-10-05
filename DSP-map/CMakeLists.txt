@@ -54,9 +54,13 @@ add_dependencies(map_sim_example ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EX
 target_link_libraries(map_sim_example ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${MunkresLIB})
 
 if(CATKIN_ENABLE_TESTING)
+  catkin_add_gtest(test_dsp_fov_grid test/test_dsp_fov_grid.cpp)
+  if(TARGET test_dsp_fov_grid)
+    target_link_libraries(test_dsp_fov_grid ${catkin_LIBRARIES})
+  endif()
+
   catkin_add_gtest(test_dsp_probability_ellipse test/test_dsp_probability_ellipse.cpp)
   if(TARGET test_dsp_probability_ellipse)
     target_link_libraries(test_dsp_probability_ellipse ${catkin_LIBRARIES})
   endif()
 endif()
-

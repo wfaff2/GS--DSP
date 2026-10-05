@@ -83,15 +83,8 @@ static constexpr int kSafeSetConstraintSize = kMaxObstacles;
 static constexpr int kFieldConstraintOffset =
     kSafeSetConstraintOffset + kSafeSetConstraintSize;
 static constexpr int kFieldConstraintSize = 1;
-// Must match the discretization and first-order tracking constants exported by
-// acado_model/quadrotor_model_thrustrates.cpp.
+// Must match the discretization exported by the ACADO model source.
 static constexpr double kModelDt = 0.1;
-static constexpr double kModelTauVxy = 0.2;
-static constexpr double kModelTauVz = 0.2;
-// Must match the compile-time acceleration bounds in
-// acado_model/quadrotor_model_thrustrates.cpp.
-static constexpr double kModelMaxAccXy = 6.0;
-static constexpr double kModelMaxAccZ = 4.0;
 static_assert(kPathConstraintSize == kAccelerationConstraintSize +
                   kCbfConstraintSize + kSafeSetConstraintSize +
                   kFieldConstraintSize,
@@ -101,7 +94,7 @@ static_assert(kPathConstraintSize == kAccelerationConstraintSize +
 // Each obstacle occupies center(3), axes(3), rotation(9), velocity(3),
 // acceleration(3), active(1) = 22 entries.  The generated model then stores
 // alpha1/alpha2, non-inertial data, planar tracking data, and the one affine
-// field-HOCBF row.
+// field-HOCBF row, followed by inverse velocity tracking time constants.
 static constexpr int kOdObstacleStride = 22;
 static constexpr int kOdObstacleOffset = 0;
 static constexpr int kOdAlpha1Index =
@@ -114,10 +107,12 @@ static constexpr int kOdRefXIndex = kOdCarAccOffset + 3;
 static constexpr int kOdRefYIndex = kOdRefXIndex + 1;
 static constexpr int kOdTrustFactorIndex = kOdRefYIndex + 1;
 static constexpr int kOdFieldOffset = kOdTrustFactorIndex + 1;
+static constexpr int kOdInvTauVxyIndex = kOdFieldOffset + 5;
+static constexpr int kOdInvTauVzIndex = kOdInvTauVxyIndex + 1;
 static_assert(kOdTrustFactorIndex < kOdSize,
               "MPC: ACADO online data size does not match model layout.");
-static_assert(kOdFieldOffset + 5 <= kOdSize,
-              "MPC: ACADO field online-data layout does not fit ACADO_NOD.");
+static_assert(kOdInvTauVzIndex < kOdSize,
+              "MPC: ACADO online-data layout does not fit ACADO_NOD.");
 
 /**
  * @brief Wrapper for the ACADO MPC implementation
@@ -138,13 +133,6 @@ class MpcWrapper
   using Vec3Profile = Eigen::Matrix<T, 3, kSamples + 1>;
   using ObstacleProfileVector =
       std::vector<ObstacleProfile, Eigen::aligned_allocator<ObstacleProfile>>;
-  using RiskRegion = Eigen::Matrix<T, 22, 1>;
-  using RiskRegionVector =
-      std::vector<RiskRegion, Eigen::aligned_allocator<RiskRegion>>;
-  using RiskRegionProfile = Eigen::Matrix<T, 22, kSamples + 1>;
-  using RiskRegionProfileVector =
-      std::vector<RiskRegionProfile,
-                  Eigen::aligned_allocator<RiskRegionProfile>>;
   // Ax, Ay, Az, b, active, diagnostic slack weight.
   using FieldHocbfProfile = Eigen::Matrix<T, 6, kSamples + 1>;
 
@@ -164,15 +152,13 @@ class MpcWrapper
     const T state_cost_scaling = 0.0, const T input_cost_scaling = 0.0);
 
   bool setLimits(T max_v_xy, T max_v_z, T max_yaw_rate,
+    T a_max_xy, T a_max_z,
     T slack_max = std::numeric_limits<T>::infinity());
+  bool setVelocityTrackingTimeConstants(T tau_v_xy, T tau_v_z);
   bool setObstacles(
     const ObstacleVector& obstacles,
     const ObstacleProfileVector& obstacle_profiles,
     T alpha1, T alpha2, bool enabled);
-  bool setRiskRegions(
-      const RiskRegionVector& risk_regions,
-      const RiskRegionProfileVector& risk_region_profiles,
-      T alpha1, T alpha2, bool enabled);
   bool setFieldHocbf(const FieldHocbfProfile& profile, bool enabled);
   bool setNonInertialData(
     const Eigen::Ref<const Eigen::Matrix<T, 3, 1>>& omega_non,

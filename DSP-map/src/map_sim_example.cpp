@@ -756,6 +756,8 @@ int main(int argc, char **argv)
     int minimum_samples = 3;
     std::string predicted_ellipses_topic = "/my_map/predicted_ellipses";
     std::string predicted_ellipse_markers_topic = "/my_map/predicted_ellipse_markers";
+    bool full_360_lidar_fov = false;
+    bool cluster_diagnostics = false;
     private_nh.param("probability_mass", probability_mass, probability_mass);
     private_nh.param("covariance_regularization", covariance_regularization,
                      covariance_regularization);
@@ -769,6 +771,10 @@ int main(int argc, char **argv)
                      predicted_ellipse_marker_height);
     private_nh.param("input_cloud_convention", input_cloud_convention,
                      input_cloud_convention);
+    private_nh.param("full_360_lidar_fov", full_360_lidar_fov,
+                     full_360_lidar_fov);
+    private_nh.param("cluster_diagnostics", cluster_diagnostics,
+                     cluster_diagnostics);
     if(input_cloud_convention != "optical" && input_cloud_convention != "body_flu"){
         ROS_FATAL_STREAM("Unsupported input_cloud_convention='"
                          << input_cloud_convention
@@ -778,6 +784,8 @@ int main(int argc, char **argv)
     my_map.setProbabilityEllipseConfig(probability_mass, covariance_regularization,
                                        minimum_weight,
                                        static_cast<std::size_t>(std::max(1, minimum_samples)));
+    my_map.setFull360LidarFov(full_360_lidar_fov);
+    my_map.setClusterDiagnostics(cluster_diagnostics);
 
     /// Map parameters that can be changed dynamically. But usually we still use them as static parameters.
     my_map.setPredictionVariance(0.05, 0.05); // StdDev for prediction. velocity StdDev, position StdDev, respectively.

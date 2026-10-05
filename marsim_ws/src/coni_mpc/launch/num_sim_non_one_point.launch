@@ -1,7 +1,7 @@
 <launch>
   <arg name="r" default="1.0"></arg>
-  <arg name="v" default="3.0"></arg>
-  <arg name="w" default="0.5"></arg>
+  <arg name="v" default="1.0"></arg>
+  <arg name="w" default="0.135"></arg>
   <!-- If not provided at launch, fall back to YAML values. -->
   <arg name="obstacle_count" default=""></arg>
   <arg name="seed" default=""></arg>
@@ -26,9 +26,7 @@
   <arg name="safety_variant" default=""></arg>
   <arg name="cbf_enabled" default=""></arg>
   <arg name="cbf_use_in_sim" default=""></arg>
-  <arg name="cbf_use_risk_regions" default="false"></arg>
-  <arg name="cbf_risk_region_topic" default="/coni_mpc/risk_regions"></arg>
-  <arg name="cbf_use_field_hocbf" default="false"></arg>
+  <arg name="cbf_use_field_hocbf" default="true"></arg>
   <arg name="cbf_field_topic" default="/my_map/future_occupancy_3d"></arg>
   <arg name="cbf_slack_max" default=""></arg>
   <arg name="cbf_r_slack" default=""></arg>
@@ -125,8 +123,6 @@
       <param if="$(eval arg('cbf_use_in_sim') != '')"
              name="cbf/use_in_sim"
              value="$(arg cbf_use_in_sim)" />
-      <param name="cbf/use_risk_regions" value="$(arg cbf_use_risk_regions)" />
-      <param name="cbf/risk_region_topic" value="$(arg cbf_risk_region_topic)" />
       <param name="cbf/use_field_hocbf" value="$(arg cbf_use_field_hocbf)" />
       <param name="cbf/field_topic" value="$(arg cbf_field_topic)" />
       <param if="$(eval arg('cbf_slack_max') != '')"
@@ -268,8 +264,6 @@
       <param if="$(eval arg('cbf_use_in_sim') != '')"
              name="cbf/use_in_sim"
              value="$(arg cbf_use_in_sim)" />
-      <param name="cbf/use_risk_regions" value="$(arg cbf_use_risk_regions)" />
-      <param name="cbf/risk_region_topic" value="$(arg cbf_risk_region_topic)" />
       <param name="cbf/use_field_hocbf" value="$(arg cbf_use_field_hocbf)" />
       <param name="cbf/field_topic" value="$(arg cbf_field_topic)" />
       <param if="$(eval arg('cbf_slack_max') != '')"

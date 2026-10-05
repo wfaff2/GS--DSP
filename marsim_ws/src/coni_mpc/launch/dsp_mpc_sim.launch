@@ -7,18 +7,19 @@
   <!-- One-command integration launch. The DSP node still needs its normal
        depth-cloud and pose inputs (or a rosbag publishing them). -->
   <arg name="start_dsp" default="true" />
-  <!-- Dedicated DSP-CBF validation scene: one UAV, three static cylinders,
+  <!-- Dedicated DSP-CBF validation scene: one UAV, three static square prisms,
        one static L-shaped wall, and two dynamic obstacles.  Do not inherit
        the four-UAV figure-eight
        benchmark defaults from num_sim_non_one_point.yaml. -->
   <arg name="num_uavs" default="1" />
   <arg name="sim_duration_sec" default="" />
+  <arg name="metrics_csv" default="" />
+  <arg name="run_tag" default="" />
   <!-- Field-HOCBF acceptance target: run the controller at 50 Hz. -->
   <arg name="sim_control_dt_sec" default="0.02" />
   <arg name="cbf_enabled" default="true" />
   <arg name="cbf_use_in_sim" default="true" />
-  <arg name="cbf_use_risk_regions" default="true" />
-  <arg name="cbf_use_field_hocbf" default="false" />
+  <arg name="cbf_use_field_hocbf" default="true" />
   <!-- Explicit baseline-controller selectors.  The previous MPC+CBF
        experiment used the non-inertial frame and a frozen UGV rollout. -->
   <arg name="frame_mode" default="noninertial" />
@@ -28,6 +29,7 @@
   <arg name="relative_frame_id" default="base_link" />
   <arg name="start_rviz" default="true" />
   <arg name="start_marsim_lidar" default="true" />
+  <arg name="dsp_cluster_diagnostics" default="false" />
   <arg name="lidar_collision_enabled" default="true" />
   <arg name="lidar_collision_cloud_topic"
        default="/quad0_pcl_render_node/cloud" />
@@ -36,7 +38,7 @@
        explicitly only when compensating for a deliberately sparse cloud. -->
   <arg name="lidar_collision_point_margin" default="0.0" />
 
-  <!-- The static map contains three copies of the A2 cylinder distributed on
+  <!-- The static map contains three 1 m x 1 m square prisms distributed on
        a radius-5 m ring plus one perpendicular two-arm wall near the top of
        the UAV orbit.  The UAV nominal radius is 5.5 m, while the UGV radius
        is 7 m, so these obstacles challenge the UAV and keep the UGV path
@@ -59,12 +61,12 @@
        /quad0_pcl_render_node/sensor_cloud and sensor_pose for DSP. -->
   <include if="$(arg start_marsim_lidar)"
            file="$(dirname)/marsim_depth_cbf_uav1.launch">
-    <!-- A2_three_cylinders_l_wall.pcd contains the three static cylinders and
-         the additional right-angle wall.  The deterministic box
+    <!-- A2_three_square_prisms_l_wall.pcd contains the three static square
+         prisms and the additional right-angle wall.  The deterministic box
          configuration supplies two moving obstacles through the same
          LiDAR/DSP path. -->
     <arg name="map_name"
-         value="$(dirname)/../test_data/depth_cbf_m25/A2_three_cylinders_l_wall.pcd" />
+         value="$(dirname)/../test_data/depth_cbf_m25/A2_three_square_prisms_l_wall.pcd" />
     <arg name="use_intensity_pcd_publisher" value="true" />
     <arg name="uav_odom_topic" value="/coni_mpc/quad_odom0" />
     <arg name="dynamic_obstacles" value="true" />
@@ -82,6 +84,8 @@
         pkg="dynamic_occpuancy_map" type="map_sim_example"
         name="map_sim_example" output="screen">
     <param name="input_cloud_convention" value="body_flu" />
+    <param name="full_360_lidar_fov" value="true" />
+    <param name="cluster_diagnostics" value="$(arg dsp_cluster_diagnostics)" />
     <!-- Adapt the DSP example's historical camera topic names to the
          MARSIM Mid-360 LiDAR and pose topics. -->
     <remap from="/camera_front/depth/points"
@@ -89,8 +93,6 @@
     <remap from="/mavros/local_position/pose"
            to="/quad0_pcl_render_node/sensor_pose" />
   </node>
-
-  <include file="$(dirname)/risk_region_constructor.launch" />
 
   <node if="$(arg start_rviz)" pkg="rviz" type="rviz"
         name="dsp_mpc_rviz" output="screen"
@@ -102,8 +104,6 @@
     <arg name="relative_frame_id" value="$(arg relative_frame_id)" />
     <arg name="cbf_enabled" value="$(arg cbf_enabled)" />
     <arg name="cbf_use_in_sim" value="$(arg cbf_use_in_sim)" />
-    <arg name="cbf_use_risk_regions" value="$(arg cbf_use_risk_regions)" />
-    <arg name="cbf_risk_region_topic" value="/coni_mpc/risk_regions" />
     <arg name="cbf_use_field_hocbf" value="$(arg cbf_use_field_hocbf)" />
     <arg name="frame_mode" value="$(arg frame_mode)" />
     <arg name="ugv_rollout_mode" value="$(arg ugv_rollout_mode)" />
@@ -132,5 +132,7 @@
     <arg name="sim_startup_delay_sec" value="3.0" />
     <arg name="sim_control_dt_sec" value="$(arg sim_control_dt_sec)" />
     <arg name="sim_duration_sec" value="$(arg sim_duration_sec)" />
+    <arg name="metrics_csv" value="$(arg metrics_csv)" />
+    <arg name="run_tag" value="$(arg run_tag)" />
   </include>
 </launch>

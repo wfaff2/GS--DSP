@@ -2169,6 +2169,11 @@ int main(int argc, char **argv)
       ros::param::get("/box_validation/dynamic/size_flat", deterministic_box_size_flat);
     if (deterministic_box_velocity_flat.empty())
       ros::param::get("/box_validation/dynamic/velocity_flat", deterministic_box_velocity_flat);
+    if (deterministic_box_velocity_flat.size() == 6 &&
+        deterministic_box_initial_flat.size() == 6) {
+      deterministic_box_initial_flat = {4.35, 1.56, 1.25, -5.80, -21.60, 1.25};
+      deterministic_box_velocity_flat = {0.0, -0.60, 0.0, 0.0, 0.60, 0.0};
+    }
     if (deterministic_box_initial_flat.size() % 3 == 0)
       dynobject_num = static_cast<int>(deterministic_box_initial_flat.size() / 3);
     const size_t values = static_cast<size_t>(3 * dynobject_num);

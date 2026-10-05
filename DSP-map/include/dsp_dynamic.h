@@ -32,11 +32,14 @@ Description: This is the head file for the DSP map with constant velocity model.
 #include <thread>
 #include <array>
 #include <cstdint>
+#include <iomanip>
 #include <set>
+#include <sstream>
 #include <unordered_map>
 #include <vector>
 #include "munkres.h"
 #include "dsp_probability_ellipse.h"
+#include "dsp_fov_grid.h"
 
 using namespace std;
 
@@ -61,13 +64,17 @@ const int half_fov_h = 42;
 const int half_fov_v = 24;
 
 #define DYNAMIC_CLUSTER_MAX_POINT_NUM 200
-#define DYNAMIC_CLUSTER_MAX_CENTER_HEIGHT 1.5
+#define DYNAMIC_CLUSTER_MAX_CENTER_HEIGHT 2.5
 
 string particle_save_folder = ".";
 /** END **/
 
-static const int observation_pyramid_num_h = (int)half_fov_h * 2 / ANGLE_RESOLUTION;
-static const int observation_pyramid_num_v = (int)half_fov_v * 2 / ANGLE_RESOLUTION;
+static const int camera_observation_pyramid_num_h = (int)half_fov_h * 2 / ANGLE_RESOLUTION;
+static const int camera_observation_pyramid_num_v = (int)half_fov_v * 2 / ANGLE_RESOLUTION;
+// Allocate for the largest supported runtime sensor grid. Camera mode keeps
+// using only its historical 28x16 prefix.
+static const int observation_pyramid_num_h = 360 / ANGLE_RESOLUTION;
+static const int observation_pyramid_num_v = 90 / ANGLE_RESOLUTION;
 static const int observation_pyramid_num = observation_pyramid_num_h * observation_pyramid_num_v;
 
 static const int VOXEL_NUM = MAP_LENGTH_VOXEL_NUM*MAP_WIDTH_VOXEL_NUM*MAP_HEIGHT_VOXEL_NUM;
@@ -170,6 +177,9 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in_current_view_rotated(new pcl::Point
 static float current_position[3] = {0.f, 0.f, 0.f};
 static float voxel_filtered_resolution = 0.15;
 static float delt_t_from_last_observation = 0.f;
+static double current_observation_timestamp = 0.0;
+static bool cluster_diagnostics_enabled = false;
+static bool full_360_lidar_fov_enabled = false;
 pcl::PointCloud<pcl::PointXYZINormal>::Ptr input_cloud_with_velocity(new pcl::PointCloud<pcl::PointXYZINormal>());
 static std::vector<std::int64_t> input_cloud_with_velocity_obstacle_ids;
 static dsp_probability::PersistentIdAllocator obstacle_id_allocator;
@@ -215,6 +225,25 @@ public:
         cout << "Map is ready to update!" << endl;
     }
 
+    void setFull360LidarFov(bool enabled) {
+        full_360_lidar_fov = enabled;
+        full_360_lidar_fov_enabled = enabled;
+        active_observation_pyramid_num_h =
+                enabled ? observation_pyramid_num_h : camera_observation_pyramid_num_h;
+        active_observation_pyramid_num_v =
+                enabled ? observation_pyramid_num_v : camera_observation_pyramid_num_v;
+        active_observation_pyramid_num =
+                active_observation_pyramid_num_h * active_observation_pyramid_num_v;
+        for(int i = 0; i < active_observation_pyramid_num; ++i) {
+            findPyramidNeighborIndexInFOV(i, observation_pyramid_neighbors[i][0],
+                                          &observation_pyramid_neighbors[i][1]);
+        }
+    }
+
+    void setClusterDiagnostics(bool enabled) {
+        cluster_diagnostics_enabled = enabled;
+    }
+
     ~DSPMap(){
         cout << "\n See you ;)" <<endl;
     }
@@ -255,6 +284,7 @@ public:
         current_position[1] = sensor_py_last = sensor_py;
         current_position[2] = sensor_pz_last = sensor_pz;
         time_stamp_second_last = time_stamp_second;
+        current_observation_timestamp = time_stamp_second;
 
         delt_t_from_last_observation = delt_t;
 
@@ -264,16 +294,18 @@ public:
         sensor_rotation_quaternion[2] = sensor_quaternion_y;
         sensor_rotation_quaternion[3] = sensor_quaternion_z;
 
-        for(int i=0; i<observation_pyramid_num_h+1; i++){
-            rotateVectorByQuaternion(&pyramid_BPnorm_params_ori_h[i][0], sensor_rotation_quaternion, &pyramid_BPnorm_params_h[i][0]);
-        }
+        if(!full_360_lidar_fov) {
+            for(int i=0; i<camera_observation_pyramid_num_h+1; i++){
+                rotateVectorByQuaternion(&pyramid_BPnorm_params_ori_h[i][0], sensor_rotation_quaternion, &pyramid_BPnorm_params_h[i][0]);
+            }
 
-        for(int j=0; j<observation_pyramid_num_v+1; j++){
-            rotateVectorByQuaternion(&pyramid_BPnorm_params_ori_v[j][0], sensor_rotation_quaternion, &pyramid_BPnorm_params_v[j][0]);
+            for(int j=0; j<camera_observation_pyramid_num_v+1; j++){
+                rotateVectorByQuaternion(&pyramid_BPnorm_params_ori_v[j][0], sensor_rotation_quaternion, &pyramid_BPnorm_params_v[j][0]);
+            }
         }
 
         /** Insert point cloud to observation storage **/
-        for(int i=0; i< observation_pyramid_num; i++){  //Initialize point num in the storage
+        for(int i=0; i< active_observation_pyramid_num; i++){  //Initialize point num in the storage
             observation_num_each_pyramid[i] = 0; //Set number of observations in each pyramid as zero in the beginning
             point_cloud_max_length[i] = -1.f;
         }
@@ -301,7 +333,7 @@ public:
                 pyramid_index_h = findPointPyramidHorizontalIndex(rotated_point_this[0], rotated_point_this[1], rotated_point_this[2]);
                 pyramid_index_v = findPointPyramidVerticalIndex(rotated_point_this[0], rotated_point_this[1], rotated_point_this[2]);
 
-                int pyramid_index = pyramid_index_h * observation_pyramid_num_v + pyramid_index_v;
+                int pyramid_index = pyramid_index_h * active_observation_pyramid_num_v + pyramid_index_v;
                 int  observation_inner_seq = observation_num_each_pyramid[pyramid_index];
 
                 float length = sqrtf( rotated_point_this[0]*rotated_point_this[0] + rotated_point_this[1]*rotated_point_this[1] + rotated_point_this[2]*rotated_point_this[2]);
@@ -582,6 +614,11 @@ private:
     int observation_num_each_pyramid[observation_pyramid_num]{};
 
     float sensor_rotation_quaternion[4];
+    bool full_360_lidar_fov = false;
+    int active_observation_pyramid_num_h = camera_observation_pyramid_num_h;
+    int active_observation_pyramid_num_v = camera_observation_pyramid_num_v;
+    int active_observation_pyramid_num =
+            camera_observation_pyramid_num_h * camera_observation_pyramid_num_v;
 
     // Normal vectors for pyramids boundary planes when sensor has no rotation
     float pyramid_BPnorm_params_ori_h[observation_pyramid_num_h+1][3]; // x, y, z
@@ -667,7 +704,7 @@ private:
         }
 
         // Find neighborhood pyramids' indexes for observation pyramids
-        for(int i=0; i< observation_pyramid_num; i++){  //Initialize point num in the storage
+        for(int i=0; i< active_observation_pyramid_num; i++){  //Initialize point num in the storage
             findPyramidNeighborIndexInFOV(i, observation_pyramid_neighbors[i][0], &observation_pyramid_neighbors[i][1]);
         }
 
@@ -797,7 +834,7 @@ private:
         int operation_counter_update = 0;
 
         /// Calculate Ck + kappa first
-        for(int i=0; i<observation_pyramid_num; ++i){
+        for(int i=0; i<active_observation_pyramid_num; ++i){
             for(int j=0; j<observation_num_each_pyramid[i]; ++j){
                 // Iteration of z
                 for(int n_seq=0; n_seq<observation_pyramid_neighbors[i][0]; ++n_seq){
@@ -831,7 +868,7 @@ private:
 
 
         /// Update weight for each particle in view
-        for(int i=0; i < observation_pyramid_num; i++)
+        for(int i=0; i < active_observation_pyramid_num; i++)
         {
             int current_pyramid_index = i;
 
@@ -888,7 +925,7 @@ public:
     {
         /** Calculate normalization coefficient first **/
         float normalization_coefficient = 0.f;
-        for(int i=0; i< observation_pyramid_num; i++){
+        for(int i=0; i< active_observation_pyramid_num; i++){
             for(int j=0; j< observation_num_each_pyramid[i]; j++){
                 normalization_coefficient += 1.f / point_cloud[i][j][3];
             }
@@ -946,21 +983,26 @@ public:
 
             // Dempster-Shafer Theory
             float total_weight_voxel = static_particle_weight_sum + dynamic_particle_weight_sum + static_or_dynamic_weight_sum;
-            float m_static = static_particle_weight_sum / total_weight_voxel;
-            float m_dynamic = dynamic_particle_weight_sum / total_weight_voxel;
-            float m_static_or_dynamic = static_or_dynamic_weight_sum / total_weight_voxel;
+            float p_static_normalized = (point.intensity > 0.01f) ? 0.2f : 1.0f;
+            if (total_weight_voxel > 1.0e-5f) {
+                float m_static = static_particle_weight_sum / total_weight_voxel;
+                float m_dynamic = dynamic_particle_weight_sum / total_weight_voxel;
+                float m_static_or_dynamic = static_or_dynamic_weight_sum / total_weight_voxel;
 
-            float p_static = (m_static + m_static + m_static_or_dynamic) * 0.5f;
-            float p_dynamic = (m_dynamic + m_dynamic + m_static_or_dynamic) * 0.5f;
-            float normalization_p = p_static + p_dynamic;
-            float p_static_normalized = p_static / normalization_p;
-            float p_dynamic_normalized = p_dynamic / normalization_p;
+                float p_static = (m_static + m_static + m_static_or_dynamic) * 0.5f;
+                float p_dynamic = (m_dynamic + m_dynamic + m_static_or_dynamic) * 0.5f;
+                float normalization_p = p_static + p_dynamic;
+                if (normalization_p > 1.0e-5f) {
+                    p_static_normalized = p_static / normalization_p;
+                }
+            }
 
-            static_new_born_particle_number_each_point = (int)((float)model_generated_particle_number_each_point * p_static_normalized);
+            if (point.intensity <= 0.01f) {
+                static_new_born_particle_number_each_point = new_born_particle_number_each_point;
+            } else {
+                static_new_born_particle_number_each_point = 0;
+            }
             pf_derive_new_born_particle_number_each_point = model_generated_particle_number_each_point - static_new_born_particle_number_each_point;
-
-            // Set a minimum number of static particles
-            static_new_born_particle_number_each_point = max(min_static_new_born_particle_number_each_point, static_new_born_particle_number_each_point);
 
             for(int p=0; p<new_born_particle_number_each_point; p++){
                 std::shared_ptr<Particle> particle_ptr{new Particle};
@@ -972,32 +1014,15 @@ public:
 
                 if (getParticleVoxelsIndex(*particle_ptr, particle_ptr->voxel_index)) {
                     // Particle index might be different from the point index because a random Gaussian is added.
-                    if(p < static_new_born_particle_number_each_point){  // add static points
+                    if(p < static_new_born_particle_number_each_point || point.intensity <= 0.01f || point.normal_x <= -100.f){  // add static points
                         particle_ptr->vx = 0.f;
                         particle_ptr->vy = 0.f;
                         particle_ptr->vz = 0.f;
-                    }else if(point.normal_x > -100.f && p < model_generated_particle_number_each_point){ //p < pf_derive_new_born_particle_number_each_point + static_new_born_particle_number_each_point){
-                        /// Use estimated velocity to generate new particles
-                        if(point.intensity > 0.01f){
-                            particle_ptr->vx = point.normal_x + 4*getVelocityGaussianZeroCenter();
-                            particle_ptr->vy = point.normal_y + 4*getVelocityGaussianZeroCenter();
-                            particle_ptr->vz = point.normal_z + 4*getVelocityGaussianZeroCenter();
-                        }else{ //static points like ground
-                            particle_ptr->vx = 0.f;
-                            particle_ptr->vy = 0.f;
-                            particle_ptr->vz = 0.f;
-                        }
-                    }
-                    else{ /// Considering Random Noise
-                        if(point.intensity > 0.01f){
-                            particle_ptr->vx = generateRandomFloat(-1.5f, 1.5f);
-                            particle_ptr->vy = generateRandomFloat(-1.5f, 1.5f);
-                            particle_ptr->vz = generateRandomFloat(-0.5f, 0.5f);
-                        }else{ //static points like ground
-                            particle_ptr->vx = 0.f;
-                            particle_ptr->vy = 0.f;
-                            particle_ptr->vz = 0.f;
-                        }
+                    }else{
+                        /// Use estimated velocity to generate new particles for verified moving obstacles
+                        particle_ptr->vx = point.normal_x + getVelocityGaussianZeroCenter();
+                        particle_ptr->vy = point.normal_y + getVelocityGaussianZeroCenter();
+                        particle_ptr->vz = 0.f;
                     }
 
 #if(LIMIT_MOVEMENT_IN_XY_PLANE)
@@ -1271,25 +1296,12 @@ private:
     }
 
 
-    static void findPyramidNeighborIndexInFOV(const int &index_ori, int &neighbor_spaces_num, int *neighbor_spaces_index)
+    void findPyramidNeighborIndexInFOV(const int &index_ori, int &neighbor_spaces_num, int *neighbor_spaces_index) const
     {
-        int h_index_ori = index_ori / observation_pyramid_num_v;
-        int v_index_ori = index_ori % observation_pyramid_num_v;
-
-        neighbor_spaces_num = 0;
-
-        for(int i=-1; i<=1; ++i){
-            for(int j=-1; j<=1; ++j){
-                int h = h_index_ori + i;
-                int v = v_index_ori + j;
-                if(h>=0 && h<observation_pyramid_num_h && v>=0 && v<observation_pyramid_num_v)
-                {
-                    *(neighbor_spaces_index + neighbor_spaces_num) = h*observation_pyramid_num_v + v;
-                    ++ neighbor_spaces_num;
-                }
-            }
-        }
-
+        neighbor_spaces_num = dsp_fov::neighborIndices(
+                index_ori, active_observation_pyramid_num_h,
+                active_observation_pyramid_num_v, full_360_lidar_fov,
+                neighbor_spaces_index);
     }
 
 
@@ -1392,7 +1404,7 @@ private:
             int v_index = findPointPyramidVerticalIndex(voxels_with_particle[new_voxel_index][new_voxel_inner_index][4], voxels_with_particle[new_voxel_index][new_voxel_inner_index][5],
                                                         voxels_with_particle[new_voxel_index][new_voxel_inner_index][6]);
 
-            int particle_pyramid_index_new = h_index * observation_pyramid_num_v + v_index;
+            int particle_pyramid_index_new = h_index * active_observation_pyramid_num_v + v_index;
 
             int successfully_moved_by_pyramid = 0;
             for(int j=0; j<SAFE_PARTICLE_NUM_PYRAMID; j++){
@@ -1482,10 +1494,20 @@ private:
 
     int ifInPyramidsArea(float &x, float &y, float &z)
     {
+        if(full_360_lidar_fov) {
+            int horizontal_index = 0;
+            int vertical_index = 0;
+            const dsp_fov::Vector3f sensor = dsp_fov::worldToSensor(
+                    {x, y, z}, sensor_rotation_quaternion[0],
+                    sensor_rotation_quaternion[1], sensor_rotation_quaternion[2],
+                    sensor_rotation_quaternion[3]);
+            return dsp_fov::fullLidarIndex(sensor, angle_resolution, 90,
+                                           horizontal_index, vertical_index);
+        }
         if(vectorMultiply(x,y,z, pyramid_BPnorm_params_h[0][0], pyramid_BPnorm_params_h[0][1], pyramid_BPnorm_params_h[0][2]) >= 0.f
-          && vectorMultiply(x,y,z, pyramid_BPnorm_params_h[observation_pyramid_num_h][0], pyramid_BPnorm_params_h[observation_pyramid_num_h][1], pyramid_BPnorm_params_h[observation_pyramid_num_h][2]) <= 0.f
+          && vectorMultiply(x,y,z, pyramid_BPnorm_params_h[camera_observation_pyramid_num_h][0], pyramid_BPnorm_params_h[camera_observation_pyramid_num_h][1], pyramid_BPnorm_params_h[camera_observation_pyramid_num_h][2]) <= 0.f
           && vectorMultiply(x,y,z, pyramid_BPnorm_params_v[0][0], pyramid_BPnorm_params_v[0][1], pyramid_BPnorm_params_v[0][2]) <= 0.f
-          && vectorMultiply(x,y,z, pyramid_BPnorm_params_v[observation_pyramid_num_v][0], pyramid_BPnorm_params_v[observation_pyramid_num_v][1], pyramid_BPnorm_params_v[observation_pyramid_num_v][2]) >= 0.f){
+          && vectorMultiply(x,y,z, pyramid_BPnorm_params_v[camera_observation_pyramid_num_v][0], pyramid_BPnorm_params_v[camera_observation_pyramid_num_v][1], pyramid_BPnorm_params_v[camera_observation_pyramid_num_v][2]) >= 0.f){
             return 1;
         }else{
             return 0;
@@ -1493,8 +1515,19 @@ private:
     }
 
     int findPointPyramidHorizontalIndex(float &x, float &y, float &z){  /// The point should already be inside of Pyramids Area
+        if(full_360_lidar_fov) {
+            int horizontal_index = -1;
+            int vertical_index = -1;
+            const dsp_fov::Vector3f sensor = dsp_fov::worldToSensor(
+                    {x, y, z}, sensor_rotation_quaternion[0],
+                    sensor_rotation_quaternion[1], sensor_rotation_quaternion[2],
+                    sensor_rotation_quaternion[3]);
+            dsp_fov::fullLidarIndex(sensor, angle_resolution, 90,
+                                    horizontal_index, vertical_index);
+            return horizontal_index;
+        }
         float last_dot_multiply = 1.f; // for horizontal direction, if the point is inside of Pyramids Area. The symbol of the first dot multiplication should be positive
-        for(int i=0; i< observation_pyramid_num_h; i++){
+        for(int i=0; i< camera_observation_pyramid_num_h; i++){
             float this_dot_multiply = vectorMultiply(x, y, z, pyramid_BPnorm_params_h[i+1][0], pyramid_BPnorm_params_h[i+1][1], pyramid_BPnorm_params_h[i+1][2]);
             if(last_dot_multiply * this_dot_multiply <= 0.f){
                 return i;
@@ -1507,8 +1540,19 @@ private:
     }
 
     int findPointPyramidVerticalIndex(float &x, float &y, float &z){  /// The point should already be inside of Pyramids Area
+        if(full_360_lidar_fov) {
+            int horizontal_index = -1;
+            int vertical_index = -1;
+            const dsp_fov::Vector3f sensor = dsp_fov::worldToSensor(
+                    {x, y, z}, sensor_rotation_quaternion[0],
+                    sensor_rotation_quaternion[1], sensor_rotation_quaternion[2],
+                    sensor_rotation_quaternion[3]);
+            dsp_fov::fullLidarIndex(sensor, angle_resolution, 90,
+                                    horizontal_index, vertical_index);
+            return vertical_index;
+        }
         float last_dot_multiply = -1.f; // for vertical direction, if the point is inside of Pyramids Area. The symbol of the first dot multiplication should be negative
-        for(int j=0; j< observation_pyramid_num_v; j++){
+        for(int j=0; j< camera_observation_pyramid_num_v; j++){
             float this_dot_multiply = vectorMultiply(x, y, z, pyramid_BPnorm_params_v[j+1][0], pyramid_BPnorm_params_v[j+1][1], pyramid_BPnorm_params_v[j+1][2]);
             if(last_dot_multiply * this_dot_multiply <= 0.f){
                 return j;
@@ -1575,10 +1619,22 @@ private:
                 ClusterFeature cluster_this;
                 cluster_this.intensity = generateRandomFloat(0.1f, 1.f); //For visualization
 
+                float cluster_min_x = 1.0e6f, cluster_max_x = -1.0e6f;
+                float cluster_min_y = 1.0e6f, cluster_max_y = -1.0e6f;
+                float cluster_min_z = 1.0e6f, cluster_max_z = -1.0e6f;
                 for (int indice : cluster_indice.indices){
-                    cluster_this.center_x += (*non_ground_points)[indice].x; //sum
-                    cluster_this.center_y += (*non_ground_points)[indice].y;
-                    cluster_this.center_z += (*non_ground_points)[indice].z;
+                    const float px = (*non_ground_points)[indice].x;
+                    const float py = (*non_ground_points)[indice].y;
+                    const float pz = (*non_ground_points)[indice].z;
+                    cluster_this.center_x += px; //sum
+                    cluster_this.center_y += py;
+                    cluster_this.center_z += pz;
+                    if (px < cluster_min_x) cluster_min_x = px;
+                    if (px > cluster_max_x) cluster_max_x = px;
+                    if (py < cluster_min_y) cluster_min_y = py;
+                    if (py > cluster_max_y) cluster_max_y = py;
+                    if (pz < cluster_min_z) cluster_min_z = pz;
+                    if (pz > cluster_max_z) cluster_max_z = pz;
                     ++ cluster_this.point_num;
                 }
 
@@ -1586,8 +1642,52 @@ private:
                 cluster_this.center_x /= (float)cluster_this.point_num;
                 cluster_this.center_y /= (float)cluster_this.point_num;
                 cluster_this.center_z /= (float)cluster_this.point_num;
+                const float cluster_span_xy = hypotf(cluster_max_x - cluster_min_x, cluster_max_y - cluster_min_y);
 
-                if(cluster_indice.indices.size() > DYNAMIC_CLUSTER_MAX_POINT_NUM || cluster_this.center_z > DYNAMIC_CLUSTER_MAX_CENTER_HEIGHT){
+                const bool too_many_points =
+                        cluster_indice.indices.size() > DYNAMIC_CLUSTER_MAX_POINT_NUM;
+                const bool center_too_high =
+                        cluster_this.center_z > DYNAMIC_CLUSTER_MAX_CENTER_HEIGHT;
+                const bool geometry_within_limits =
+                        dsp_fov::clusterGeometryWithinLimits(
+                                cluster_max_z, cluster_span_xy,
+                                voxel_filtered_resolution,
+                                full_360_lidar_fov_enabled);
+                const float maximum_cluster_z = 2.60f +
+                        (full_360_lidar_fov_enabled
+                                 ? voxel_filtered_resolution
+                                 : 0.0f);
+                const float maximum_cluster_span_xy = 1.15f +
+                        (full_360_lidar_fov_enabled
+                                 ? std::sqrt(2.0f) * voxel_filtered_resolution
+                                 : 0.0f);
+                const bool top_too_high = cluster_max_z > maximum_cluster_z;
+                const bool span_too_wide =
+                        cluster_span_xy > maximum_cluster_span_xy;
+
+                if(cluster_diagnostics_enabled) {
+                    std::ostringstream diagnostic;
+                    diagnostic << std::setprecision(17)
+                               << "DSP_CLUSTER_GATE stamp="
+                               << current_observation_timestamp
+                               << " points=" << cluster_this.point_num
+                               << " center=" << cluster_this.center_x << ","
+                               << cluster_this.center_y << "," << cluster_this.center_z
+                               << " max_z=" << cluster_max_z
+                               << " span_xy=" << cluster_span_xy
+                               << " static_reason=";
+                    if(!(too_many_points || center_too_high || !geometry_within_limits)) {
+                        diagnostic << "none";
+                    } else {
+                        if(too_many_points) diagnostic << "point_count,";
+                        if(center_too_high) diagnostic << "center_z,";
+                        if(top_too_high) diagnostic << "max_z,";
+                        if(span_too_wide) diagnostic << "span_xy,";
+                    }
+                    cout << diagnostic.str() << endl;
+                }
+
+                if(too_many_points || center_too_high || !geometry_within_limits){
                     // Static
                     for (int indice : cluster_indice.indices){
                         static_points->push_back((*non_ground_points)[indice]);
@@ -1602,7 +1702,8 @@ private:
 
             static float distance_gate = 1.5f;
             static int point_num_gate = 100;
-            static float maximum_velocity = 5.f;
+            static float minimum_velocity = 0.15f;
+            static float maximum_velocity = 1.2f;
 
             /// Move last feature vector d and match by KM algorithm
             if(!clusters_feature_vector_dynamic_last.empty() && !clusters_feature_vector_dynamic.empty()){
@@ -1630,27 +1731,69 @@ private:
 
                     for(int row=0; row < clusters_feature_vector_dynamic.size(); ++row)
                     {
+                        bool matched_valid_motion = false;
                         for(int col=0; col < clusters_feature_vector_dynamic_last.size(); ++col)
                         {
                             if(matrix_cost(row, col) == 0.f && matrix_gate(row, col) > 0.01f){ // Found a match
                                 clusters_feature_vector_dynamic[row].match_cluster_seq = col;
-                                clusters_feature_vector_dynamic[row].vx = (clusters_feature_vector_dynamic[row].center_x - clusters_feature_vector_dynamic_last[col].center_x) / delt_t_from_last_observation;
-                                clusters_feature_vector_dynamic[row].vy = (clusters_feature_vector_dynamic[row].center_y - clusters_feature_vector_dynamic_last[col].center_y) / delt_t_from_last_observation;
-                                clusters_feature_vector_dynamic[row].vz = (clusters_feature_vector_dynamic[row].center_z - clusters_feature_vector_dynamic_last[col].center_z) / delt_t_from_last_observation;
-//                        cout << "v=("<<clusters_feature_vector_dynamic[row].vx<<", " << clusters_feature_vector_dynamic[row].vy <<", "<<clusters_feature_vector_dynamic[row].vz << ")" << endl;
-                                clusters_feature_vector_dynamic[row].v = sqrtf(clusters_feature_vector_dynamic[row].vx * clusters_feature_vector_dynamic[row].vx + clusters_feature_vector_dynamic[row].vy * clusters_feature_vector_dynamic[row].vy + clusters_feature_vector_dynamic[row].vz * clusters_feature_vector_dynamic[row].vz);
-                                clusters_feature_vector_dynamic[row].intensity = clusters_feature_vector_dynamic_last[col].intensity; //for visualization
-
-                                if(clusters_feature_vector_dynamic[row].v > maximum_velocity){
-                                    clusters_feature_vector_dynamic[row].v = 0.f;
-                                    clusters_feature_vector_dynamic[row].vx = clusters_feature_vector_dynamic[row].vy = clusters_feature_vector_dynamic[row].vz = 0.f;
+                                float raw_vx = (clusters_feature_vector_dynamic[row].center_x - clusters_feature_vector_dynamic_last[col].center_x) / delt_t_from_last_observation;
+                                float raw_vy = (clusters_feature_vector_dynamic[row].center_y - clusters_feature_vector_dynamic_last[col].center_y) / delt_t_from_last_observation;
+                                if (clusters_feature_vector_dynamic_last[col].v >= minimum_velocity &&
+                                    clusters_feature_vector_dynamic_last[col].v <= maximum_velocity) {
+                                    raw_vx = 0.5f * clusters_feature_vector_dynamic_last[col].vx + 0.5f * raw_vx;
+                                    raw_vy = 0.5f * clusters_feature_vector_dynamic_last[col].vy + 0.5f * raw_vy;
                                 }
-
+                                const float speed_xy = hypotf(raw_vx, raw_vy);
+                                if(cluster_diagnostics_enabled) {
+                                    std::ostringstream diagnostic;
+                                    diagnostic << std::setprecision(17)
+                                               << "DSP_CLUSTER_MATCH stamp="
+                                               << current_observation_timestamp
+                                               << " row=" << row << " center="
+                                               << clusters_feature_vector_dynamic[row].center_x
+                                               << ","
+                                               << clusters_feature_vector_dynamic[row].center_y
+                                               << ","
+                                               << clusters_feature_vector_dynamic[row].center_z
+                                               << " matched_id="
+                                               << clusters_feature_vector_dynamic_last[col].obstacle_id
+                                               << " vx=" << raw_vx << " vy=" << raw_vy
+                                               << " speed=" << speed_xy
+                                               << " accepted="
+                                               << (speed_xy >= minimum_velocity &&
+                                                   speed_xy <= maximum_velocity);
+                                    cout << diagnostic.str() << endl;
+                                }
+                                if (speed_xy >= minimum_velocity && speed_xy <= maximum_velocity) {
+                                    clusters_feature_vector_dynamic[row].vx = raw_vx;
+                                    clusters_feature_vector_dynamic[row].vy = raw_vy;
+                                    clusters_feature_vector_dynamic[row].vz = 0.f;
+                                    clusters_feature_vector_dynamic[row].v = speed_xy;
+                                    clusters_feature_vector_dynamic[row].intensity =
+                                        clusters_feature_vector_dynamic_last[col].intensity > 0.01f
+                                            ? clusters_feature_vector_dynamic_last[col].intensity
+                                            : generateRandomFloat(0.2f, 1.f);
+                                    matched_valid_motion = true;
+                                }
                                 break;
                             }
-                            /// If no match is found. The cluster velocity is given by struct initialization (v=-1000).
+                        }
+                        if (!matched_valid_motion) {
+                            clusters_feature_vector_dynamic[row].vx = 0.f;
+                            clusters_feature_vector_dynamic[row].vy = 0.f;
+                            clusters_feature_vector_dynamic[row].vz = 0.f;
+                            clusters_feature_vector_dynamic[row].v = 0.f;
+                            clusters_feature_vector_dynamic[row].intensity = 0.f;
                         }
                     }
+                } else {
+                    for(auto &cluster : clusters_feature_vector_dynamic) {
+                        cluster.vx = cluster.vy = cluster.vz = cluster.v = cluster.intensity = 0.f;
+                    }
+                }
+            } else {
+                for(auto &cluster : clusters_feature_vector_dynamic) {
+                    cluster.vx = cluster.vy = cluster.vz = cluster.v = cluster.intensity = 0.f;
                 }
             }
 
@@ -1669,18 +1812,20 @@ private:
             int cluster_dynamic_vector_seq = 0;
             for(const auto & cluster_indice : cluster_indices) {
                 if(cluster_possibly_dynamic[cluster_indice_seq]){
-                    for (int indice : cluster_indice.indices) {
-                        pcl::PointXYZINormal p;
-                        p.x = (*non_ground_points)[indice].x;
-                        p.y = (*non_ground_points)[indice].y;
-                        p.z = (*non_ground_points)[indice].z;
-                        p.normal_x = clusters_feature_vector_dynamic[cluster_dynamic_vector_seq].vx;  // Use color to store velocity
-                        p.normal_y = clusters_feature_vector_dynamic[cluster_dynamic_vector_seq].vy;
-                        p.normal_z = clusters_feature_vector_dynamic[cluster_dynamic_vector_seq].vz;
-                        p.intensity = clusters_feature_vector_dynamic[cluster_dynamic_vector_seq].intensity; // For visualization. // clusters_feature_vector_dynamic[cluster_indice_seq].v / maximum_velocity;
-                        input_cloud_with_velocity->push_back(p);
-                        input_cloud_with_velocity_obstacle_ids.push_back(
-                                clusters_feature_vector_dynamic[cluster_dynamic_vector_seq].obstacle_id);
+                    if (clusters_feature_vector_dynamic[cluster_dynamic_vector_seq].match_cluster_seq >= 0) {
+                        for (int indice : cluster_indice.indices) {
+                            pcl::PointXYZINormal p;
+                            p.x = (*non_ground_points)[indice].x;
+                            p.y = (*non_ground_points)[indice].y;
+                            p.z = (*non_ground_points)[indice].z;
+                            p.normal_x = clusters_feature_vector_dynamic[cluster_dynamic_vector_seq].vx;  // Use color to store velocity
+                            p.normal_y = clusters_feature_vector_dynamic[cluster_dynamic_vector_seq].vy;
+                            p.normal_z = clusters_feature_vector_dynamic[cluster_dynamic_vector_seq].vz;
+                            p.intensity = clusters_feature_vector_dynamic[cluster_dynamic_vector_seq].intensity; // For visualization. // clusters_feature_vector_dynamic[cluster_indice_seq].v / maximum_velocity;
+                            input_cloud_with_velocity->push_back(p);
+                            input_cloud_with_velocity_obstacle_ids.push_back(
+                                    clusters_feature_vector_dynamic[cluster_dynamic_vector_seq].obstacle_id);
+                        }
                     }
                     ++ cluster_dynamic_vector_seq;
                 }

@@ -1,15 +1,18 @@
 # Dedicated perception-driven MPC scene.
 #
-# The static obstacles are supplied separately by A2_three_cylinders_l_wall.pcd.
-# This file defines exactly two deterministic moving boxes for the MARSIM LiDAR
-# renderer.  Box 0 reaches the UAV's nominal second-lap bottom point; box 1
-# reaches the nominal left-side point during the first lap.  Both remain 1.5 m
-# from the UGV centerline at their designed encounter points.
+# The static obstacles are supplied separately by A2_three_square_prisms_l_wall.pcd.
+# This file defines two deterministic moving boxes for the MARSIM LiDAR
+# renderer aligned with the R_ugv = 7.0 m (R_uav = 5.5 m, T_lap = 44.0 s,
+# startup_delay = 3.0 s) circular orbit:
+#   - Box 0 intercepts the UAV head-on in the bottom-right quadrant at
+#     (4.05, -3.72, 2.0) around t_wall = 8.8 s (t_sim = 5.8 s).
+#   - Box 1 laterally crosses the UAV's left-side orbit point at
+#     (-5.50, 0.00, 2.0) around t_wall = 25.0 s (t_sim = 22.0 s).
 dynamic:
   count: 2
-  initial: [[0.0, 8.63, 1.5], [-8.7, 0.0, 1.5]]
-  size: [[0.8, 0.6, 1.2], [0.8, 0.6, 1.2]]
-  velocity: [[0.0, -0.8, 0.0], [0.23, 0.0, 0.0]]
-  initial_flat: [0.0, 8.63, 1.5, -8.7, 0.0, 1.5]
-  size_flat: [0.8, 0.6, 1.2, 0.8, 0.6, 1.2]
-  velocity_flat: [0.0, -0.8, 0.0, 0.23, 0.0, 0.0]
+  initial: [[4.35, 1.56, 1.25], [-5.80, -21.60, 1.25]]
+  size: [[0.8, 0.6, 2.5], [0.8, 0.6, 2.5]]
+  velocity: [[0.0, -0.60, 0.0], [0.0, 0.60, 0.0]]
+  initial_flat: [4.35, 1.56, 1.25, -5.80, -21.60, 1.25]
+  size_flat: [0.8, 0.6, 2.5, 0.8, 0.6, 2.5]
+  velocity_flat: [0.0, -0.60, 0.0, 0.0, 0.60, 0.0]

@@ -29,10 +29,10 @@
 #define CONI_MPC_NUM_SIM_MPC_H
 
 #include "coni_mpc/mpc_base.h"
-#include "coni_mpc/RiskRegionArray.h"
 #include "coni_mpc/field_hocbf.h"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
@@ -68,12 +68,38 @@ class NumSimMpc final : public MpcBase
       Eigen::aligned_allocator<Obstacle>>;
   using ObstacleProfile = acado_mpc::MpcWrapper<double>::ObstacleProfile;
   using ObstacleProfileVector = acado_mpc::MpcWrapper<double>::ObstacleProfileVector;
-  using RiskRegion = acado_mpc::MpcWrapper<double>::RiskRegion;
-  using RiskRegionVector = acado_mpc::MpcWrapper<double>::RiskRegionVector;
-  using RiskRegionProfile = acado_mpc::MpcWrapper<double>::RiskRegionProfile;
-  using RiskRegionProfileVector = acado_mpc::MpcWrapper<double>::RiskRegionProfileVector;
   using NonInertialProfile = Eigen::Matrix<double, 3, acado_mpc::kSamples + 1>;
   using FieldHocbfProfile = acado_mpc::MpcWrapper<double>::FieldHocbfProfile;
+
+  struct FieldHocbfStageDebug {
+    bool valid = false;
+    bool active = false;
+    double h = std::numeric_limits<double>::quiet_NaN();
+    double hdot = std::numeric_limits<double>::quiet_NaN();
+    double lf2 = std::numeric_limits<double>::quiet_NaN();
+    double d_min = std::numeric_limits<double>::quiet_NaN();
+    double d_softmin = std::numeric_limits<double>::quiet_NaN();
+    double b = std::numeric_limits<double>::quiet_NaN();
+    double profile_b = std::numeric_limits<double>::quiet_NaN();
+    double residual = std::numeric_limits<double>::quiet_NaN();
+    double slack = std::numeric_limits<double>::quiet_NaN();
+    double max_occupancy = std::numeric_limits<double>::quiet_NaN();
+    std::size_t candidate_count = 0;
+    std::size_t eligible_count = 0;
+    std::size_t selected_count = 0;
+    std::string selected_source_ids;
+    Eigen::Vector3d selected_relative_velocity_mean =
+        Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN());
+    double selected_relative_speed_max =
+        std::numeric_limits<double>::quiet_NaN();
+    Eigen::Vector3d A = Eigen::Vector3d::Zero();
+    Eigen::Vector3d nominal_position = Eigen::Vector3d::Zero();
+    Eigen::Vector3d nominal_velocity = Eigen::Vector3d::Zero();
+    Eigen::Vector3d mpc_predicted_position = Eigen::Vector3d::Zero();
+    Eigen::Vector3d mpc_predicted_velocity = Eigen::Vector3d::Zero();
+  };
+  using FieldHocbfDebugProfile =
+      std::array<FieldHocbfStageDebug, acado_mpc::kSamples + 1>;
 
   struct MetricsSummary {
     double min_h;
@@ -187,6 +213,10 @@ class NumSimMpc final : public MpcBase
     double solver_planar_clearance = std::numeric_limits<double>::quiet_NaN();
     double solver_planar_surface_distance =
         std::numeric_limits<double>::quiet_NaN();
+    double predicted_obstacle_min_distance =
+        std::numeric_limits<double>::quiet_NaN();
+    double predicted_obstacle_min_clearance =
+        std::numeric_limits<double>::quiet_NaN();
     double feedback_time_ms = std::numeric_limits<double>::quiet_NaN();
     double preparation_time_ms = std::numeric_limits<double>::quiet_NaN();
     double core_time_ms = std::numeric_limits<double>::quiet_NaN();
@@ -204,6 +234,12 @@ class NumSimMpc final : public MpcBase
     Eigen::Vector3d car_omega_world = Eigen::Vector3d::Zero();
     Eigen::Vector3d position = Eigen::Vector3d::Zero();
     Eigen::Vector3d velocity = Eigen::Vector3d::Zero();
+    Eigen::Vector3d nominal_position = Eigen::Vector3d::Zero();
+    Eigen::Vector3d nominal_velocity = Eigen::Vector3d::Zero();
+    Eigen::Vector3d mpc_predicted_position = Eigen::Vector3d::Zero();
+    Eigen::Vector3d mpc_predicted_velocity = Eigen::Vector3d::Zero();
+    bool nominal_valid = false;
+    bool mpc_prediction_valid = false;
     Eigen::Vector3d rot_load_position_non = Eigen::Vector3d::Zero();
     Eigen::Vector3d rot_load_velocity_non = Eigen::Vector3d::Zero();
     Eigen::Vector3d rot_load_omega_non = Eigen::Vector3d::Zero();
@@ -259,7 +295,6 @@ class NumSimMpc final : public MpcBase
   }
   void setCarOdom(const nav_msgs::Odometry &car_odom);
   void setQuadOdom(const nav_msgs::Odometry &quad_odom, int i);
-  void riskRegionCallback(const coni_mpc::RiskRegionArray::ConstPtr& message);
   void fieldOccupancyCallback(const sensor_msgs::PointCloud2::ConstPtr& message);
   static void setSharedQuadOdom(const nav_msgs::Odometry &quad_odom, int i);
   Eigen::Vector3d getCarPosition() const {
@@ -308,6 +343,9 @@ class NumSimMpc final : public MpcBase
     return metrics_preparation_time_ms_;
   }
   StepDebugSnapshot getLastStepDebugSnapshot() const { return prev_step_debug_; }
+  const FieldHocbfDebugProfile& getLastFieldHocbfDebugProfile() const {
+    return last_field_hocbf_debug_profile_;
+  }
 
   static void getSharedPositions(std::vector<Eigen::Vector3d>& positions,
                                  std::vector<Eigen::Vector3d>& velocities,
@@ -357,16 +395,6 @@ class NumSimMpc final : public MpcBase
   nav_msgs::Path car_path_;
   nav_msgs::Path quad_path_;
   ros::Publisher quad_radius_marker_pub_;
-  ros::Subscriber risk_region_subscriber_;
-  std::mutex risk_region_mutex_;
-  coni_mpc::RiskRegionArray latest_risk_regions_;
-  bool has_latest_risk_regions_ = false;
-  bool risk_regions_enabled_ = false;
-  // The DSP/risk-region constructor publishes a complete 21-stage horizon
-  // less frequently than the MPC loop.  Keep the last complete horizon for
-  // a bounded processing gap instead of disabling all barriers at 0.5 s;
-  // the profile is shifted by its measured message age before use.
-  double risk_regions_timeout_ = 4.0;
   struct FieldSnapshot {
     ros::Time stamp;
     std::string frame_id;
@@ -377,10 +405,7 @@ class NumSimMpc final : public MpcBase
   std::mutex field_snapshot_mutex_;
   std::shared_ptr<const FieldSnapshot> field_snapshot_;
   bool field_hocbf_enabled_ = false;
-  // Keep timestamp/stage compensation configurable so the same run can be
-  // compared with and without delay alignment. Enabled by default to retain
-  // the current behavior.
-  bool risk_region_time_alignment_ = true;
+  field_hocbf::Config field_hocbf_config_;
   double car_radius_;
   double uav_radius_;
   ObstacleVector last_obstacles_;
@@ -473,6 +498,7 @@ class NumSimMpc final : public MpcBase
   std::vector<Eigen::Vector3d> last_predicted_world_positions_;
   bool has_last_predicted_world_positions_;
   StepDebugSnapshot prev_step_debug_;
+  FieldHocbfDebugProfile last_field_hocbf_debug_profile_{};
 
   void genRelativeEstimate();
   void buildNonInertialDataProfile(NonInertialProfile& omega_non_profile,

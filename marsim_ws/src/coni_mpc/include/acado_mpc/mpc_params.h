@@ -70,8 +70,6 @@ class MpcParams {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   using ObstacleVector = typename MpcWrapper<T>::ObstacleVector;
   using ObstacleProfileVector = typename MpcWrapper<T>::ObstacleProfileVector;
-  using RiskRegionVector = typename MpcWrapper<T>::RiskRegionVector;
-  using RiskRegionProfileVector = typename MpcWrapper<T>::RiskRegionProfileVector;
   using FieldHocbfProfile = typename MpcWrapper<T>::FieldHocbfProfile;
   
   MpcParams() :
@@ -83,6 +81,10 @@ class MpcParams {
     max_v_xy_(0.0),
     max_v_z_(0.0),
     max_yaw_rate_(0.0),
+    a_max_xy_(0.0),
+    a_max_z_(0.0),
+    tau_v_xy_(0.0),
+    tau_v_z_(0.0),
     cbf_enabled_(false),
     cbf_alpha1_(1.0),
     cbf_alpha2_(1.0),
@@ -95,9 +97,6 @@ class MpcParams {
     R_(Eigen::Matrix<T, kInputSize, kInputSize>::Zero()),
     cbf_obstacles_(),
     cbf_obstacle_profiles_(),
-    cbf_risk_regions_(),
-    cbf_risk_region_profiles_(),
-    cbf_use_risk_regions_(false),
     cbf_use_field_hocbf_(false),
     cbf_field_hocbf_profile_(FieldHocbfProfile::Zero())
   {
@@ -186,13 +185,30 @@ class MpcParams {
     GET_PARAM_(max_v_xy);
     GET_PARAM_(max_v_z);
     acado_mpc_common::getParam("max_yaw_rate", max_yaw_rate_, (T)1.5, pnh);
+    GET_PARAM_(a_max_xy);
+    GET_PARAM_(a_max_z);
+    GET_PARAM_(tau_v_xy);
+    GET_PARAM_(tau_v_z);
 
-    // Check whether all input limits are positive.
-    if(max_v_xy_ <= 0.0 ||
-       max_v_z_  <= 0.0 ||
-       max_yaw_rate_ <= 0.0)
+    // Command limits, acceleration limits, and tracking time constants must
+    // all be finite and strictly positive before they reach ACADO.
+    if (!(max_v_xy_ > static_cast<T>(0.0)) ||
+        !(max_v_z_ > static_cast<T>(0.0)) ||
+        !(max_yaw_rate_ > static_cast<T>(0.0)) ||
+        !(a_max_xy_ > static_cast<T>(0.0)) ||
+        !(a_max_z_ > static_cast<T>(0.0)) ||
+        !(tau_v_xy_ > static_cast<T>(0.0)) ||
+        !(tau_v_z_ > static_cast<T>(0.0)) ||
+        !std::isfinite(static_cast<double>(max_v_xy_)) ||
+        !std::isfinite(static_cast<double>(max_v_z_)) ||
+        !std::isfinite(static_cast<double>(max_yaw_rate_)) ||
+        !std::isfinite(static_cast<double>(a_max_xy_)) ||
+        !std::isfinite(static_cast<double>(a_max_z_)) ||
+        !std::isfinite(static_cast<double>(tau_v_xy_)) ||
+        !std::isfinite(static_cast<double>(tau_v_z_)))
     {
-      ROS_ERROR("MPC: All limits must be positive non-zero values!");
+      ROS_ERROR("MPC: Command/acceleration limits and velocity tracking "
+                "constants must be finite positive values!");
       return false;
     }
 
@@ -209,42 +225,9 @@ class MpcParams {
     acado_mpc_common::getParam("cbf/enabled", cbf_enabled_, false, pnh);
     acado_mpc_common::getParam("cbf/use_field_hocbf", cbf_use_field_hocbf_,
                                false, pnh);
-    const bool has_alpha1 = pnh.hasParam("cbf/alpha1");
-    const bool has_alpha2 = pnh.hasParam("cbf/alpha2");
-    if (has_alpha1) {
-      acado_mpc_common::getParam("cbf/alpha1", cbf_alpha1_, (T)1.0, pnh);
-    }
-    if (has_alpha2) {
-      acado_mpc_common::getParam("cbf/alpha2", cbf_alpha2_, (T)1.0, pnh);
-    }
-    if (!has_alpha1 && !has_alpha2) {
-      const bool has_alpha_hdot = pnh.hasParam("cbf/alpha_hdot");
-      const bool has_alpha_h = pnh.hasParam("cbf/alpha_h");
-      const bool has_alpha = pnh.hasParam("cbf/alpha");
-      if (has_alpha_hdot) {
-        acado_mpc_common::getParam("cbf/alpha_hdot", cbf_alpha1_, (T)1.0, pnh);
-      }
-      if (has_alpha_h) {
-        acado_mpc_common::getParam("cbf/alpha_h", cbf_alpha2_, (T)1.0, pnh);
-      }
-      if (!has_alpha_hdot && has_alpha_h) {
-        cbf_alpha1_ = cbf_alpha2_;
-      } else if (has_alpha_hdot && !has_alpha_h) {
-        cbf_alpha2_ = cbf_alpha1_;
-      } else if (has_alpha) {
-        T legacy_alpha = static_cast<T>(1.0);
-        acado_mpc_common::getParam("cbf/alpha", legacy_alpha, (T)1.0, pnh);
-        cbf_alpha1_ = legacy_alpha;
-        cbf_alpha2_ = legacy_alpha;
-      }
-    } else {
-      if (!has_alpha1) {
-        cbf_alpha1_ = cbf_alpha2_;
-      }
-      if (!has_alpha2) {
-        cbf_alpha2_ = cbf_alpha1_;
-      }
-    }
+    // Read the two CBF poles independently from the node's YAML parameters.
+    acado_mpc_common::getParam("cbf/alpha1", cbf_alpha1_, (T)1.0, pnh);
+    acado_mpc_common::getParam("cbf/alpha2", cbf_alpha2_, (T)1.0, pnh);
     acado_mpc_common::getParam("cbf/safety_margin", cbf_safety_margin_, (T)0.0, pnh);
     acado_mpc_common::getParam("cbf/slack_max", cbf_slack_max_, std::numeric_limits<T>::infinity(), pnh);
     // Keep cbf_slack_max == 0 as hard-CBF (slack fixed to zero).
@@ -354,6 +337,10 @@ class MpcParams {
   T max_v_xy_;
   T max_v_z_;
   T max_yaw_rate_;
+  T a_max_xy_;
+  T a_max_z_;
+  T tau_v_xy_;
+  T tau_v_z_;
 
   bool cbf_enabled_;
   T cbf_alpha1_;
@@ -369,9 +356,6 @@ class MpcParams {
   Eigen::Matrix<T, kInputSize, kInputSize> R_;
   ObstacleVector cbf_obstacles_;
   ObstacleProfileVector cbf_obstacle_profiles_;
-  RiskRegionVector cbf_risk_regions_;
-  RiskRegionProfileVector cbf_risk_region_profiles_;
-  bool cbf_use_risk_regions_;
   bool cbf_use_field_hocbf_;
   FieldHocbfProfile cbf_field_hocbf_profile_;
 };

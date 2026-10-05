@@ -129,24 +129,24 @@ int main( ){
   OnlineData            ref_x, ref_y, trust_factor;
   // Frozen-nominal probabilistic field HOCBF affine row.
   OnlineData            field_Ax, field_Ay, field_Az, field_b, field_active;
+  // Appended runtime inverse time constants for first-order velocity tracking.
+  OnlineData            tau_v_xy_inv, tau_v_z_inv;
 
   // Parameters with exemplary values. These are set/overwritten at runtime.
   const double t_start = 0.0;     // Initial time [s]
   const double t_end = 2.0;       // Time horizon [s]
   const double dt = 0.1;          // Discretization time [s]
   const int N = round(t_end/dt);  // Number of nodes
-  const double v_xy_max = 3.0;    // Maximal commanded velocity in xy [m/s]
+  const double v_xy_max = 1.5;    // Maximal commanded velocity in xy [m/s]
   const double v_z_max = 1.0;     // Maximal commanded velocity in z  [m/s]
   const double yaw_rate_max = 3.14; // Maximal commanded yaw rate [rad/s]
   const double a_max_xy = 6.0;  // Physical acceleration limit XY [m/s^2]
   const double a_max_z = 4.0;   // Physical acceleration limit Z [m/s^2]
-  const double tau_v_xy = 0.2;  // Tracking constant XY [s]
-  const double tau_v_z = 0.2;   // Tracking constant Z [s]
 
   // First-order velocity tracking dynamics.
-  Expression acc_x = (v_cmd_x - v_x) / tau_v_xy;
-  Expression acc_y = (v_cmd_y - v_y) / tau_v_xy;
-  Expression acc_z = (v_cmd_z - v_z) / tau_v_z;
+  Expression acc_x = (v_cmd_x - v_x) * tau_v_xy_inv;
+  Expression acc_y = (v_cmd_y - v_y) * tau_v_xy_inv;
+  Expression acc_z = (v_cmd_z - v_z) * tau_v_z_inv;
 
   // Non-inertial compensation terms:
   // a_ni = -2 * (omega x v) - (beta x p) - omega x (omega x p) - a_car_non
@@ -415,18 +415,26 @@ int main( ){
       delta2);
 
   // Coefficients are assembled outside ACADO at the current nominal
-  // trajectory. Multiplication by field_active makes an empty/stale field a
-  // no-op while preserving one fixed generated path-constraint row.
+  // trajectory. Include state-feedback sensitivity (p, v) so future horizon
+  // stages propagate repulsive gradients backward to u_0 instead of causing
+  // control-only inverse pre-compensation.
+  Expression k_v_xy = (cbf_alpha1 + cbf_alpha2) / tau_v_xy_inv - 1.0;
+  Expression k_p_xy = (cbf_alpha1 * cbf_alpha2) / tau_v_xy_inv;
+  Expression k_v_z  = (cbf_alpha1 + cbf_alpha2) / tau_v_z_inv - 1.0;
+  Expression k_p_z  = (cbf_alpha1 * cbf_alpha2) / tau_v_z_inv;
   ocp.subjectTo(field_active *
-                (field_Ax * v_cmd_x + field_Ay * v_cmd_y +
-                 field_Az * v_cmd_z + delta0 - field_b) >= 0.0);
+                (field_Ax * (v_cmd_x + k_v_xy * v_x + k_p_xy * p_x) +
+                 field_Ay * (v_cmd_y + k_v_xy * v_y + k_p_xy * p_y) +
+                 field_Az * (v_cmd_z + k_v_z  * v_z + k_p_z  * p_z) +
+                 delta0 - field_b) >= 0.0);
 
   // Online data layout (ACADO_NOD):
   // Each region occupies 22 values: center(3), axes(3), Q row-major(9),
   // center velocity(3), center acceleration(3), active(1).
   // [66..67] alpha1/alpha2, [68..76] non-inertial data,
-  // [77..79] ref_x/ref_y/trust_factor, [80..84] field Ax/Ay/Az/b/active.
-  ocp.setNOD(85);
+  // [77..79] ref_x/ref_y/trust_factor, [80..84] field Ax/Ay/Az/b/active,
+  // [85..86] inverse XY/Z velocity-tracking time constants.
+  ocp.setNOD(87);
 
 
   if(!CODE_GEN)
@@ -476,9 +484,9 @@ int main( ){
     mpc.set(DISCRETIZATION_TYPE,    MULTIPLE_SHOOTING);   // good convergence
     mpc.set(SPARSE_QP_SOLUTION,     FULL_CONDENSING);     // more robust than FULL_CONDENSING_N2 for larger horizons
     mpc.set(INTEGRATOR_TYPE,        INT_IRK_GL4);         // accurate
-    // tau_v = 0.01 makes the velocity channel much stiffer than the original
-    // export. Use a finer integration grid per shooting interval so the RTI
-    // linearization stays numerically well-behaved on the longer horizon.
+    // Runtime tau_v can make the velocity channel stiff. Use a finer
+    // integration grid per shooting interval so the RTI linearization stays
+    // numerically well-behaved on the longer horizon.
     mpc.set(NUM_INTEGRATOR_STEPS,   4 * N);
     mpc.set(USE_SINGLE_PRECISION,   NO);                  // improve QP robustness
     mpc.set(QP_SOLVER,              QP_QPOASES3);         // embedded qpOASES variant is more robust for the longer horizon
