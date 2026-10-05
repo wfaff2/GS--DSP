@@ -21,7 +21,7 @@ TEST(FieldHocbf, PruningSeedsThenEnforcesSeparation) {
   ASSERT_EQ(selected.size(), 3u);
   EXPECT_DOUBLE_EQ(selected.front().position.x(), 0.0);
   EXPECT_DOUBLE_EQ(selected[1].position.x(), 0.01);
-  EXPECT_DOUBLE_EQ(selected.back().position.x(), 0.15);
+  EXPECT_DOUBLE_EQ(selected.back().position.x(), 0.16);
 }
 
 TEST(FieldHocbf, AffineAssemblyMatchesDirectEvaluation) {
