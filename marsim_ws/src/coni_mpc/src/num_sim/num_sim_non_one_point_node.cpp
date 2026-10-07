@@ -72,7 +72,7 @@ DEFINE_double(v, 0.0, "V value");
 DEFINE_double(w, 0.01, "W value");
 
 const double DEFAULT_START_Z = 2.0;
-const double DURATION = 125;
+const double DURATION = 50;
 int num_uavs=4;
 
 struct StaticObstacle {
@@ -144,6 +144,11 @@ class LidarCollisionMonitor {
   }
 
   double pointMargin() const { return point_margin_; }
+  double cloudStampSec() const { return last_cloud_stamp_.toSec(); }
+  double receiptAgeSec() const {
+    return has_cloud_ ? (ros::WallTime::now() - last_receipt_wall_).toSec()
+                      : std::numeric_limits<double>::quiet_NaN();
+  }
 
  private:
   void callback(const sensor_msgs::PointCloud2ConstPtr& message) {
@@ -187,6 +192,7 @@ class LidarCollisionMonitor {
       return;
     }
     kdtree_.setInputCloud(cloud_);
+    last_cloud_stamp_ = message->header.stamp;
     last_receipt_wall_ = ros::WallTime::now();
     has_cloud_ = true;
   }
@@ -202,6 +208,7 @@ class LidarCollisionMonitor {
       new pcl::PointCloud<pcl::PointXYZ>()};
   mutable pcl::KdTreeFLANN<pcl::PointXYZ> kdtree_;
   ros::WallTime last_receipt_wall_;
+  ros::Time last_cloud_stamp_;
 };
 
 struct RandomObstacleConfig {
@@ -5194,6 +5201,18 @@ int main(int argc, char **argv)
   if (field_hocbf_csv.empty()) {
     field_hocbf_csv = deriveFieldHocbfCsvPath(step_metrics_csv);
   }
+  bool field_replay_diagnostics = false;
+  pnh.param("cbf/field_replay_diagnostics", field_replay_diagnostics, false);
+  std::string field_replay_log;
+  pnh.param("field_replay_log", field_replay_log, std::string(""));
+  if (field_replay_diagnostics && field_replay_log.empty() &&
+      !field_hocbf_csv.empty()) {
+    field_replay_log = field_hocbf_csv + ".replay.bin";
+  }
+  if (field_replay_diagnostics && field_replay_log.empty()) {
+    ROS_ERROR("Field replay diagnostics requires metrics_csv or field_replay_log.");
+    return 1;
+  }
   std::string safety_variant;
   pnh.param("safety_variant", safety_variant, std::string("A2_soft_cbf"));
   bool exclude_uav0_from_simulation = true;
@@ -6252,6 +6271,25 @@ simulators.push_back(simulator);
       writeFieldHocbfHeader(field_hocbf_out);
     }
   }
+  std::vector<char> field_replay_buffer(1024 * 1024);
+  std::ofstream field_replay_out;
+  std::ofstream field_replay_timing_out;
+  if (field_replay_diagnostics) {
+    field_replay_out.rdbuf()->pubsetbuf(field_replay_buffer.data(),
+                                      field_replay_buffer.size());
+    field_replay_out.open(field_replay_log, std::ios::binary | std::ios::trunc);
+    field_replay_timing_out.open(field_replay_log + ".timing.csv",
+                                 std::ios::out | std::ios::trunc);
+    if (!field_replay_out.good() || !field_replay_timing_out.good()) {
+      ROS_ERROR_STREAM("Failed to open field replay diagnostics: " << field_replay_log);
+      return 1;
+    }
+    field_replay_timing_out << "uav_idx,step_idx,sim_time,write_ms,write_ok,"
+        "lidar_valid,lidar_stamp_sec,lidar_receipt_age_sec,"
+        "lidar_point_distance_m,lidar_sampled_clearance_m,"
+        "nearest_point_x,nearest_point_y,nearest_point_z\n";
+    ROS_INFO_STREAM("field_replay_log=" << field_replay_log);
+  }
   std::vector<std::size_t> step_row_counts(
       static_cast<std::size_t>(std::max(1, num_uavs)), 0);
   std::size_t ugv_horizon_row_count = 0;
@@ -6420,6 +6458,33 @@ simulators.push_back(simulator);
                   control_system_ptr[static_cast<size_t>(idx)]
                       ->getLastFieldHocbfDebugProfile());
             }
+            if (field_replay_diagnostics) {
+              const auto write_start = std::chrono::steady_clock::now();
+              const bool write_ok = control_system_ptr[static_cast<size_t>(idx)]
+                  ->writeFieldReplayDiagnostics(field_replay_out,
+                                               current_step_idx, sim_time);
+              const double write_ms = std::chrono::duration<double, std::milli>(
+                  std::chrono::steady_clock::now() - write_start).count();
+              double point_distance = std::numeric_limits<double>::quiet_NaN();
+              Eigen::Vector3d nearest = Eigen::Vector3d::Constant(
+                  std::numeric_limits<double>::quiet_NaN());
+              const bool lidar_valid = lidar_collision_monitor.nearestPoint(
+                  simulators[static_cast<size_t>(idx)]->getWorldPosition(),
+                  point_distance, nearest);
+              field_replay_timing_out << idx << ',' << current_step_idx << ','
+                  << std::setprecision(17) << sim_time << ',' << write_ms << ','
+                  << (write_ok ? 1 : 0) << ',' << (lidar_valid ? 1 : 0) << ','
+                  << lidar_collision_monitor.cloudStampSec() << ','
+                  << lidar_collision_monitor.receiptAgeSec() << ','
+                  << point_distance << ','
+                  << point_distance - uav_radius -
+                         lidar_collision_monitor.pointMargin() << ','
+                  << nearest.x() << ',' << nearest.y() << ',' << nearest.z()
+                  << '\n';
+              if (!write_ok || !field_replay_timing_out.good()) {
+                ROS_ERROR_THROTTLE(1.0, "Incomplete Field-HOCBF replay diagnostics.");
+              }
+            }
             step_row_counts[static_cast<size_t>(idx)] += 1;
           }
         }
@@ -6507,6 +6572,13 @@ simulators.push_back(simulator);
     }
   }
 
+  if (field_replay_diagnostics) {
+    field_replay_out.flush();
+    field_replay_timing_out.flush();
+    if (!field_replay_out.good() || !field_replay_timing_out.good()) {
+      ROS_ERROR("Field replay diagnostics failed to flush completely.");
+    }
+  }
   if (scheduler_cycle_count > 0) {
     ROS_INFO_STREAM("MPC scheduler summary: cycles=" << scheduler_cycle_count
                     << " mean_cycle_ms="

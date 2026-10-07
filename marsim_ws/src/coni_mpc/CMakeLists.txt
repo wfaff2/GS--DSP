@@ -239,6 +239,11 @@ target_link_libraries(polytopic_vo_hrvo_smoke_test
         PolytopicVoHrvoFilter
         Eigen3::Eigen)
 
+add_executable(field_replay_tool test/field_replay_tool.cpp)
+target_link_libraries(field_replay_tool Eigen3::Eigen)
+add_executable(field_replay_event_tool test/field_replay_event_tool.cpp)
+target_link_libraries(field_replay_event_tool Eigen3::Eigen)
+
 if(CATKIN_ENABLE_TESTING)
         add_test(NAME polytopic_vo_hrvo_smoke_test
                  COMMAND polytopic_vo_hrvo_smoke_test)
@@ -261,7 +266,15 @@ if(CATKIN_ENABLE_TESTING)
                         Eigen3::Eigen)
         endif()
         catkin_add_gtest(field_hocbf_test test/field_hocbf_test.cpp)
+        catkin_add_gtest(voxel_online_data_pool_test test/voxel_online_data_pool_test.cpp)
+        if(TARGET voxel_online_data_pool_test)
+                target_link_libraries(voxel_online_data_pool_test gtest_main Eigen3::Eigen)
+        endif()
         if(TARGET field_hocbf_test)
                 target_link_libraries(field_hocbf_test gtest_main Eigen3::Eigen)
+        endif()
+        catkin_add_gtest(field_replay_diagnostics_test test/field_replay_diagnostics_test.cpp)
+        if(TARGET field_replay_diagnostics_test)
+                target_link_libraries(field_replay_diagnostics_test gtest_main Eigen3::Eigen)
         endif()
 endif()

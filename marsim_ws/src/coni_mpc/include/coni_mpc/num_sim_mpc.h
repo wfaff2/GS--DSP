@@ -30,6 +30,8 @@
 
 #include "coni_mpc/mpc_base.h"
 #include "coni_mpc/field_hocbf.h"
+#include "coni_mpc/voxel_online_data_pool.h"
+#include "coni_mpc/field_replay_diagnostics.h"
 
 #include <algorithm>
 #include <array>
@@ -38,6 +40,7 @@
 #include <mutex>
 #include <random>
 #include <memory>
+#include <ostream>
 #include <string>
 #include <vector>
 #include <nav_msgs/Odometry.h>
@@ -296,6 +299,11 @@ class NumSimMpc final : public MpcBase
   void setCarOdom(const nav_msgs::Odometry &car_odom);
   void setQuadOdom(const nav_msgs::Odometry &quad_odom, int i);
   void fieldOccupancyCallback(const sensor_msgs::PointCloud2::ConstPtr& message);
+  // Input positions and pos must be expressed in the same solver frame.
+  // Pass a single prediction slice; do not mix DSP stage_index values.
+  std::vector<double> buildVoxelOnlineData(
+      const Eigen::Vector3d& pos,
+      const field_hocbf::KinematicPoints& raw_voxels) const;
   static void setSharedQuadOdom(const nav_msgs::Odometry &quad_odom, int i);
   Eigen::Vector3d getCarPosition() const {
     return Eigen::Vector3d(car_odom_.pose.pose.position.x,
@@ -346,6 +354,10 @@ class NumSimMpc final : public MpcBase
   const FieldHocbfDebugProfile& getLastFieldHocbfDebugProfile() const {
     return last_field_hocbf_debug_profile_;
   }
+  // Appends the raw snapshot once and one final-applied cycle record. The
+  // caller owns and serializes access to the shared stream.
+  bool writeFieldReplayDiagnostics(std::ostream& out, std::size_t step_idx,
+                                   double sim_time);
 
   static void getSharedPositions(std::vector<Eigen::Vector3d>& positions,
                                  std::vector<Eigen::Vector3d>& velocities,
@@ -396,6 +408,7 @@ class NumSimMpc final : public MpcBase
   nav_msgs::Path quad_path_;
   ros::Publisher quad_radius_marker_pub_;
   struct FieldSnapshot {
+    std::uint64_t snapshot_id = 0;
     ros::Time stamp;
     std::string frame_id;
     field_hocbf::Points points;
@@ -404,8 +417,16 @@ class NumSimMpc final : public MpcBase
   ros::Subscriber field_occupancy_subscriber_;
   std::mutex field_snapshot_mutex_;
   std::shared_ptr<const FieldSnapshot> field_snapshot_;
+  std::uint64_t field_snapshot_counter_ = 0;
+  std::uint64_t last_written_field_snapshot_id_ =
+      std::numeric_limits<std::uint64_t>::max();
+  bool field_replay_diagnostics_enabled_ = false;
+  std::shared_ptr<const FieldSnapshot> last_field_replay_snapshot_;
+  field_replay::CycleRecord last_field_replay_cycle_;
+  bool last_field_replay_cycle_valid_ = false;
   bool field_hocbf_enabled_ = false;
   field_hocbf::Config field_hocbf_config_;
+  std::unique_ptr<VoxelOnlineDataPool> voxel_online_data_pool_;
   double car_radius_;
   double uav_radius_;
   ObstacleVector last_obstacles_;

@@ -27,6 +27,7 @@
   <arg name="cbf_enabled" default=""></arg>
   <arg name="cbf_use_in_sim" default=""></arg>
   <arg name="cbf_use_field_hocbf" default="true"></arg>
+  <arg name="field_replay_diagnostics" default="false"></arg>
   <arg name="cbf_field_topic" default="/my_map/future_occupancy_3d"></arg>
   <arg name="cbf_slack_max" default=""></arg>
   <arg name="cbf_r_slack" default=""></arg>
@@ -124,6 +125,7 @@
              name="cbf/use_in_sim"
              value="$(arg cbf_use_in_sim)" />
       <param name="cbf/use_field_hocbf" value="$(arg cbf_use_field_hocbf)" />
+      <param name="cbf/field_replay_diagnostics" value="$(arg field_replay_diagnostics)" />
       <param name="cbf/field_topic" value="$(arg cbf_field_topic)" />
       <param if="$(eval arg('cbf_slack_max') != '')"
              name="cbf/slack_max"
@@ -265,6 +267,7 @@
              name="cbf/use_in_sim"
              value="$(arg cbf_use_in_sim)" />
       <param name="cbf/use_field_hocbf" value="$(arg cbf_use_field_hocbf)" />
+      <param name="cbf/field_replay_diagnostics" value="$(arg field_replay_diagnostics)" />
       <param name="cbf/field_topic" value="$(arg cbf_field_topic)" />
       <param if="$(eval arg('cbf_slack_max') != '')"
              name="cbf/slack_max"

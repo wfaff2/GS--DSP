@@ -434,6 +434,20 @@ relative_est_pub_[quad_id] =
   noise_rng_.seed(noise_seed_effective);
   pnh_.param("cbf/use_in_sim", cbf_use_in_sim_, mpc_params_.cbf_enabled_);
   pnh_.param("cbf/use_field_hocbf", field_hocbf_enabled_, true);
+  // Optional preparation API; no changes to the live affine-HOCBF path.
+  if (pnh_.hasParam("cbf/voxel_field")) {
+    double pool_leaf_size, padding_distance;
+    int n_obs;
+    if (!pnh_.getParam("cbf/voxel_field/pool_leaf_size", pool_leaf_size) ||
+        !pnh_.getParam("cbf/voxel_field/n_obs", n_obs) || n_obs <= 0 ||
+        !pnh_.getParam("cbf/voxel_field/padding_distance", padding_distance)) {
+      throw std::invalid_argument("Incomplete private cbf/voxel_field configuration");
+    }
+    voxel_online_data_pool_.reset(new VoxelOnlineDataPool(
+        pool_leaf_size, static_cast<std::size_t>(n_obs), padding_distance));
+  }
+  pnh_.param("cbf/field_replay_diagnostics",
+             field_replay_diagnostics_enabled_, false);
   field_hocbf_config_.gamma1 = mpc_params_.cbf_alpha1_;
   field_hocbf_config_.gamma2 = mpc_params_.cbf_alpha2_;
   pnh_.param("cbf/field_sigma", field_hocbf_config_.sigma,
@@ -662,7 +676,17 @@ void NumSimMpc::fieldOccupancyCallback(
         std::max(snapshot->last_occupied_stage, point.stage_index);
   }
   std::lock_guard<std::mutex> lock(field_snapshot_mutex_);
+  snapshot->snapshot_id = ++field_snapshot_counter_;
   field_snapshot_ = std::move(snapshot);
+}
+
+std::vector<double> NumSimMpc::buildVoxelOnlineData(
+    const Eigen::Vector3d& pos,
+    const field_hocbf::KinematicPoints& raw_voxels) const {
+  if (!voxel_online_data_pool_) {
+    throw std::logic_error("buildVoxelOnlineData requires private cbf/voxel_field parameters");
+  }
+  return voxel_online_data_pool_->build(pos, raw_voxels);
 }
 
 void NumSimMpc::getSharedPositions(std::vector<Eigen::Vector3d>& positions,
@@ -1965,16 +1989,23 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
   using FieldNominalPrediction =
       Eigen::Matrix<double, acado_mpc::kStateSize, acado_mpc::kSamples + 1>;
   FieldHocbfDebugProfile field_debug_profile{};
+  std::vector<field_replay::StageRecord> field_replay_stages;
 #if CONI_MPC_EXTERNAL_FIELD_MICRO_ITERATIONS
   FieldHocbfDebugProfile refined_field_debug_profile{};
+  std::vector<field_replay::StageRecord> refined_field_replay_stages;
 #endif
   const auto buildFieldProfile =
       [&](const FieldNominalPrediction* nominal_prediction,
           bool& profile_active_out,
-          FieldHocbfDebugProfile* debug_profile_out) {
+          FieldHocbfDebugProfile* debug_profile_out,
+          std::vector<field_replay::StageRecord>* replay_stages_out) {
         FieldHocbfProfile profile = FieldHocbfProfile::Zero();
         profile_active_out = false;
         if (!field_available) return profile;
+        if (replay_stages_out != nullptr) {
+          replay_stages_out->clear();
+          replay_stages_out->reserve(acado_mpc::kSamples + 1);
+        }
 
         // If the last published DSP stage is empty, reuse its latest occupied
         // stage after the prediction horizon rather than losing all barriers.
@@ -2093,6 +2124,25 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
           const auto constraint = field_hocbf::computeConstraint(
               selected, nominal_position, nominal_velocity, nominal_a_non,
               field_hocbf_config_, lambda_vec);
+          if (replay_stages_out != nullptr) {
+            field_replay::StageRecord record;
+            record.stage = static_cast<std::uint32_t>(stage);
+            record.source_stage = static_cast<std::uint32_t>(source_stage);
+            record.extrapolation_time = extrapolation_time;
+            record.car_position = car_position;
+            record.car_velocity = car_velocity;
+            record.world_q_non = world_q_non;
+            record.omega_non = omega_non;
+            record.beta_non = beta_non;
+            record.a_car_non = a_car_non;
+            record.nominal_position = nominal_position;
+            record.nominal_velocity = nominal_velocity;
+            record.lambda = lambda_vec;
+            record.config = field_hocbf_config_;
+            record.selected_source_ids = prune_stats.selected_source_ids;
+            record.expected = constraint;
+            replay_stages_out->push_back(record);
+          }
           if (debug_profile_out != nullptr) {
             auto& debug = (*debug_profile_out)[static_cast<std::size_t>(stage)];
             debug.valid = !selected.empty();
@@ -2137,6 +2187,9 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
               constraint.A.dot(k_v.cwiseProduct(nominal_velocity) +
                                k_p.cwiseProduct(nominal_position));
           const double profile_b = constraint.b + state_feedback_offset;
+          if (replay_stages_out != nullptr) {
+            replay_stages_out->back().profile_b = profile_b;
+          }
           if (debug_profile_out != nullptr) {
             (*debug_profile_out)[static_cast<std::size_t>(stage)].profile_b =
                 profile_b;
@@ -2153,7 +2206,8 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
 
   bool field_profile_active = false;
   FieldHocbfProfile field_profile = buildFieldProfile(
-      nullptr, field_profile_active, &field_debug_profile);
+      nullptr, field_profile_active, &field_debug_profile,
+      field_replay_diagnostics_enabled_ ? &field_replay_stages : nullptr);
   mpc_params_.cbf_field_hocbf_profile_ = field_profile;
   // The latest nonempty field owns the safety path even when pruning leaves a
   // stage inactive. This prevents legacy risk regions from being mixed with
@@ -2258,7 +2312,8 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
     const double first_slack = mpc_controller_.getLatestSlack();
     bool refined_field_active = false;
     const FieldHocbfProfile refined_field_profile = buildFieldProfile(
-        &first_prediction, refined_field_active, &refined_field_debug_profile);
+        &first_prediction, refined_field_active, &refined_field_debug_profile,
+        field_replay_diagnostics_enabled_ ? &refined_field_replay_stages : nullptr);
     const double profile_delta =
         (refined_field_profile - field_profile).norm();
     mpc_params_.cbf_field_hocbf_profile_ = refined_field_profile;
@@ -2274,6 +2329,7 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
     if (mpc_controller_.getLastSolveOk()) {
       command = refined_command;
       field_debug_profile = refined_field_debug_profile;
+      field_replay_stages = refined_field_replay_stages;
     } else {
       // The first solve is a valid feasible fallback.  Restore its rollout
       // and slew anchor so a failed refinement cannot publish half-updated
@@ -2345,6 +2401,23 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
     }
   }
   last_field_hocbf_debug_profile_ = field_debug_profile;
+  last_field_replay_cycle_valid_ = false;
+  if (field_replay_diagnostics_enabled_) {
+    last_field_replay_snapshot_ = field_snapshot;
+    last_field_replay_cycle_ = field_replay::CycleRecord();
+    last_field_replay_cycle_.quad_id = quad_id;
+    last_field_replay_cycle_.snapshot_id = field_snapshot ? field_snapshot->snapshot_id : 0;
+    last_field_replay_cycle_.field_age = field_age;
+    last_field_replay_cycle_.prediction_dt = field_dt;
+    last_field_replay_cycle_.field_stamp = field_snapshot ? field_snapshot->stamp.toSec() : 0.0;
+    last_field_replay_cycle_.inertial_frame = isInertialFrame();
+    last_field_replay_cycle_.field_available = field_available;
+    if (field_available && field_replay_stages.size() ==
+            static_cast<std::size_t>(acado_mpc::kSamples + 1)) {
+      last_field_replay_cycle_.stages = std::move(field_replay_stages);
+    }
+    last_field_replay_cycle_valid_ = true;
+  }
   ROS_INFO_STREAM_THROTTLE(
       1.0,
       "[MPC UAV " << quad_id << "] cmd_rel=(" << command.velocity_cmd.x() << ", "
@@ -2713,6 +2786,57 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
   last_cbf_active_ = cbf_active;
   last_active_obstacle_key_ = effective_active_obstacle_key;
   return command;
+}
+
+bool NumSimMpc::writeFieldReplayDiagnostics(std::ostream& out,
+                                            std::size_t step_idx,
+                                            double sim_time) {
+  if (!field_replay_diagnostics_enabled_) return true;
+  if (!last_field_replay_cycle_valid_) return true;
+
+  if (last_field_replay_snapshot_ &&
+      last_written_field_snapshot_id_ != last_field_replay_snapshot_->snapshot_id) {
+    field_replay::SnapshotRecord snapshot;
+    snapshot.quad_id = quad_id;
+    snapshot.snapshot_id = last_field_replay_snapshot_->snapshot_id;
+    snapshot.stamp_sec = last_field_replay_snapshot_->stamp.toSec();
+    snapshot.frame_id = last_field_replay_snapshot_->frame_id;
+    snapshot.last_occupied_stage =
+        last_field_replay_snapshot_->last_occupied_stage;
+    snapshot.points = last_field_replay_snapshot_->points;
+    if (!field_replay::writeSnapshot(out, snapshot)) return false;
+    last_written_field_snapshot_id_ = snapshot.snapshot_id;
+  }
+
+  field_replay::CycleRecord cycle = last_field_replay_cycle_;
+  cycle.step_idx = static_cast<std::uint64_t>(step_idx);
+  cycle.sim_time = sim_time;
+  cycle.write_ros_time = ros::Time::now().toSec();
+  cycle.quad_stamp = quad_odom_.header.stamp.toSec();
+  cycle.car_stamp = car_odom_.header.stamp.toSec();
+  cycle.estimate_position = state_estimate_.position;
+  cycle.estimate_velocity = state_estimate_.velocity;
+  cycle.truth_quad_position = Eigen::Vector3d(
+      quad_odom_.pose.pose.position.x, quad_odom_.pose.pose.position.y,
+      quad_odom_.pose.pose.position.z);
+  cycle.truth_quad_velocity = Eigen::Vector3d(
+      quad_odom_.twist.twist.linear.x, quad_odom_.twist.twist.linear.y,
+      quad_odom_.twist.twist.linear.z);
+  cycle.truth_car_position = Eigen::Vector3d(
+      car_odom_.pose.pose.position.x, car_odom_.pose.pose.position.y,
+      car_odom_.pose.pose.position.z);
+  cycle.truth_car_velocity = Eigen::Vector3d(
+      car_odom_.twist.twist.linear.x, car_odom_.twist.twist.linear.y,
+      car_odom_.twist.twist.linear.z);
+  cycle.truth_world_q_non = Eigen::Quaterniond(
+      car_odom_.pose.pose.orientation.w, car_odom_.pose.pose.orientation.x,
+      car_odom_.pose.pose.orientation.y, car_odom_.pose.pose.orientation.z);
+  if (cycle.truth_world_q_non.norm() > 1.0e-9) cycle.truth_world_q_non.normalize();
+  else cycle.truth_world_q_non = Eigen::Quaterniond::Identity();
+  cycle.truth_omega_non = Eigen::Vector3d(
+      car_odom_.twist.twist.angular.x, car_odom_.twist.twist.angular.y,
+      car_odom_.twist.twist.angular.z);
+  return field_replay::writeCycle(out, cycle) && static_cast<bool>(out);
 }
 
 namespace {

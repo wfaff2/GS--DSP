@@ -20,6 +20,7 @@
   <arg name="cbf_enabled" default="true" />
   <arg name="cbf_use_in_sim" default="true" />
   <arg name="cbf_use_field_hocbf" default="true" />
+  <arg name="field_replay_diagnostics" default="false" />
   <!-- Explicit baseline-controller selectors.  The previous MPC+CBF
        experiment used the non-inertial frame and a frozen UGV rollout. -->
   <arg name="frame_mode" default="noninertial" />
@@ -105,6 +106,7 @@
     <arg name="cbf_enabled" value="$(arg cbf_enabled)" />
     <arg name="cbf_use_in_sim" value="$(arg cbf_use_in_sim)" />
     <arg name="cbf_use_field_hocbf" value="$(arg cbf_use_field_hocbf)" />
+    <arg name="field_replay_diagnostics" value="$(arg field_replay_diagnostics)" />
     <arg name="frame_mode" value="$(arg frame_mode)" />
     <arg name="ugv_rollout_mode" value="$(arg ugv_rollout_mode)" />
     <arg name="cbf_field_topic" value="$(arg cbf_field_topic)" />

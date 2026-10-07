@@ -97,10 +97,21 @@ cbf:
   field_seed_count: 8
   field_max_count: 35
   field_separation: 0.15
+  # Preparation/model-generation API only; not a live controller mode selector.
+  voxel_field:
+    n_obs: 60                  # Generation-time dimension, requires new NOD
+    r_cut: 2.0
+    k_steep: 20.0              # tanh switch steepness [1/m]
+    sigma: 0.12
+    d_safe_robust: 0.48
+    pool_leaf_size: 0.15
+    padding_distance: 20.0     # Finite, relative to pos, must exceed r_cut
+    distance_epsilon: 1.0e-6   # sqrt(||delta||^2 + epsilon^2), AD protection
+    partition_floor: 1.0e-12   # log(S + floor), must be < exp(-d_safe/sigma)
   preview_margin: 0.0
   preview_steps: 5        # 降低预测步数，减少非惯性系下障碍物"相对高速运动"产生的极长拖尾遮挡
   obstacle_hysteresis_hold_cycles: 0
-  slack_max: 200   # direct upper bound: 0 = hard, >0 = bounded soft slack
+  slack_max: 0   # direct upper bound: 0 = hard, >0 = bounded soft slack
   R_slack: 500   # quadratic penalty on slack when slack_max > 0
 
 # Comment 3.4 baseline: independent Moving-Goal Polytopic HRVO (MG-PolyHRVO).

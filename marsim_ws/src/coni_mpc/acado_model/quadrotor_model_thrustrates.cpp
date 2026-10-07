@@ -47,6 +47,9 @@
 
 #include <cmath>
 #include <memory>
+#include <iostream>
+#include <string>
+#include "voxel_barrier_model.h"
 #include <acado_optimal_control.hpp>
 #include <acado_code_generation.hpp>
 #include <acado_gnuplot.hpp>
@@ -54,7 +57,7 @@
 // Standalone code generation for a parameter-free quadrotor model
 // with thrust and rates input. 
 
-int main( ){
+int main(int argc, char** argv){
   // Use Acado
   USING_NAMESPACE_ACADO
 
@@ -131,6 +134,50 @@ int main( ){
   OnlineData            field_Ax, field_Ay, field_Az, field_b, field_active;
   // Appended runtime inverse time constants for first-order velocity tracking.
   OnlineData            tau_v_xy_inv, tau_v_z_inv;
+
+  // Optional voxel assembly exports separately: the live wrapper still uses
+  // the existing affine Field-HOCBF OnlineData layout.
+  std::unique_ptr<coni_mpc::VoxelBarrierModel> voxel_field;
+  std::string export_directory = "quadrotor_mpc_codegen";
+  if (argc != 1) {
+    if (argc != 11 || std::string(argv[1]) != "--voxel-field") {
+      std::cerr << "Usage: " << argv[0] << " [--voxel-field n_obs r_cut sigma "
+          "d_safe_robust distance_epsilon partition_floor k_steep --output directory]\n";
+      return EXIT_FAILURE;
+    }
+    try {
+      auto parse_double = [](const char* text) {
+        std::size_t parsed = 0;
+        const std::string value(text);
+        const double result = std::stod(value, &parsed);
+        if (parsed != value.size()) throw std::invalid_argument("trailing input");
+        return result;
+      };
+      std::size_t parsed = 0;
+      const std::string count_text(argv[2]);
+      const unsigned long count = std::stoul(count_text, &parsed);
+      if (count_text.empty() || count_text.front() == '-' ||
+          parsed != count_text.size() || std::string(argv[9]) != "--output") {
+        throw std::invalid_argument("invalid count/output option");
+      }
+      export_directory = argv[10];
+      while (!export_directory.empty() && export_directory.back() == '/') {
+        export_directory.pop_back();
+      }
+      const auto slash = export_directory.find_last_of('/');
+      if (export_directory.empty() || export_directory.substr(
+              slash == std::string::npos ? 0 : slash + 1) ==
+              "quadrotor_mpc_codegen") {
+        throw std::invalid_argument("voxel mode requires an isolated output directory");
+      }
+      voxel_field.reset(new coni_mpc::VoxelBarrierModel(count,
+          parse_double(argv[3]), parse_double(argv[4]), parse_double(argv[5]),
+          parse_double(argv[6]), parse_double(argv[7]), parse_double(argv[8])));
+    } catch (const std::exception& error) {
+      std::cerr << "Voxel field configuration: " << error.what() << '\n';
+      return EXIT_FAILURE;
+    }
+  }
 
   // Parameters with exemplary values. These are set/overwritten at runtime.
   const double t_start = 0.0;     // Initial time [s]
@@ -434,7 +481,10 @@ int main( ){
   // [66..67] alpha1/alpha2, [68..76] non-inertial data,
   // [77..79] ref_x/ref_y/trust_factor, [80..84] field Ax/Ay/Az/b/active,
   // [85..86] inverse XY/Z velocity-tracking time constants.
-  ocp.setNOD(87);
+  if (voxel_field) {
+    voxel_field->assemble(ocp, p_x, p_y, p_z);
+  }
+  ocp.setNOD(87 + (voxel_field ? voxel_field->onlineDataSize() : 0));
 
 
   if(!CODE_GEN)
@@ -503,7 +553,7 @@ int main( ){
     mpc.set( GENERATE_SIMULINK_INTERFACE, NO);
 
     // Finally, export everything.
-    if(mpc.exportCode("quadrotor_mpc_codegen") != SUCCESSFUL_RETURN)
+    if(mpc.exportCode(export_directory.c_str()) != SUCCESSFUL_RETURN)
       exit( EXIT_FAILURE );
     mpc.printDimensionsQP( );
   }
