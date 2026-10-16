@@ -200,7 +200,13 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
 #define GREEN std::string("\033[1;42m")
 #define RST std::string("\033[0m")
 
+  mpc_wrapper_.resetFeedbackDiagnostics();
+  last_command_used_fallback_ = false;
+  last_fallback_had_previous_valid_ = false;
+
   auto makeFailureFallback = [this](const char* reason) {
+    last_command_used_fallback_ = true;
+    last_fallback_had_previous_valid_ = has_last_valid_control_;
     if (has_last_valid_control_) {
       ROS_WARN_STREAM_THROTTLE(
           0.5, "[MpcController] keeping previous valid control after "
@@ -254,7 +260,7 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
   const bool obstacle_update_ok = mpc_wrapper_.setObstacles(
       params.cbf_obstacles_, params.cbf_obstacle_profiles_,
       params.cbf_alpha1_, params.cbf_alpha2_,
-      params.cbf_enabled_ && !field_active);
+      params.cbf_enabled_);
   const bool field_update_ok = mpc_wrapper_.setFieldHocbf(
       params.cbf_field_hocbf_profile_, field_active);
   const bool field_mode_changed = field_active != last_field_enabled_;
@@ -680,7 +686,7 @@ bool MpcController<T>::setNewParams(MpcParams<T>& params) {
   const bool obstacle_update_ok = mpc_wrapper_.setObstacles(
       params.cbf_obstacles_, params.cbf_obstacle_profiles_,
       params.cbf_alpha1_, params.cbf_alpha2_,
-      params.cbf_enabled_ && !field_active);
+      params.cbf_enabled_);
   if (!obstacle_update_ok) {
     ROS_ERROR("MPC: Failed to configure CBF obstacles.");
     return false;
