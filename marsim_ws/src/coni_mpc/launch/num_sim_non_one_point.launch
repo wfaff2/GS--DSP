@@ -1,4 +1,5 @@
 <launch>
+  <arg name="scene_resolver" default="" />
   <arg name="r" default="1.0"></arg>
   <arg name="v" default="1.0"></arg>
   <arg name="w" default="0.135"></arg>
@@ -6,11 +7,12 @@
   <arg name="obstacle_count" default=""></arg>
   <arg name="seed" default=""></arg>
   <arg name="kappa" default="1.0"></arg>
-  <arg name="num_uavs" default="4"></arg>
+  <arg name="num_uavs" default=""></arg>
   <arg name="active_uavs_csv" default=""></arg>
   <arg name="use_dynamic_obs" default="false"></arg>
   <arg name="warm_start" default="true"></arg>
   <arg name="metrics_csv" default=""></arg>
+  <arg name="world_command_provenance_csv" default=""></arg>
   <arg name="run_tag" default=""></arg>
   <arg name="sim_duration_sec" default=""></arg>
   <arg name="sim_system_dt_sec" default=""></arg>
@@ -81,7 +83,9 @@
              name="random_obstacles/seed"
              value="$(arg seed)" />
       <param name="kappa" value="$(arg kappa)" />
-      <param name="num_uavs" value="$(arg num_uavs)" />
+      <param if="$(eval arg('num_uavs') != '')"
+             name="num_uavs"
+             value="$(arg num_uavs)" />
       <rosparam if="$(eval arg('active_uavs_csv') != '')"
                 param="active_uavs"
                 subst_value="true">[$(arg active_uavs_csv)]</rosparam>
@@ -102,6 +106,7 @@
                 subst_value="true">$(arg uav_reference_offsets)</rosparam>
       <param name="warm_start" value="$(arg warm_start)" />
       <param name="metrics_csv" value="$(arg metrics_csv)" />
+      <param name="world_command_provenance_csv" value="$(arg world_command_provenance_csv)" />
       <param name="run_tag" value="$(arg run_tag)" />
       <param if="$(eval arg('sim_duration_sec') != '')"
              name="sim_duration_sec"
@@ -209,6 +214,18 @@
       <param if="$(eval arg('figure_eight_obstacles_enabled') != '')"
              name="figure_eight_obstacles/enabled"
              value="$(arg figure_eight_obstacles_enabled)" />
+      <param if="$(eval arg('scene_resolver') != '')" name="car_trajectory_mode"
+             command="$(arg scene_resolver) --key scene" type="str" />
+      <param if="$(eval arg('scene_resolver') != '')" name="v"
+             command="$(arg scene_resolver) --key v" type="double" />
+      <param if="$(eval arg('scene_resolver') != '')" name="w"
+             command="$(arg scene_resolver) --key w" type="double" />
+      <param if="$(eval arg('scene_resolver') != '')" name="trajectory_laps"
+             command="$(arg scene_resolver) --key trajectory_laps" type="double" />
+      <param if="$(eval arg('scene_resolver') != '' and arg('ugv_circle_radius') == '')" name="ugv_circle_radius"
+             command="$(arg scene_resolver) --key ugv_circle_radius" type="double" />
+      <param if="$(eval arg('scene_resolver') != '' and arg('uav_reference_offsets') == '')" name="uav_reference_offsets"
+             command="$(arg scene_resolver) --key uav_reference_offsets" type="yaml" />
       <!-- <rosparam file="$(find coni_mpc)/parameters/traj_params.yaml" /> -->
     </node>
   </group>
@@ -223,7 +240,9 @@
              name="random_obstacles/seed"
              value="$(arg seed)" />
       <param name="kappa" value="$(arg kappa)" />
-      <param name="num_uavs" value="$(arg num_uavs)" />
+      <param if="$(eval arg('num_uavs') != '')"
+             name="num_uavs"
+             value="$(arg num_uavs)" />
       <rosparam if="$(eval arg('active_uavs_csv') != '')"
                 param="active_uavs"
                 subst_value="true">[$(arg active_uavs_csv)]</rosparam>
@@ -244,6 +263,7 @@
                 subst_value="true">$(arg uav_reference_offsets)</rosparam>
       <param name="warm_start" value="$(arg warm_start)" />
       <param name="metrics_csv" value="$(arg metrics_csv)" />
+      <param name="world_command_provenance_csv" value="$(arg world_command_provenance_csv)" />
       <param name="run_tag" value="$(arg run_tag)" />
       <param if="$(eval arg('sim_duration_sec') != '')"
              name="sim_duration_sec"
@@ -351,6 +371,18 @@
       <param if="$(eval arg('figure_eight_obstacles_enabled') != '')"
              name="figure_eight_obstacles/enabled"
              value="$(arg figure_eight_obstacles_enabled)" />
+      <param if="$(eval arg('scene_resolver') != '')" name="car_trajectory_mode"
+             command="$(arg scene_resolver) --key scene" type="str" />
+      <param if="$(eval arg('scene_resolver') != '')" name="v"
+             command="$(arg scene_resolver) --key v" type="double" />
+      <param if="$(eval arg('scene_resolver') != '')" name="w"
+             command="$(arg scene_resolver) --key w" type="double" />
+      <param if="$(eval arg('scene_resolver') != '')" name="trajectory_laps"
+             command="$(arg scene_resolver) --key trajectory_laps" type="double" />
+      <param if="$(eval arg('scene_resolver') != '' and arg('ugv_circle_radius') == '')" name="ugv_circle_radius"
+             command="$(arg scene_resolver) --key ugv_circle_radius" type="double" />
+      <param if="$(eval arg('scene_resolver') != '' and arg('uav_reference_offsets') == '')" name="uav_reference_offsets"
+             command="$(arg scene_resolver) --key uav_reference_offsets" type="yaml" />
       <!-- <rosparam file="$(find coni_mpc)/parameters/traj_params.yaml" /> -->
     </node>
   </group>

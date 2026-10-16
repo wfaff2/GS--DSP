@@ -16,7 +16,7 @@
   <arg name="static_map_filename" default="" />
   <arg name="scene_resolver"
        default="python3 '$(dirname)/../scripts/resolve_dsp_scene.py' --config '$(arg scene_config)' --scene '$(arg scene)' --v '$(arg v)' --w '$(arg w)' --trajectory-laps '$(arg trajectory_laps)' --static-map '$(arg static_map_filename)'" />
-  <arg name="num_uavs" default="3" />
+  <arg name="num_uavs" default="" />
   <arg name="sim_duration_sec" default="" />
   <arg name="metrics_csv" default="" />
   <arg name="world_command_provenance_csv" default="" />
