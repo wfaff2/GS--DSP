@@ -95,7 +95,8 @@ class LidarCollisionMonitor {
                  const std::string& topic,
                  const std::string& expected_frame,
                  double timeout_sec,
-                 double point_margin) {
+                 double point_margin,
+                 int num_uavs = 3) {
     enabled_ = enabled && !topic.empty();
     topic_ = topic;
     expected_frame_ = expected_frame;
@@ -107,8 +108,31 @@ class LidarCollisionMonitor {
       }
       return;
     }
-    subscriber_ = nh.subscribe(topic_, 1, &LidarCollisionMonitor::callback, this);
-    ROS_INFO_STREAM("LiDAR collision monitor enabled: topic=" << topic_
+    std::vector<std::string> topics;
+    if (topic_.find("%d") != std::string::npos) {
+      for (int i = 0; i < num_uavs; ++i) {
+        char buf[256];
+        std::snprintf(buf, sizeof(buf), topic_.c_str(), i);
+        topics.emplace_back(buf);
+      }
+    } else if (topic_.find(",") != std::string::npos) {
+      std::stringstream ss(topic_);
+      std::string item;
+      while (std::getline(ss, item, ',')) {
+        if (!item.empty()) topics.push_back(item);
+      }
+    } else {
+      topics.push_back(topic_);
+    }
+
+    subscribers_.clear();
+    for (const auto& t : topics) {
+      subscribers_.push_back(
+          nh.subscribe<sensor_msgs::PointCloud2>(
+              t, 1, boost::bind(&LidarCollisionMonitor::callback, this, _1, t)));
+      ROS_INFO_STREAM("LiDAR collision monitor subscribed to topic: " << t);
+    }
+    ROS_INFO_STREAM("LiDAR collision monitor enabled: topics=" << topics.size()
                     << " frame=" << expected_frame_
                     << " timeout=" << timeout_sec_ << " s"
                     << " point_margin=" << point_margin_ << " m");
@@ -152,13 +176,13 @@ class LidarCollisionMonitor {
   }
 
  private:
-  void callback(const sensor_msgs::PointCloud2ConstPtr& message) {
+  void callback(const sensor_msgs::PointCloud2ConstPtr& message,
+                const std::string& source_topic) {
     if (!message) {
       return;
     }
     const std::string frame = message->header.frame_id;
     if (!expected_frame_.empty() && frame != expected_frame_) {
-      has_cloud_ = false;
       ROS_WARN_THROTTLE(2.0,
                         "LiDAR collision cloud frame '%s' does not match expected world frame '%s'; ignoring it.",
                         frame.c_str(), expected_frame_.c_str());
@@ -169,9 +193,8 @@ class LidarCollisionMonitor {
     try {
       pcl::fromROSMsg(*message, converted);
     } catch (const std::exception& error) {
-      has_cloud_ = false;
-      ROS_WARN_THROTTLE(2.0, "Failed to decode LiDAR collision cloud: %s",
-                        error.what());
+      ROS_WARN_THROTTLE(2.0, "Failed to decode LiDAR collision cloud from %s: %s",
+                        source_topic.c_str(), error.what());
       return;
     }
 
@@ -184,10 +207,19 @@ class LidarCollisionMonitor {
         filtered->push_back(candidate);
       }
     }
-    filtered->width = static_cast<std::uint32_t>(filtered->points.size());
-    filtered->height = 1;
-    filtered->is_dense = true;
-    cloud_ = filtered;
+    per_topic_clouds_[source_topic] = filtered;
+
+    pcl::PointCloud<pcl::PointXYZ>::Ptr combined(
+        new pcl::PointCloud<pcl::PointXYZ>());
+    for (const auto& pair : per_topic_clouds_) {
+      if (pair.second) {
+        *combined += *(pair.second);
+      }
+    }
+    combined->width = static_cast<std::uint32_t>(combined->points.size());
+    combined->height = 1;
+    combined->is_dense = true;
+    cloud_ = combined;
     if (cloud_->empty()) {
       has_cloud_ = false;
       return;
@@ -204,7 +236,8 @@ class LidarCollisionMonitor {
   std::string expected_frame_;
   double timeout_sec_ = 0.5;
   double point_margin_ = 0.0;
-  ros::Subscriber subscriber_;
+  std::vector<ros::Subscriber> subscribers_;
+  std::map<std::string, pcl::PointCloud<pcl::PointXYZ>::Ptr> per_topic_clouds_;
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_{
       new pcl::PointCloud<pcl::PointXYZ>()};
   mutable pcl::KdTreeFLANN<pcl::PointXYZ> kdtree_;
@@ -5762,7 +5795,7 @@ int main(int argc, char **argv)
   lidar_collision_monitor.configure(
       nh, lidar_collision_enabled, lidar_collision_cloud_topic,
       acado_mpc_common::worldFrameId(), lidar_collision_timeout_sec,
-      lidar_collision_point_margin);
+      lidar_collision_point_margin, num_uavs);
 
   ros::Publisher obstacle_marker_pub =
       nh.advertise<visualization_msgs::MarkerArray>(

@@ -385,10 +385,10 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
         ? feedback_profile(3, 0) : static_cast<T>(0.0);
     const Eigen::Matrix<T, 3, 1> raw_u_xyz =
         predicted_inputs_.template block<3, 1>(0, 0);
-    const T raw_slack0 = predicted_inputs_(INPUT::kSlack0, 0);
-    const T current_residual = current_A.dot(raw_u_xyz) + raw_slack0 - current_b;
+    const T raw_slack2 = predicted_inputs_(INPUT::kSlack2, 0);
+    const T current_residual = current_A.dot(raw_u_xyz) + raw_slack2 - current_b;
     const T feedback_residual =
-        feedback_A.dot(raw_u_xyz) + raw_slack0 - feedback_b;
+        feedback_A.dot(raw_u_xyz) + raw_slack2 - feedback_b;
     ROS_DEBUG_STREAM_NAMED(
         "field_hocbf",
         "[FIELD_HOCBF_SOLVE] feedback_profile_source="
@@ -403,7 +403,7 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
             << " feedback_active=" << feedback_stage0_active
             << " feedback_residual=" << feedback_residual
             << " raw_u_xyz=" << raw_u_xyz.transpose()
-            << " raw_slack0=" << raw_slack0);
+            << " raw_slack2=" << raw_slack2);
   }
   ROS_INFO_STREAM_THROTTLE(
       1.0,

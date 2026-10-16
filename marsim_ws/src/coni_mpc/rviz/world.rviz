@@ -77,13 +77,33 @@ Visualization Manager:
       Value: true
     - Class: rviz/PointCloud2
       Enabled: true
-      Name: MARSIM LiDAR point cloud
+      Name: UAV0 LiDAR point cloud
       Topic: /quad0_pcl_render_node/sensor_cloud
       Queue Size: 10
       Style: Points
       Size (m): 0.03
       Color Transformer: FlatColor
       Color: 255; 180; 40
+      Alpha: 0.9
+    - Class: rviz/PointCloud2
+      Enabled: true
+      Name: UAV1 LiDAR point cloud
+      Topic: /quad1_pcl_render_node/sensor_cloud
+      Queue Size: 10
+      Style: Points
+      Size (m): 0.03
+      Color Transformer: FlatColor
+      Color: 40; 180; 255
+      Alpha: 0.9
+    - Class: rviz/PointCloud2
+      Enabled: true
+      Name: UAV2 LiDAR point cloud
+      Topic: /quad2_pcl_render_node/sensor_cloud
+      Queue Size: 10
+      Style: Points
+      Size (m): 0.03
+      Color Transformer: FlatColor
+      Color: 220; 60; 220
       Alpha: 0.9
     - Class: rviz/PointCloud2
       Enabled: true

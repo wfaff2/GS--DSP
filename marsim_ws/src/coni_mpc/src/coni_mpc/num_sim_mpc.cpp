@@ -474,6 +474,17 @@ relative_est_pub_[quad_id] =
   if (field_hocbf_enabled_) {
     std::string field_topic = "/my_map/future_occupancy_3d";
     pnh_.param("cbf/field_topic", field_topic, field_topic);
+    if (field_topic.find("%d") != std::string::npos) {
+      char formatted_topic[256];
+      std::snprintf(formatted_topic, sizeof(formatted_topic), field_topic.c_str(), quad_id);
+      field_topic = formatted_topic;
+    } else {
+      bool per_uav_topic = false;
+      pnh_.param("cbf/field_topic_per_uav", per_uav_topic, false);
+      if (per_uav_topic) {
+        field_topic = "/uav" + std::to_string(quad_id) + field_topic;
+      }
+    }
     field_occupancy_subscriber_ = nh_.subscribe(
         field_topic, 1, &NumSimMpc::fieldOccupancyCallback, this);
     ROS_INFO_STREAM("[MPC UAV " << quad_id << "] using field-HOCBF topic "
@@ -2382,7 +2393,7 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
           acado_mpc::kVelX, stage);
       if (stage < acado_mpc::kSamples) {
         debug.slack = mpc_controller_.getPredictedInputs()(
-            acado_mpc::INPUT::kSlack0, stage);
+            acado_mpc::INPUT::kSlack2, stage);
         if (debug.active && debug.A.allFinite() &&
             std::isfinite(debug.profile_b) &&
             debug.mpc_predicted_position.allFinite() &&

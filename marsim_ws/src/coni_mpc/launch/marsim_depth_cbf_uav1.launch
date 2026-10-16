@@ -5,7 +5,8 @@
   <arg name="map_name"
        default="$(find map_generator)/resource/small_forest01cutoff.pcd" />
   <arg name="downsample_resolution" default="0.1" />
-  <arg name="uav_odom_topic" default="/coni_mpc/quad_odom1" />
+  <arg name="num_uavs" default="3" />
+  <arg name="uav_odom_topic" default="/coni_mpc/quad_odom0" />
   <arg name="use_intensity_pcd_publisher" default="false" />
   <arg name="dynamic_obstacles" default="false" />
   <arg name="dynamic_obstacle_count" default="0" />
@@ -51,12 +52,104 @@
 
     <!-- Deliberately do not include MARSIM single_drone.xml: it would also
          start MARSIM dynamics/PID. This is the MARSIM CPU Mid-360 renderer only. -->
-    <node pkg="local_sensing_node" type="pcl_render_node"
+    <!-- UAV 0 LiDAR Renderer -->
+    <node if="$(eval arg('num_uavs') == '' or int(arg('num_uavs')) >= 1)"
+          pkg="local_sensing_node" type="pcl_render_node"
           name="quad0_pcl_render_node" output="screen">
       <remap from="~global_map" to="/map_generator/global_cloud" />
       <remap from="~odometry" to="$(arg uav_odom_topic)" />
       <param name="drone_id" value="0" />
+      <param name="quadrotor_name" value="uav_0" />
+      <param name="uav_num" value="1" />
+      <param name="is_360lidar" value="1" />
+      <param name="sensing_horizon" value="15.0" />
+      <param name="sensing_rate" value="10.0" />
+      <param name="estimation_rate" value="10.0" />
+      <param name="polar_resolution" value="0.2" />
+      <param name="yaw_fov" value="360.0" />
+      <param name="vertical_fov" value="90.0" />
+      <param name="min_raylength" value="0.1" />
+      <param name="livox_linestep" value="1.4" />
+      <param name="curvature_limit" value="100.0" />
+      <param name="hash_cubesize" value="5.0" />
+      <param name="use_avia_pattern" value="0" />
+      <param name="use_vlp32_pattern" value="0" />
+      <param name="use_minicf_pattern" value="1" />
+      <param name="use_os128_pattern" value="0" />
+      <param name="downsample_res" value="$(arg downsample_resolution)" />
+      <param name="dynobj_enable"
+             value="$(eval 1 if arg('dynamic_obstacles') else 0)" />
+      <param name="dynobject_size" value="$(arg dynamic_obstacle_size)" />
+      <param name="dynobject_num" value="$(arg dynamic_obstacle_count)" />
+      <param name="dyn_mode" value="0" />
+      <param name="dyn_velocity" value="$(arg dynamic_obstacle_velocity)" />
+      <param name="deterministic_box_mode" value="$(arg deterministic_box_mode)" />
+      <param if="$(eval arg('scene_resolver') != '')" name="dynobj_enable"
+             command="$(arg scene_resolver) --key dynobj_enable" type="int" />
+      <param if="$(eval arg('scene_resolver') != '')" name="dynobject_num"
+             command="$(arg scene_resolver) --key dynobject_num" type="int" />
+      <param if="$(eval arg('scene_resolver') != '')" name="deterministic_box_mode"
+             command="$(arg scene_resolver) --key deterministic_box_mode" type="bool" />
+      <param name="sensor_pose_body_flu" value="$(arg sensor_pose_body_flu)" />
+      <param name="use_uav_extra_model" value="0" />
+      <param name="collisioncheck_enable" value="0" />
+      <param name="collision_range" value="0.3" />
+      <param name="output_pcd" value="0" />
+    </node>
+
+    <!-- UAV 1 LiDAR Renderer -->
+    <node if="$(eval arg('num_uavs') == '' or int(arg('num_uavs')) >= 2)"
+          pkg="local_sensing_node" type="pcl_render_node"
+          name="quad1_pcl_render_node" output="screen">
+      <remap from="~global_map" to="/map_generator/global_cloud" />
+      <remap from="~odometry" to="/coni_mpc/quad_odom1" />
+      <param name="drone_id" value="1" />
       <param name="quadrotor_name" value="uav_1" />
+      <param name="uav_num" value="1" />
+      <param name="is_360lidar" value="1" />
+      <param name="sensing_horizon" value="15.0" />
+      <param name="sensing_rate" value="10.0" />
+      <param name="estimation_rate" value="10.0" />
+      <param name="polar_resolution" value="0.2" />
+      <param name="yaw_fov" value="360.0" />
+      <param name="vertical_fov" value="90.0" />
+      <param name="min_raylength" value="0.1" />
+      <param name="livox_linestep" value="1.4" />
+      <param name="curvature_limit" value="100.0" />
+      <param name="hash_cubesize" value="5.0" />
+      <param name="use_avia_pattern" value="0" />
+      <param name="use_vlp32_pattern" value="0" />
+      <param name="use_minicf_pattern" value="1" />
+      <param name="use_os128_pattern" value="0" />
+      <param name="downsample_res" value="$(arg downsample_resolution)" />
+      <param name="dynobj_enable"
+             value="$(eval 1 if arg('dynamic_obstacles') else 0)" />
+      <param name="dynobject_size" value="$(arg dynamic_obstacle_size)" />
+      <param name="dynobject_num" value="$(arg dynamic_obstacle_count)" />
+      <param name="dyn_mode" value="0" />
+      <param name="dyn_velocity" value="$(arg dynamic_obstacle_velocity)" />
+      <param name="deterministic_box_mode" value="$(arg deterministic_box_mode)" />
+      <param if="$(eval arg('scene_resolver') != '')" name="dynobj_enable"
+             command="$(arg scene_resolver) --key dynobj_enable" type="int" />
+      <param if="$(eval arg('scene_resolver') != '')" name="dynobject_num"
+             command="$(arg scene_resolver) --key dynobject_num" type="int" />
+      <param if="$(eval arg('scene_resolver') != '')" name="deterministic_box_mode"
+             command="$(arg scene_resolver) --key deterministic_box_mode" type="bool" />
+      <param name="sensor_pose_body_flu" value="$(arg sensor_pose_body_flu)" />
+      <param name="use_uav_extra_model" value="0" />
+      <param name="collisioncheck_enable" value="0" />
+      <param name="collision_range" value="0.3" />
+      <param name="output_pcd" value="0" />
+    </node>
+
+    <!-- UAV 2 LiDAR Renderer -->
+    <node if="$(eval arg('num_uavs') == '' or int(arg('num_uavs')) >= 3)"
+          pkg="local_sensing_node" type="pcl_render_node"
+          name="quad2_pcl_render_node" output="screen">
+      <remap from="~global_map" to="/map_generator/global_cloud" />
+      <remap from="~odometry" to="/coni_mpc/quad_odom2" />
+      <param name="drone_id" value="2" />
+      <param name="quadrotor_name" value="uav_2" />
       <param name="uav_num" value="1" />
       <param name="is_360lidar" value="1" />
       <param name="sensing_horizon" value="15.0" />

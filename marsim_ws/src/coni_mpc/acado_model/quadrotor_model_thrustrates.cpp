@@ -473,7 +473,7 @@ int main(int argc, char** argv){
                 (field_Ax * (v_cmd_x + k_v_xy * v_x + k_p_xy * p_x) +
                  field_Ay * (v_cmd_y + k_v_xy * v_y + k_p_xy * p_y) +
                  field_Az * (v_cmd_z + k_v_z  * v_z + k_p_z  * p_z) +
-                 delta0 - field_b) >= 0.0);
+                 delta2 - field_b) >= 0.0);
 
   // Online data layout (ACADO_NOD):
   // Each region occupies 22 values: center(3), axes(3), Q row-major(9),
