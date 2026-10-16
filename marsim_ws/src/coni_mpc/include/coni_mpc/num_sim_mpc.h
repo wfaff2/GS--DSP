@@ -333,13 +333,38 @@ class NumSimMpc final : public MpcBase
   // this before computing their own velocity command.
   void runReactiveBaselineStep();
   virtual acado_mpc_common::ControlCommand run() override;
+  struct CommandContextDiagnostics {
+    std::uint64_t snapshot_id = 0;
+    double snapshot_stamp = 0.0;
+    Eigen::Vector3d estimate_position = Eigen::Vector3d::Zero();
+    Eigen::Vector3d omega_profile0 = Eigen::Vector3d::Zero();
+  };
+  void setCommandDiagnosticsEnabled(bool enabled) {
+    command_diagnostics_enabled_ = enabled;
+    mpc_controller_.setFeedbackDiagnosticsEnabled(enabled);
+  }
+  const auto& getCommandContextDiagnostics() const { return command_context_diagnostics_; }
+  const auto& getFeedbackDiagnostics() const { return mpc_controller_.getFeedbackDiagnostics(); }
+  const auto& getQuadOdomDiagnostic() const { return quad_odom_; }
+  const auto& getCarOdomDiagnostic() const { return car_odom_; }
   bool isInertialFrame() const { return frame_mode_ == FrameMode::kInertial; }
   bool getLastSolveOk() const { return mpc_controller_.getLastSolveOk(); }
+  bool getLastCommandUsedFallback() const {
+    return mpc_controller_.getLastCommandUsedFallback();
+  }
+  bool getLastFallbackHadPreviousValid() const {
+    return mpc_controller_.getLastFallbackHadPreviousValid();
+  }
+  const auto& getLastPredictedInputs() const {
+    return mpc_controller_.getPredictedInputs();
+  }
   const std::string& getFrameModeEffective() const { return frame_mode_effective_; }
   const std::string& getSafetyVariant() const { return safety_variant_; }
   double getMaxVelocityXY() const { return mpc_params_.max_v_xy_; }
   double getMaxVelocityZ() const { return mpc_params_.max_v_z_; }
   double getMaxYawRate() const { return mpc_params_.max_yaw_rate_; }
+  double getQuadOdomStampSec() const { return quad_odom_.header.stamp.toSec(); }
+  double getCarOdomStampSec() const { return car_odom_.header.stamp.toSec(); }
   double getPredictionDt() const { return mpc_controller_.getPredictionDt(); }
   std::vector<double> getTrackingErrors() const { return metrics_tracking_errors_; }
   std::vector<double> getTrackingErrorsTrackOnly() const {
@@ -372,6 +397,8 @@ class NumSimMpc final : public MpcBase
   static std::vector<bool> shared_position_valid_;
   static ObstacleVector shared_static_obstacles_;
 
+  bool command_diagnostics_enabled_ = false;
+  CommandContextDiagnostics command_context_diagnostics_;
   int  quad_id;
   std::mutex mtx;
   ros::NodeHandle nh_, pnh_;

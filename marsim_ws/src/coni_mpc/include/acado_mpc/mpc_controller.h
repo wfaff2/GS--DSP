@@ -130,11 +130,17 @@ public:
       const NonInertialProfile* beta_non_profile = nullptr,
       const NonInertialProfile* a_car_non_profile = nullptr);
 
+  void setFeedbackDiagnosticsEnabled(bool enabled) { mpc_wrapper_.setFeedbackDiagnosticsEnabled(enabled); }
+  const auto& getFeedbackDiagnostics() const { return mpc_wrapper_.getFeedbackDiagnostics(); }
   T getLatestSlack() const { return latest_slack_; }
   double getLastSolveTimeMs() const { return last_feedback_solve_time_sec_ * 1000.0; }
   double getLastFeedbackTimeMs() const { return last_feedback_solve_time_sec_ * 1000.0; }
   double getLastPreparationTimeMs() const { return last_preparation_time_sec_ * 1000.0; }
   bool getLastSolveOk() const { return last_solve_ok_; }
+  bool getLastCommandUsedFallback() const { return last_command_used_fallback_; }
+  bool getLastFallbackHadPreviousValid() const {
+    return last_fallback_had_previous_valid_;
+  }
   double getPredictionDt() const { return static_cast<double>(mpc_wrapper_.getTimestep()); }
   const Eigen::Matrix<T, kStateSize, kSamples + 1>& getPredictedStates() const {
     return predicted_states_;
@@ -228,9 +234,12 @@ private:
   // Failed/invalid solves must never overwrite this command.
   acado_mpc_common::ControlCommand last_valid_control_;
   bool has_last_valid_control_;
+  bool last_command_used_fallback_ = false;
+  bool last_fallback_had_previous_valid_ = false;
   typename MpcWrapper<T>::FieldHocbfProfile last_field_profile_ =
       MpcWrapper<T>::FieldHocbfProfile::Zero();
   bool last_field_enabled_ = false;
+  std::size_t last_obstacle_count_ = 0;
 };
 
 

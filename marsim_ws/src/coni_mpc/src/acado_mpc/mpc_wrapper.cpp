@@ -199,6 +199,14 @@ bool MpcWrapper<T>::setLimits(T max_v_xy, T max_v_z, T max_yaw_rate,
   path_lower_bounds(0) = -a_max_xy;
   path_lower_bounds(1) = -a_max_xy;
   path_lower_bounds(2) = -a_max_z;
+  // Constraints 4, 6, 8 correspond to obs_active * h >= 0.0 without slack.
+  // Enforcing hard state constraints at shooting nodes in sampled MPC causes QP infeasibility
+  // whenever disturbance, lag, or proximity momentarily makes h < 0.
+  // Relax these hard state bounds to -1e12 and rely on the high-order soft-CBF (indices 3, 5, 7)
+  // with slack variables, as formulated in the manuscript.
+  path_lower_bounds(4) = -static_cast<T>(1.0e12);
+  path_lower_bounds(6) = -static_cast<T>(1.0e12);
+  path_lower_bounds(8) = -static_cast<T>(1.0e12);
   path_upper_bounds(0) = a_max_xy;
   path_upper_bounds(1) = a_max_xy;
   path_upper_bounds(2) = a_max_z;
@@ -521,7 +529,19 @@ bool MpcWrapper<T>::updateLocked(
   }
 
   acado_initial_state_ = state.template cast<AcadoScalar>();
+  if (feedback_diagnostics_enabled_) {
+    feedback_diagnostics_.nominal = acado_inputs_.col(0).template head<4>().template cast<double>();
+    feedback_diagnostics_.start_mono = std::chrono::duration<double>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+  }
   const int feedback_status = acado_feedbackStep();
+  if (feedback_diagnostics_enabled_) {
+    feedback_diagnostics_.end_mono = std::chrono::duration<double>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    feedback_diagnostics_.status = feedback_status;
+    for (int i = 0; i < 4; ++i) feedback_diagnostics_.increment(i) = acadoWorkspace.x[i];
+    feedback_diagnostics_.expanded = acado_inputs_.col(0).template head<4>().template cast<double>();
+  }
   if (feedback_status != 0) {
     ROS_WARN_STREAM_THROTTLE(
         1.0, "MPC: ACADO feedbackStep returned status " << feedback_status

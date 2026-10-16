@@ -47,6 +47,7 @@
 #include <string>
 #include <utility>
 #include <cmath>
+#include <cstdlib>
 #include <random>
 #include <queue>
 #include <boost/uuid/detail/sha1.hpp>
@@ -299,6 +300,11 @@ static std::string fmtDouble(double value) {
   ss.setf(std::ios::fixed);
   ss << std::setprecision(6) << value;
   return ss.str();
+}
+
+static double steadyNowSec() {
+  return std::chrono::duration<double>(
+      std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
 static Eigen::Vector2d clampPlanarVelocity(const Eigen::Vector2d& velocity,
@@ -1903,6 +1909,60 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
     double official_overlap_output_delta_norm = 0.0;
     double filter_time_ms = 0.0;
   };
+
+  struct WorldCommandProvenance {
+    int qp_status = -999;
+    std::uint64_t snapshot_id = 0;
+    double snapshot_stamp = 0.0, feedback_start_mono = 0.0, feedback_end_mono = 0.0;
+    double publish_ros_sec = 0.0, collection_ms = 0.0;
+    Eigen::Vector4d qp_nominal = Eigen::Vector4d::Zero(), qp_increment = Eigen::Vector4d::Zero();
+    Eigen::Vector3d estimate_position = Eigen::Vector3d::Zero();
+    Eigen::Vector3d omega_profile0 = Eigen::Vector3d::Zero();
+    Eigen::Vector3d raw_ugv_velocity = Eigen::Vector3d::Zero(), raw_ugv_omega = Eigen::Vector3d::Zero();
+    Eigen::Vector3d solve_quad_position = Eigen::Vector3d::Zero();
+    bool valid = false;
+    bool mpc_path = false;
+    bool solve_ok = false;
+    bool fallback_used = false;
+    bool fallback_previous_valid = false;
+    double sim_time = std::numeric_limits<double>::quiet_NaN();
+    double state_stamp_sec = std::numeric_limits<double>::quiet_NaN();
+    double ugv_stamp_sec = std::numeric_limits<double>::quiet_NaN();
+    double mpc_start_mono_sec = std::numeric_limits<double>::quiet_NaN();
+    double mpc_end_mono_sec = std::numeric_limits<double>::quiet_NaN();
+    double publish_mono_sec = std::numeric_limits<double>::quiet_NaN();
+    Eigen::Vector4d acado_stage0 = Eigen::Vector4d::Constant(
+        std::numeric_limits<double>::quiet_NaN());
+    double acado_slack0 = std::numeric_limits<double>::quiet_NaN();
+    Eigen::Vector4d mpc_command = Eigen::Vector4d::Constant(
+        std::numeric_limits<double>::quiet_NaN());
+    Eigen::Vector3d quad_position_world = Eigen::Vector3d::Constant(
+        std::numeric_limits<double>::quiet_NaN());
+    Eigen::Vector3d ugv_position_world = Eigen::Vector3d::Constant(
+        std::numeric_limits<double>::quiet_NaN());
+    Eigen::Vector3d ugv_velocity_world = Eigen::Vector3d::Constant(
+        std::numeric_limits<double>::quiet_NaN());
+    Eigen::Vector3d ugv_omega_non = Eigen::Vector3d::Constant(
+        std::numeric_limits<double>::quiet_NaN());
+    Eigen::Matrix3d rotation_WN = Eigen::Matrix3d::Constant(
+        std::numeric_limits<double>::quiet_NaN());
+    Eigen::Vector3d p_rel_non = Eigen::Vector3d::Constant(
+        std::numeric_limits<double>::quiet_NaN());
+    Eigen::Vector3d omega_cross_p_non = Eigen::Vector3d::Constant(
+        std::numeric_limits<double>::quiet_NaN());
+    Eigen::Vector3d compensated_relative_non = Eigen::Vector3d::Constant(
+        std::numeric_limits<double>::quiet_NaN());
+    Eigen::Vector3d rotated_relative_world = Eigen::Vector3d::Constant(
+        std::numeric_limits<double>::quiet_NaN());
+    Eigen::Vector3d world_command_before_limits = Eigen::Vector3d::Constant(
+        std::numeric_limits<double>::quiet_NaN());
+    Eigen::Vector3d world_command_after_limits = Eigen::Vector3d::Constant(
+        std::numeric_limits<double>::quiet_NaN());
+    double yaw_before_limits = std::numeric_limits<double>::quiet_NaN();
+    double yaw_after_limits = std::numeric_limits<double>::quiet_NaN();
+    Control_t published_control = Control_t::Constant(
+        std::numeric_limits<double>::quiet_NaN());
+  };
  
   // constructor
   QuadrotorSimulator(double system_dt, 
@@ -2010,6 +2070,14 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
 
   const ExternalAvoidanceSnapshot& getLastExternalAvoidanceSnapshot() const {
     return last_external_avoidance_;
+  }
+
+  void setWorldCommandProvenanceEnabled(bool enabled) {
+    world_command_provenance_enabled_ = enabled;
+    control_system_ptr_->setCommandDiagnosticsEnabled(enabled);
+  }
+  const WorldCommandProvenance& getLastWorldCommandProvenance() const {
+    return last_world_command_provenance_;
   }
 
   const Control_t& getLastAppliedControlWorld() const {
@@ -2896,6 +2964,19 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
     Control_t control;
     Eigen::Vector3d v_world_cmd = Eigen::Vector3d::Zero();
     double yaw_rate_world_cmd = 0.0;
+    double provenance_collection_sec = 0.0;
+    double provenance_block_start = 0.0;
+    if (world_command_provenance_enabled_) {
+      provenance_block_start = steadyNowSec();
+    last_world_command_provenance_ = WorldCommandProvenance();
+    last_world_command_provenance_.valid = true;
+    last_world_command_provenance_.sim_time = sim_time;
+    last_world_command_provenance_.state_stamp_sec =
+        control_system_ptr_->getQuadOdomStampSec();
+    last_world_command_provenance_.ugv_stamp_sec =
+        control_system_ptr_->getCarOdomStampSec();
+      provenance_collection_sec += steadyNowSec() - provenance_block_start;
+    }
     last_external_avoidance_ = ExternalAvoidanceSnapshot();
     if (external_avoidance_cfg_.enabled()) {
       control_system_ptr_->runReactiveBaselineStep();
@@ -3173,9 +3254,54 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
           std::chrono::duration<double, std::milli>(filter_end - filter_start)
               .count();
     } else {
+      if (world_command_provenance_enabled_) {
+      last_world_command_provenance_.mpc_path = true;
+      last_world_command_provenance_.mpc_start_mono_sec = steadyNowSec();
+      }
       auto command = control_system_ptr_->run();
+      if (world_command_provenance_enabled_)
+      last_world_command_provenance_.mpc_end_mono_sec = steadyNowSec();
       last_solver_obstacle_drift_ = buildSolverObstacleDriftSnapshot(sim_time);
       const bool solve_ok = control_system_ptr_->getLastSolveOk();
+      if (world_command_provenance_enabled_) {
+        provenance_block_start = steadyNowSec();
+      last_world_command_provenance_.solve_ok = solve_ok;
+      last_world_command_provenance_.fallback_used =
+          control_system_ptr_->getLastCommandUsedFallback();
+      last_world_command_provenance_.fallback_previous_valid =
+          control_system_ptr_->getLastFallbackHadPreviousValid();
+      const auto& predicted_inputs = control_system_ptr_->getLastPredictedInputs();
+      if (predicted_inputs.cols() > 0) {
+        last_world_command_provenance_.acado_stage0 <<
+            predicted_inputs(0, 0), predicted_inputs(1, 0),
+            predicted_inputs(2, 0), predicted_inputs(3, 0);
+        last_world_command_provenance_.acado_slack0 = predicted_inputs(4, 0);
+      }
+      last_world_command_provenance_.mpc_command <<
+          command.velocity_cmd.x(), command.velocity_cmd.y(),
+          command.velocity_cmd.z(), command.yaw_rate;
+        const auto& fb = control_system_ptr_->getFeedbackDiagnostics();
+        last_world_command_provenance_.qp_status = fb.status;
+        last_world_command_provenance_.feedback_start_mono = fb.start_mono;
+        last_world_command_provenance_.feedback_end_mono = fb.end_mono;
+        last_world_command_provenance_.acado_stage0 = fb.expanded;
+        last_world_command_provenance_.qp_nominal = fb.nominal;
+        last_world_command_provenance_.qp_increment = fb.increment;
+        const auto& ctx = control_system_ptr_->getCommandContextDiagnostics();
+        last_world_command_provenance_.snapshot_id = ctx.snapshot_id;
+        last_world_command_provenance_.snapshot_stamp = ctx.snapshot_stamp;
+        last_world_command_provenance_.estimate_position = ctx.estimate_position;
+        last_world_command_provenance_.omega_profile0 = ctx.omega_profile0;
+        const auto& car = control_system_ptr_->getCarOdomDiagnostic();
+        last_world_command_provenance_.raw_ugv_velocity << car.twist.twist.linear.x,
+            car.twist.twist.linear.y, car.twist.twist.linear.z;
+        last_world_command_provenance_.raw_ugv_omega << car.twist.twist.angular.x,
+            car.twist.twist.angular.y, car.twist.twist.angular.z;
+        const auto& quad = control_system_ptr_->getQuadOdomDiagnostic();
+        last_world_command_provenance_.solve_quad_position << quad.pose.pose.position.x,
+            quad.pose.pose.position.y, quad.pose.pose.position.z;
+        provenance_collection_sec += steadyNowSec() - provenance_block_start;
+      }
       v_world_cmd = command.velocity_cmd;
       const Eigen::Quaterniond W_q_non =
           control_system_ptr_->getCarOrientation();
@@ -3189,6 +3315,17 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
                                      x_snapshot(1),
                                      x_snapshot(2));
       Eigen::Vector3d p_rel = W_q_non.inverse() * (quad_pos_world - car_pos);
+      if (world_command_provenance_enabled_) {
+        provenance_block_start = steadyNowSec();
+      last_world_command_provenance_.quad_position_world = quad_pos_world;
+      last_world_command_provenance_.ugv_position_world = car_pos;
+      last_world_command_provenance_.ugv_velocity_world = v_non;
+      last_world_command_provenance_.ugv_omega_non = omega_non;
+      last_world_command_provenance_.rotation_WN = W_q_non.toRotationMatrix();
+      last_world_command_provenance_.p_rel_non = p_rel;
+      last_world_command_provenance_.omega_cross_p_non = omega_non.cross(p_rel);
+        provenance_collection_sec += steadyNowSec() - provenance_block_start;
+      }
       if (!solve_ok && control_system_ptr_->isInertialFrame()) {
         // Keep consistent fallback behavior across modes on solver failure:
         // maintain current relative position to the moving non-inertial frame.
@@ -3198,8 +3335,22 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
         Eigen::Vector3d v_rel_cmd(command.velocity_cmd.x(),
                                   command.velocity_cmd.y(),
                                   command.velocity_cmd.z());
+        if (world_command_provenance_enabled_) {
+          provenance_block_start = steadyNowSec();
+        last_world_command_provenance_.compensated_relative_non =
+            v_rel_cmd + omega_non.cross(p_rel);
+        last_world_command_provenance_.rotated_relative_world =
+            W_q_non * last_world_command_provenance_.compensated_relative_non;
+          provenance_collection_sec += steadyNowSec() - provenance_block_start;
+        }
         // v_world = v_non + R * (v_rel_cmd + omega_non x p_rel)
         v_world_cmd = v_non + W_q_non * (v_rel_cmd + omega_non.cross(p_rel));
+      }
+      if (world_command_provenance_enabled_) {
+        provenance_block_start = steadyNowSec();
+      last_world_command_provenance_.world_command_before_limits = v_world_cmd;
+      last_world_command_provenance_.yaw_before_limits = command.yaw_rate;
+        provenance_collection_sec += steadyNowSec() - provenance_block_start;
       }
       Eigen::Vector2d v_world_xy(v_world_cmd.x(), v_world_cmd.y());
       const double v_world_xy_norm = v_world_xy.norm();
@@ -3214,10 +3365,18 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
       if (!control_system_ptr_->isInertialFrame()) {
         yaw_rate_world_cmd += omega_non.z();
       }
+      if (world_command_provenance_enabled_)
+        last_world_command_provenance_.yaw_before_limits = yaw_rate_world_cmd;
       if (max_yaw_rate_world > 1e-9) {
         yaw_rate_world_cmd = std::max(
             -max_yaw_rate_world,
             std::min(max_yaw_rate_world, yaw_rate_world_cmd));
+      }
+      if (world_command_provenance_enabled_) {
+        provenance_block_start = steadyNowSec();
+      last_world_command_provenance_.world_command_after_limits = v_world_cmd;
+      last_world_command_provenance_.yaw_after_limits = yaw_rate_world_cmd;
+        provenance_collection_sec += steadyNowSec() - provenance_block_start;
       }
     }
     control << v_world_cmd.x(), 
@@ -3227,6 +3386,15 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
 
     last_applied_control_world_ = control;
     system_ptr_->setControlAction(control);
+    if (world_command_provenance_enabled_) {
+      provenance_block_start = steadyNowSec();
+    last_world_command_provenance_.published_control = control;
+    last_world_command_provenance_.publish_mono_sec = steadyNowSec();      last_world_command_provenance_.publish_ros_sec = ros::Time::now().toSec();
+      last_world_command_provenance_.published_control = system_ptr_->getControlAction();
+      last_world_command_provenance_.collection_ms = 1000.0 *
+          (provenance_collection_sec + steadyNowSec() - provenance_block_start);
+    }
+
 
   }
 
@@ -3335,10 +3503,81 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
   UgvHorizonCompareSnapshot last_ugv_horizon_compare_;
   SolverObstacleDriftSnapshot last_solver_obstacle_drift_;
   ExternalAvoidanceSnapshot last_external_avoidance_;
+  bool world_command_provenance_enabled_ = false;
+  WorldCommandProvenance last_world_command_provenance_;
   Control_t last_applied_control_world_ = Control_t::Zero();
   nav_msgs::Odometry cycle_quad_odom_snapshot_;
   bool cycle_quad_odom_snapshot_valid_ = false;
 };
+
+static std::string provenanceDouble(double value) {
+  std::ostringstream out;
+  out << std::setprecision(17) << value;
+  return out.str();
+}
+
+static void writeWorldCommandProvenanceHeader(std::ostream& out) {
+  out << "uav_idx,cycle_id,sim_time,mpc_path,solve_ok,fallback_used,"
+         "fallback_previous_valid,state_stamp_sec,ugv_stamp_sec,"
+         "mpc_start_mono_sec,mpc_end_mono_sec,publish_mono_sec,"
+         "acado_u0,acado_u1,acado_u2,acado_u3,acado_slack0,"
+         "mpc_cmd_vx,mpc_cmd_vy,mpc_cmd_vz,mpc_cmd_yaw,"
+         "quad_px_w,quad_py_w,quad_pz_w,ugv_px_w,ugv_py_w,ugv_pz_w,"
+         "ugv_vx_w,ugv_vy_w,ugv_vz_w,ugv_omega_x_n,ugv_omega_y_n,ugv_omega_z_n,"
+         "R00,R01,R02,R10,R11,R12,R20,R21,R22,"
+         "p_rel_x_n,p_rel_y_n,p_rel_z_n,omega_cross_p_x_n,omega_cross_p_y_n,"
+         "omega_cross_p_z_n,comp_rel_x_n,comp_rel_y_n,comp_rel_z_n,"
+         "rot_rel_x_w,rot_rel_y_w,rot_rel_z_w,world_before_x,world_before_y,"
+         "world_before_z,world_after_x,world_after_y,world_after_z,"
+         "yaw_before,yaw_after,published_vx,published_vy,published_vz,published_yaw,"
+         "qp_status,snapshot_id,snapshot_stamp,feedback_start_mono,feedback_end_mono,apply_ros_sec,collection_ms,"
+         "qp_nominal0,qp_nominal1,qp_nominal2,qp_nominal3,qp_increment0,qp_increment1,qp_increment2,qp_increment3,"
+         "estimate_px_n,estimate_py_n,estimate_pz_n,omega_profile0_x,omega_profile0_y,omega_profile0_z,"
+         "raw_ugv_vx,raw_ugv_vy,raw_ugv_vz,raw_ugv_omega_x,raw_ugv_omega_y,raw_ugv_omega_z,"
+         "solve_quad_px_w,solve_quad_py_w,solve_quad_pz_w\n";
+}
+
+static void writeWorldCommandProvenanceRow(
+    std::ostream& out, int uav_idx, std::size_t cycle_id,
+    const QuadrotorSimulator::WorldCommandProvenance& p) {
+  const auto v3 = [](const Eigen::Vector3d& v) {
+    std::ostringstream s;
+    s << provenanceDouble(v.x()) << ',' << provenanceDouble(v.y()) << ',' << provenanceDouble(v.z());
+    return s.str();
+  };
+  const auto v4 = [](const Eigen::Vector4d& v) {
+    std::ostringstream s;
+    s << provenanceDouble(v(0)) << ',' << provenanceDouble(v(1)) << ','
+      << provenanceDouble(v(2)) << ',' << provenanceDouble(v(3));
+    return s.str();
+  };
+  out << uav_idx << ',' << cycle_id << ',' << provenanceDouble(p.sim_time) << ','
+      << (p.mpc_path ? 1 : 0) << ',' << (p.solve_ok ? 1 : 0) << ','
+      << (p.fallback_used ? 1 : 0) << ','
+      << (p.fallback_previous_valid ? 1 : 0) << ','
+      << provenanceDouble(p.state_stamp_sec) << ',' << provenanceDouble(p.ugv_stamp_sec) << ','
+      << provenanceDouble(p.mpc_start_mono_sec) << ',' << provenanceDouble(p.mpc_end_mono_sec)
+      << ',' << provenanceDouble(p.publish_mono_sec) << ',' << v4(p.acado_stage0) << ','
+      << provenanceDouble(p.acado_slack0) << ',' << v4(p.mpc_command) << ','
+      << v3(p.quad_position_world) << ',' << v3(p.ugv_position_world) << ','
+      << v3(p.ugv_velocity_world) << ',' << v3(p.ugv_omega_non) << ','
+      << provenanceDouble(p.rotation_WN(0,0)) << ',' << provenanceDouble(p.rotation_WN(0,1)) << ','
+      << provenanceDouble(p.rotation_WN(0,2)) << ',' << provenanceDouble(p.rotation_WN(1,0)) << ','
+      << provenanceDouble(p.rotation_WN(1,1)) << ',' << provenanceDouble(p.rotation_WN(1,2)) << ','
+      << provenanceDouble(p.rotation_WN(2,0)) << ',' << provenanceDouble(p.rotation_WN(2,1)) << ','
+      << provenanceDouble(p.rotation_WN(2,2)) << ',' << v3(p.p_rel_non) << ','
+      << v3(p.omega_cross_p_non) << ',' << v3(p.compensated_relative_non) << ','
+      << v3(p.rotated_relative_world) << ',' << v3(p.world_command_before_limits)
+      << ',' << v3(p.world_command_after_limits) << ','
+      << provenanceDouble(p.yaw_before_limits) << ',' << provenanceDouble(p.yaw_after_limits)
+      << ',' << v4(p.published_control) << ',' << p.qp_status << ',' << p.snapshot_id
+      << ',' << provenanceDouble(p.snapshot_stamp) << ',' << provenanceDouble(p.feedback_start_mono)
+      << ',' << provenanceDouble(p.feedback_end_mono) << ',' << provenanceDouble(p.publish_ros_sec)
+      << ',' << provenanceDouble(p.collection_ms) << ',' << v4(p.qp_nominal) << ',' << v4(p.qp_increment)
+      << ',' << v3(p.estimate_position) << ',' << v3(p.omega_profile0)
+      << ',' << v3(p.raw_ugv_velocity) << ',' << v3(p.raw_ugv_omega)
+      << ',' << v3(p.solve_quad_position) << '\n';
+}
 
 static void writeUgvHorizonDetailRows(
     std::ostream& out,
@@ -4997,6 +5236,10 @@ int main(int argc, char **argv)
   ros::NodeHandle nh; 
   ros::NodeHandle pnh("~");
 
+  // Optional scene-file parameters; direct node runs retain their gflags values.
+  pnh.param("v", v, v);
+  pnh.param("w", w, w);
+
   pnh.param("num_uavs", num_uavs, num_uavs);
   if (num_uavs <= 0) {
     ROS_WARN("Parameter num_uavs should be positive. Falling back to 1.");
@@ -5201,6 +5444,13 @@ int main(int argc, char **argv)
   if (field_hocbf_csv.empty()) {
     field_hocbf_csv = deriveFieldHocbfCsvPath(step_metrics_csv);
   }
+  std::string world_command_provenance_csv;
+  pnh.param("world_command_provenance_csv", world_command_provenance_csv,
+            std::string(""));
+  if (world_command_provenance_csv.empty()) {
+    const char* env_path = std::getenv("CONI_MPC_WORLD_COMMAND_PROVENANCE");
+    if (env_path != nullptr) world_command_provenance_csv = env_path;
+  }
   bool field_replay_diagnostics = false;
   pnh.param("cbf/field_replay_diagnostics", field_replay_diagnostics, false);
   std::string field_replay_log;
@@ -5389,6 +5639,10 @@ int main(int argc, char **argv)
   }
   if (!field_hocbf_csv.empty()) {
     ROS_INFO_STREAM("field_hocbf_csv=" << field_hocbf_csv);
+  }
+  if (!world_command_provenance_csv.empty()) {
+    ROS_INFO_STREAM("world_command_provenance_csv="
+                    << world_command_provenance_csv);
   }
   ROS_INFO_STREAM("RViz world view uses fixed frame '"
                   << acado_mpc_common::worldFrameId()
@@ -6271,6 +6525,26 @@ simulators.push_back(simulator);
       writeFieldHocbfHeader(field_hocbf_out);
     }
   }
+  std::ofstream world_command_provenance_out;
+  std::ofstream provenance_timing_out;
+  if (!world_command_provenance_csv.empty()) {
+    const bool need_provenance_header =
+        !fileHasData(world_command_provenance_csv);
+    world_command_provenance_out.open(world_command_provenance_csv.c_str(),
+                                      std::ios::out | std::ios::app);
+    if (!world_command_provenance_out.good()) {
+      ROS_ERROR_STREAM("Failed to open world-command provenance CSV: "
+                       << world_command_provenance_csv);
+    } else if (need_provenance_header) {
+      writeWorldCommandProvenanceHeader(world_command_provenance_out);
+      provenance_timing_out.open(world_command_provenance_csv + ".timing.csv");
+      provenance_timing_out << "uav_idx,cycle_id,collection_ms,serialize_ms\n";
+    }
+  }
+  for (const auto& sim : simulators) {
+    sim->setWorldCommandProvenanceEnabled(world_command_provenance_out.is_open() &&
+                                         world_command_provenance_out.good());
+  }
   std::vector<char> field_replay_buffer(1024 * 1024);
   std::ofstream field_replay_out;
   std::ofstream field_replay_timing_out;
@@ -6422,6 +6696,16 @@ simulators.push_back(simulator);
               control_system_ptr[static_cast<size_t>(idx)]
                   ->getLastStepDebugSnapshot();
           if (step_debug.valid) {
+            if (world_command_provenance_out.is_open() && world_command_provenance_out.good()) {
+              const double serialize_start = steadyNowSec();
+              writeWorldCommandProvenanceRow(
+                  world_command_provenance_out, idx, current_step_idx,
+                  simulators[static_cast<size_t>(idx)]
+                      ->getLastWorldCommandProvenance());
+              provenance_timing_out << idx << ',' << current_step_idx << ','
+                  << provenanceDouble(simulators[idx]->getLastWorldCommandProvenance().collection_ms)
+                  << ',' << provenanceDouble(1000.0 * (steadyNowSec() - serialize_start)) << '\n';
+            }
             if (step_metrics_out.good()) {
               writeStepMetricsRow(
                   step_metrics_out,

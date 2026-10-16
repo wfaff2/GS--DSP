@@ -991,11 +991,15 @@ void NumSimMpc::genRelativeEstimate()
       Eigen::Vector3d(car_linear_velocity_noise_std_ * sampleNormal(),
                       car_linear_velocity_noise_std_ * sampleNormal(),
                       car_linear_velocity_noise_std_ * sampleNormal());
+  Eigen::Vector3d car_angular_velocity_noise(
+      car_angular_velocity_noise_std_ * sampleNormal(),
+      car_angular_velocity_noise_std_ * sampleNormal(),
+      car_angular_velocity_noise_std_ * sampleNormal());
+  // Preserve the random draw sequence, but inject UGV angular noise only in yaw.
+  car_angular_velocity_noise.x() = 0.0;
+  car_angular_velocity_noise.y() = 0.0;
   measured_car_angular_velocity_ =
-      car_angular_velocity_raw +
-      Eigen::Vector3d(car_angular_velocity_noise_std_ * sampleNormal(),
-                      car_angular_velocity_noise_std_ * sampleNormal(),
-                      car_angular_velocity_noise_std_ * sampleNormal());
+      car_angular_velocity_raw + car_angular_velocity_noise;
   if (isInertialFrame()) {
     relative_est_.header.stamp = quad_odom_.header.stamp;
     state_estimate_.position = W_position_quad;
@@ -1973,6 +1977,12 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
   {
     std::lock_guard<std::mutex> lock(field_snapshot_mutex_);
     field_snapshot = field_snapshot_;
+  }
+  if (command_diagnostics_enabled_) {
+    command_context_diagnostics_.snapshot_id = field_snapshot ? field_snapshot->snapshot_id : 0;
+    command_context_diagnostics_.snapshot_stamp = field_snapshot ? field_snapshot->stamp.toSec() : 0.0;
+    command_context_diagnostics_.estimate_position = state_estimate_.position;
+    command_context_diagnostics_.omega_profile0 = omega_non_profile.col(0);
   }
   const ros::Time field_now = ros::Time::now();
   const double field_dt = std::max(1.0e-3, mpc_controller_.getPredictionDt());

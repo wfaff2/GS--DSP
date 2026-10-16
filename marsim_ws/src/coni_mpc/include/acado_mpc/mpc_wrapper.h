@@ -51,6 +51,7 @@
 #include <Eigen/Eigen>
 #include <ros/ros.h>
 #include <cstring>
+#include <chrono>
 #include <mutex>
 #include <vector>
 #include <limits>
@@ -186,6 +187,17 @@ class MpcWrapper
               bool do_preparation = true);
   bool prepare();
 
+  struct FeedbackDiagnostics {
+    int status = -999;  // no feedback attempted
+    double start_mono = 0.0, end_mono = 0.0;
+    Eigen::Vector4d nominal = Eigen::Vector4d::Zero();
+    Eigen::Vector4d increment = Eigen::Vector4d::Zero();
+    Eigen::Vector4d expanded = Eigen::Vector4d::Zero();
+  };
+  void setFeedbackDiagnosticsEnabled(bool enabled) { feedback_diagnostics_enabled_ = enabled; }
+  void resetFeedbackDiagnostics() { if (feedback_diagnostics_enabled_) feedback_diagnostics_ = FeedbackDiagnostics(); }
+  const FeedbackDiagnostics& getFeedbackDiagnostics() const { return feedback_diagnostics_; }
+
   // Cached objective after the last solve/update call (thread-safe to read).
   T getObjective() const { return static_cast<T>(cached_objective_); }
 
@@ -209,6 +221,8 @@ class MpcWrapper
   T getTimestep() const { return dt_; }
 
  private:
+  bool feedback_diagnostics_enabled_ = false;
+  FeedbackDiagnostics feedback_diagnostics_;
   struct ScopedContext {
     explicit ScopedContext(MpcWrapper& wrapper)
         : wrapper_(wrapper),

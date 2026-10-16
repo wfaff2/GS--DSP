@@ -264,6 +264,10 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
   const bool field_update_ok = mpc_wrapper_.setFieldHocbf(
       params.cbf_field_hocbf_profile_, field_active);
   const bool field_mode_changed = field_active != last_field_enabled_;
+  const std::size_t active_obs_count =
+      params.cbf_enabled_ ? params.cbf_obstacles_.size() : 0;
+  const bool obstacle_mode_changed = (last_obstacle_count_ != active_obs_count);
+  last_obstacle_count_ = active_obs_count;
   const bool field_changed = field_mode_changed ||
       !params.cbf_field_hocbf_profile_.isApprox(last_field_profile_, T(1e-12));
   if (field_changed) {
@@ -279,7 +283,7 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
       preparationThread();
       return makeFailureFallback("Field-HOCBF slack-bound update failure");
     }
-    if (field_mode_changed) {
+    if (field_mode_changed || obstacle_mode_changed) {
       // A mode transition changes the path row and its slack bounds.  One
       // cold solve installs both atomically; subsequent coefficient updates
       // follow the normal prepared-for-next-cycle RTI pipeline.
@@ -290,6 +294,8 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
     // next feedback step while retaining the current primal warm start.
     last_field_profile_ = params.cbf_field_hocbf_profile_;
     last_field_enabled_ = field_active;
+  } else if (obstacle_mode_changed) {
+    solve_from_scratch_ = true;
   }
   if (!obstacle_update_ok || !field_update_ok) {
     ROS_ERROR("MPC: Failed to update CBF obstacles.");
