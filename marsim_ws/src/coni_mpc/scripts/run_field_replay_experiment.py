@@ -28,6 +28,9 @@ def main():
     parser.add_argument('--output', required=True)
     parser.add_argument('--port', type=int, default=11411)
     parser.add_argument('--duration', type=float, default=30.)
+    parser.add_argument('--provenance', action='store_true')
+    parser.add_argument('--capture-qp', action='store_true')
+    parser.add_argument('--launch-arg', action='append', default=[])
     args = parser.parse_args()
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=False)
@@ -44,10 +47,16 @@ def main():
                'field_replay_diagnostics:=true', 'sim_control_dt_sec:=0.02',
                f'sim_duration_sec:={args.duration}', f'metrics_csv:={output / "metrics.csv"}',
                'run_tag:=field_replay_50hz', 'start_rviz:=false']
+    if args.provenance:
+        command.append(f'world_command_provenance_csv:={output / "world_command_provenance.csv"}')
+    if args.capture_qp:
+        env['CONI_MPC_QP_CAPTURE'] = str(output / 'acado_qp_capture.bin')
+    command.extend(args.launch_arg)
     metadata = {'schema': 1, 'started_at': datetime.datetime.now().astimezone().isoformat(),
                 'command': command, 'ros_master_uri': env['ROS_MASTER_URI'],
                 'repo': str(repo), 'duration_sec': args.duration, 'control_dt_sec': .02,
                 'rviz_enabled': False, 'status': 'starting'}
+    metadata['diagnostics'] = {'provenance': args.provenance, 'qp_capture': args.capture_qp}
     metadata['commit'] = subprocess.check_output(['git', '-C', str(repo), 'rev-parse', 'HEAD'], text=True).strip()
     (output / 'source.diff').write_text(subprocess.check_output(['git', '-C', str(repo), 'diff'], text=True))
     (output / 'git_status.txt').write_text(subprocess.check_output(['git', '-C', str(repo), 'status', '--short'], text=True))
@@ -56,6 +65,15 @@ def main():
                  'include/coni_mpc/num_sim_mpc.h', 'include/coni_mpc/field_hocbf.h',
                  'include/coni_mpc/field_replay_diagnostics.h', 'test/field_replay_tool.cpp',
                  'test/field_replay_diagnostics_test.cpp',
+                 'include/acado_mpc/mpc_controller.h', 'include/acado_mpc/mpc_wrapper.h',
+                 'src/acado_mpc/mpc_controller.cpp', 'src/acado_mpc/mpc_wrapper.cpp',
+                 'test/qp_counterfactual_tool.cpp', 'test/qp_capture_replay_tool.cpp',
+                 'scripts/qp_numeric_audit.py', 'scripts/analyze_world_command_provenance.py',
+                 'test/world_command_provenance_test.py',
+                 'acado_model/quadrotor_mpc_codegen/acado_common.h',
+                 'acado_model/quadrotor_mpc_codegen/acado_solver.c',
+                 'acado_model/quadrotor_mpc_codegen/acado_integrator.c',
+                 'acado_model/quadrotor_mpc_codegen/acado_qpoases3_interface.c',
                  'parameters/num_sim_non_one_point.yaml', 'parameters/dsp_mpc_single_obstacles.yaml',
                  'launch/dsp_mpc_sim.launch', 'launch/num_sim_non_one_point.launch',
                  'launch/marsim_depth_cbf_uav1.launch', 'scripts/run_field_replay_experiment.py']:
@@ -117,6 +135,9 @@ def main():
     finally:
         stop(bag)
         stop(launch)
+        metadata['source_sha256'] = {
+            str(p.relative_to(archive)): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(archive.rglob('*')) if p.is_file()}
         metadata['finished_at'] = datetime.datetime.now().astimezone().isoformat()
         metadata_path.write_text(json.dumps(metadata, indent=2))
     print(f'COMPLETED {output}', flush=True)

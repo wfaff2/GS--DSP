@@ -20,8 +20,8 @@ ugv_rollout_mode:           stage
 car_trajectory_mode:        figure_eight   # obstacle_aware | circle | figure_eight
 
 # Limits for commands
-max_v_xy:                  3 #1.5
-max_v_z:                   1.5 #1.0
+max_v_xy:                  5 #1.5
+max_v_z:                   3 #1.0
 max_yaw_rate:              3.14 #3.14
 a_max_xy:                  10 #6.0
 a_max_z:                   4 #4.0
@@ -111,7 +111,7 @@ cbf:
   preview_margin: 0.0
   preview_steps: 5        # 降低预测步数，减少非惯性系下障碍物"相对高速运动"产生的极长拖尾遮挡
   obstacle_hysteresis_hold_cycles: 0
-  slack_max: 50   # direct upper bound: 0 = hard, >0 = bounded soft slack
+  slack_max: 0   # direct upper bound: 0 = hard, >0 = bounded soft slack
   R_slack: 500   # quadratic penalty on slack when slack_max > 0
 
 # Comment 3.4 baseline: independent Moving-Goal Polytopic HRVO (MG-PolyHRVO).

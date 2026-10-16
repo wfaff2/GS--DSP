@@ -208,6 +208,32 @@ target_include_directories(PolytopicVoHrvoFilter PUBLIC
 target_link_libraries(PolytopicVoHrvoFilter
         Eigen3::Eigen)
 
+add_library(dsp_particle_risk
+        STATIC
+        src/dsp_particle_risk.cpp)
+target_include_directories(dsp_particle_risk PUBLIC
+        ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(dsp_particle_risk
+        Eigen3::Eigen)
+
+add_library(dsp_particle_to_grid
+        STATIC
+        src/dsp_particle_to_grid.cpp)
+target_include_directories(dsp_particle_to_grid PUBLIC
+        ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(dsp_particle_to_grid
+        Eigen3::Eigen)
+
+add_library(conservative_grid_risk
+        STATIC
+        src/conservative_grid_risk.cpp)
+target_include_directories(conservative_grid_risk PUBLIC
+        ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(conservative_grid_risk
+        dsp_particle_risk
+        dsp_particle_to_grid
+        Eigen3::Eigen)
+
 add_executable(num_sim_non_one_point_node
         src/num_sim/num_sim_non_one_point_node.cpp)
 target_link_libraries(num_sim_non_one_point_node
@@ -243,6 +269,10 @@ add_executable(field_replay_tool test/field_replay_tool.cpp)
 target_link_libraries(field_replay_tool Eigen3::Eigen)
 add_executable(field_replay_event_tool test/field_replay_event_tool.cpp)
 target_link_libraries(field_replay_event_tool Eigen3::Eigen)
+add_executable(qp_capture_replay_tool test/qp_capture_replay_tool.cpp)
+target_link_libraries(qp_capture_replay_tool acado_mpc)
+add_executable(qp_counterfactual_tool test/qp_counterfactual_tool.cpp)
+target_link_libraries(qp_counterfactual_tool acado_mpc)
 
 if(CATKIN_ENABLE_TESTING)
         add_test(NAME polytopic_vo_hrvo_smoke_test
@@ -276,5 +306,30 @@ if(CATKIN_ENABLE_TESTING)
         catkin_add_gtest(field_replay_diagnostics_test test/field_replay_diagnostics_test.cpp)
         if(TARGET field_replay_diagnostics_test)
                 target_link_libraries(field_replay_diagnostics_test gtest_main Eigen3::Eigen)
+        endif()
+        catkin_add_gtest(dsp_particle_risk_test test/dsp_particle_risk_test.cpp)
+        if(TARGET dsp_particle_risk_test)
+                target_link_libraries(dsp_particle_risk_test
+                        dsp_particle_risk
+                        gtest_main
+                        Eigen3::Eigen)
+        endif()
+        catkin_add_gtest(dsp_particle_to_grid_test
+                test/dsp_particle_to_grid_test.cpp)
+        if(TARGET dsp_particle_to_grid_test)
+                target_link_libraries(dsp_particle_to_grid_test
+                        dsp_particle_to_grid
+                        gtest_main
+                        Eigen3::Eigen)
+        endif()
+        catkin_add_gtest(conservative_grid_risk_test
+                test/conservative_grid_risk_test.cpp)
+        if(TARGET conservative_grid_risk_test)
+                target_link_libraries(conservative_grid_risk_test
+                        conservative_grid_risk
+                        dsp_particle_risk
+                        dsp_particle_to_grid
+                        gtest_main
+                        Eigen3::Eigen)
         endif()
 endif()

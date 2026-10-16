@@ -826,3 +826,198 @@
 - Verification: `catkin_make --pkg coni_mpc -j2` passed; CMake pooling target passed 6/6 tests. C++14 model build and YAML-driven 60-voxel export succeeded in `/tmp/dsp_voxel_codegen_validation` (`ACADO_NOD=327`, `ACADO_NPAC=11`). Extracted generated path-constraint check at `/tmp/dsp_voxel_generated_constraint_check.cpp` found finite values/Jacobians for empty and coincident-voxel inputs; position-gradient finite-difference error < 1e-10. `git diff --check` passed.
 - Decisions/limits: configurable distance epsilon and additive partition floor avoid singular AD/log(0), with documented formula changes. Current-position masks do not implement prediction-state compact support; Top-N can still remove nonzero contributors. No global compact C2 claim or simulation safety claim. The live MPC wrapper/solver still uses its original affine field path; no live chain replacement or simulation run was performed for these module APIs.
 - Next action if full runtime migration is requested: resolve exact compact support/capacity semantics first, then synchronize per-stage voxel OnlineData, wrapper dimensions/bounds and generated solver before comparative simulations.
+
+
+## 2026-10-07: Connect dynamic voxel field and HOCBF to the live MPC (withdrawn)
+
+- Objective: replace the preparation-only API with stage-wise DSP -> kinematic pooling -> nonlinear ACADO field/HOCBF, retaining affine mode for comparison.
+- Decisions: each of 60 slots stores p/v/a/P (10 values), plus activation; original 87 OD retained, NOD=688, NPAC=12, terminal h row at bound index240. Pool leaf0.4m; p/v/a share arithmetic averaging. Occupancy/member sets frozen within a stage. Smooth tail is noncompact and field h is not a surface-clearance certificate.
+- Changed areas: model/generator and generated solver, pool/evaluator, NumSimMpc/controller/wrapper, backend configuration/launch forwarding, CSV/experiment archive, focused tests and module documentation.
+- Evidence so far: 11 pooling/numeric tests passed; final 60-slot generated field/HOCBF values matched independent evaluation and central-FD Jacobian max error3.43e-9. Independent review confirmed OD/path/terminal layouts and relative acceleration handling. Final export /tmp/coni-voxel-final60.0i45lC; generator export110s.
+- Historical verification: implementation built and archived short simulations, but was withdrawn by the user. This entry does not describe the current controller or establish a safety result.
+- Status: superseded by the rollback repair below.
+
+
+## 2026-10-07: Repair incomplete rollback and rebuild
+
+- Objective: repair the failed build after the user withdrew the live voxel integration, retaining the earlier preparation modules.
+- Evidence: reproduced fatal missing `coni_mpc/voxel_barrier_eval.h`; remaining CMake/source/generated-solver changes still expected the withdrawn implementation.
+- Action: backed up all residual changes to `/tmp/dsp_partial_rollback_backup_20261007_211918`, restored 22 package files to pre-integration HEAD `1e66bf5`, and removed three backed-up new files belonging to that integration. Generated dimensions are restored to NOD=87, NPAC=10; original affine controller and YAML are restored. No package changes remain relative to HEAD.
+- Verification: `catkin_make --pkg coni_mpc -j2` passed (exit 0), including the numerical simulation executable; log `/tmp/dsp_rollback_build.log`. `git diff --check` passed. No simulation rerun requested.
+
+## 2026-10-09: C1 stage 3B moment/Hessian audit
+
+- Objective: independently test the cubic B-spline first/second moments and assess the requested `R_grid0 - (L2/2) sum(D_j chi_j)` correction without touching ROS, DSP publication, HOCBF, MPC, ACADO, or the stage-1 kernel.
+- Evidence: full-support tests give `sum N=1`, exact first-moment reproduction, and `sum N ||c-p||^2=Delta^2` to about `1e-15`; clipping a finite boundary breaks all three. For the fifth-order smootherstep, the radial Hessian bound is `L2=max(10/(sqrt(3)*delta_sm^2), 15/(8*r*delta_sm))`.
+- Decision: Taylor expansion gives an absolute-error bound and therefore a plus correction. A single-particle smootherstep counterexample has `R_smooth=0.9969201` while the requested minus candidate is `-11.2003403`; the requested expression cannot be a strict upper bound under the stated chi conditions.
+- Changed files: `marsim_ws/src/coni_mpc/scripts/stage3b_moment_hessian_experiment.py`, `marsim_ws/src/coni_mpc/test/stage3b_moment_hessian_test.py`, and `marsim_ws/src/coni_mpc/docs/C1_STAGE3B_MOMENT_HESSIAN_REPORT.md`.
+- Verification: the four independent Python tests pass; C++/ROS/control code was not changed. Stage 3A is retained and no invalid stage-3B risk path was implemented.
+- Next action: keep stage 3A; only pursue a separately justified plus-sign localized bound if a new experiment is requested.
+
+
+## 2026-10-11: C1 Stage 3E independent directional risk audit
+
+- Objective: audit the fixed analytical angular envelope and compare A/C/D/E offline, without modifying old stages or runtime interfaces.
+- Evidence: proved `a||u||1 <= b(u) <= sqrt(3)a`, `d_A <= d_E <= d_C`, `R_hard <= R_smooth <= R_C <= R_E <= R_A`, and global spatial C2 of the kernel composite. Fixed-grid CV P2G supplies conditional time/mixed derivatives; online snapshot regularity is not established.
+- Interface finding: live Field-HOCBF is occupancy-normalized planar soft-min with `d_safe=.48 m`, not a calibrated raw-PHD-mass threshold. Frozen affine ACADO remains NOD=87, NPAC=10.
+- Results: matched Stage3D seed/scenarios yield dense mean excess A=14.013289, D=12.886659, E=13.433649 (E reduces A by 4.136%, D by 8.040%). At exploratory tau=.15, dense exclusion samples A/D/E=363/318/341. E full reference cost=.153740 ms/query vs D=3.329602 ms/query; Python-only, no runtime claim.
+- Files added: `scripts/stage3e_directional_experiment.py`, `test/stage3e_directional_test.py`, `docs/C1_STAGE3E_DIRECTIONAL_REPORT.md`, `docs/C1_STAGE3E_RESULTS.json`, `docs/C1_STAGE3E_LEVEL_SETS.svg` under coni_mpc. Existing uncommitted work preserved; no Git commit.
+- Verification: 12/12 initial tests, 14/14 final tests after component-only timing and singleton geometry additions; full offline outputs regenerated. Independent mathematical and code review passed.
+- Decision: retain 3A as independent baseline; E is inexpensive but more conservative than D in these samples and on an analytical axis counterexample. Stop direct online replacement; prioritize separately requested option-B statistics research. Unresolved: PHD threshold calibration, snapshot/frame time derivatives, boundary mass policy, E-D global ordering, C++ and closed-loop validation.
+
+
+## 2026-10-11: Option B position-moment information-value audit
+
+- Objective: independently assess full per-node particle-position moments versus Stage3C, without modifying runtime or old stages.
+- Proofs: node contribution measure with mass/first/second moments yields `R_smooth <= sum V_full <= R_3C`. Zero covariance recovers original risk; PSD plus coordinate bounds are not sufficient for feasibility. General full-moment optimum has an actual-kernel spatial cusp on the closed-box boundary.
+- Information: exact same-P2G clouds prove first moments add information beyond all masses, and second moments add information beyond all masses+first.
+- Paired evidence: matched dense float mean excess C/first/full=11.512652/8.743461/2.649132 (76.989% reduction vs C). Exact Fraction/dyadic outward certificates strictly improve 10/12 fixed queries, including 4/4 dense queries; dense query0 C lower20.171058 versus full upper7.433051. Float full-sample averages are not machine-certified.
+- Files added under coni_mpc: `scripts/option_b_information_experiment.py`, `test/option_b_information_test.py`, `docs/C1_OPTION_B_INFORMATION_REPORT.md`, `docs/C1_OPTION_B_INFORMATION_RESULTS.json`. No existing algorithm/interface changed; no Git commit.
+- Verification: 14 initial / 16 final Python tests passed; independent mathematical and read-only code review confirmed certificates and information examples. Outputs regenerated after final examples.
+- Decision: do not terminate Option B for lack of certified information gain; retain it as offline benchmark. No online integration. Unresolved: continuum optimum gap, practical-interior spatial C2, moment time jets/sensitivity, frame/boundary policies, raw-PHD threshold calibration and closed-loop effects.
+
+## 2026-10-12: Field-HOCBF command-discontinuity causal replay
+
+- Objective: diagnose the 6.60 s prediction-slice transition and 26.28 s command change without modifying DSP, Field-HOCBF, MPC, or ACADO algorithms.
+- Evidence: the historical replay directory was absent; a fresh 50 Hz, 30 s replay was archived at `/tmp/dsp_field_replay_current_20261012` from HEAD `1e66bf5` with the pre-existing dirty state recorded. All 1500 MPC cycles solved; binary replay reconstruction and profile checks were exact.
+- Results: maximum world command jump was 1.47869 m/s at 6.44 s; 6.60 s jump was 0.40471 m/s and 26.28 s jump was 0.64401 m/s. Snapshot age median/max were 0.1232/0.2043 s. `round(field_age/field_dt)` caused measured stage transitions near 0.15 s age. Constraint-only A/B/C/D counterfactuals show large A/b changes, especially fixed-ID/current-state D at 6.44 s; 26.28 s had C=A and stage-0 residual 5.978, so optimizer causality remains unresolved.
+- Decision: no algorithm tuning or runtime integration. Current generated OCP has no explicit inter-cycle Δu/slew constraint; `previous_input_` is only a warm-start anchor. Recommend first adding read-only QP replay logging, then evaluate continuous snapshot/slice handover.
+- Changed files: `marsim_ws/src/coni_mpc/docs/field_hocbf_command_discontinuity_report_20261012.md`; standalone `/tmp/field_cf.cpp` and `/tmp/field_cf` only. Existing workspace changes preserved.
+- Verification: `catkin_make --pkg coni_mpc -j2`, `field_hocbf_test`, `field_replay_diagnostics_test`, replay self-test, event replay, and fresh simulation all passed. Unresolved: E/fixed-perception actual QP re-solve requires missing reference/warm-start/qpOASES state.
+
+## 2026-10-12: Real ACADO QP capture, replay, and causal counterfactuals
+
+- Objective: satisfy the hard acceptance requirement for actual condensed ACADO/qpOASES QP replay and A-D counterfactual solves; do not alter control mathematics or default behavior.
+- Audit: generated ACADO uses qpOASES-e `QProblem(140,200)` and `QProblem_init` on every feedback; no persistent qpOASES hot-start object was found. ACADO warm behavior is nominal x/u trajectory reuse.
+- Diagnostic hook: `acado_qpoases3_interface.c` now has a default-off `CONI_MPC_QP_CAPTURE` binary hook recording ACADO RTI context, exact H/g/A/bounds, primal/dual, status, nWSR, objective, and KKT. Added `qp_capture_replay_tool` and `qp_counterfactual_tool` targets.
+- Evidence: `/tmp/dsp_field_replay_qp_20261012` contains 1500 records (641 MiB). Exact re-preparation and qpOASES cold re-solve reproduced all 1500 statuses, nWSR, primal/dual, objective, KKT, H/A/bound vectors with zero reported error.
+- Causal results: same-context full-horizon A-D QP re-solves are valid at 6.44 s and 6.60 s. At 6.44 s, B/C/D change optimal relative/world-speed norm by 0.8885/0.3320/0.7104 m/s; at 6.60 s by 0.4993/0.1011/0.4017 m/s. At 26.28 s all B/C/D QP solutions exactly equal A despite changed condensed constraint A; no active Field-HOCBF row exists there, so its 0.64591 m/s online jump is not caused by Field-HOCBF profile changes in this fixed RTI context. E replacing previous nominal/reference changes only 0.0060/0.0144/0.0047 m/s at the three events.
+- Verification: `catkin_make --pkg coni_mpc -j2`, `qp_capture_replay_tool`, field replay self-tests, full field replay analysis, and same-archive QP counterfactual tool passed. Initial mixed-archive counterfactual was discarded and regenerated from the same QP archive.
+- Changed files: generated interface diagnostic hook, `CMakeLists.txt`, `test/qp_capture_replay_tool.cpp`, `test/qp_counterfactual_tool.cpp`, `docs/field_hocbf_qp_causal_diagnosis_20261012.md`; existing algorithms/defaults preserved. E is now completed for nominal/reference substitution; world-command provenance remains the unresolved 26.28 s evidence gap.
+
+## 2026-10-12 World-command provenance / QP audit completed
+
+- Objective: diagnostic-only command provenance, independent KKT residuals, and A–E condensed boundary audit; no algorithm/YAML tuning, hardware action, commit or push.
+- Evidence: new independent /tmp/dsp_field_provenance_complete_20261012 has 1500 complete cycles, matching QP/replay, source/config/binary hashes and raw sensors; historical archive remains intact.
+- Finding: new 26.28 s jump=0.645709482 m/s; MPC return delta=0.089984429; angular compensation delta=0.486757024. Raw UGV omega unchanged, measured omega changed by configured Gaussian noise. No clipping/application change, solve/map world state and omega-profile0 equal. Old exact 0.64591 event has no complete provenance.
+- Numerical audit: historical 1500 + 15 variants have tiny four-part residuals and symmetric positive definite H. CSV kkt is generated ACADO algebraic scalar, not native QP KKT violation.
+- Boundary correction: B/C/D change only Field local row9 of A, lbA, ubA; H/g/variable bounds and other path rows unchanged. Stage19 row199 is a path row, not terminal stage20. Historical counterfactual solve conclusions remain valid.
+- Changed files: diagnostic getters/copies in controller/wrapper/NumSimMpc; gated node CSV and launch args; experiment runner; QP counterfactual output; numeric/provenance/cross-capture scripts and tests; final report and causal-report addendum.
+- Validation: package C++ build passed; FieldHocbf 3/3 and FieldReplay 2/2; numeric unit 4/4; provenance 1500 cycles/corruption rejection; historical/new exact QP replay 1500 each; Field replay zero verification failures; 100-cycle diagnostic gate gives byte-identical QPs/identical commands; cross-capture 1500 passes.
+- Cost: measured node capture+serialization mean/p95/max=0.101111/0.244570/0.398890 ms; excludes lower-layer tiny copies/timestamps, timing-file complete write and final close flush. No period change.
+- Deliverable: marsim_ws/src/coni_mpc/docs/field_hocbf_world_command_provenance_report_20261012.md; archive includes products, final analysis sources, reproduce.sh, verification and delivery manifest.
+- Remaining research (not implemented): quantify noisy non-inertial feedforward sensitivity/position lever arm and relative/world command constraint consistency; historical exact event causality, physical estimator frames, failure-path runtime and closed-loop safety are not proven by this audit.
+
+## 2026-10-12 UGV yaw-only noise closed-loop validation
+
+- Scope: read-only verification/analysis after the authorized RP angular noise mask; no further controller/YAML/DSP algorithm changes.
+- Archive: /tmp/dsp_ugv_yaw_only_validation_20261012_dop2wi; after/before each30s1500cycles; before uses isolated historical NumSimMpc compilation/static-library member replacement and independent relink, live tree untouched.
+- Confirmed: true/measured omegaXY and all21stage OD omegaXY=0 after; RP height-lever contribution0. Yaw and linearXYZ noise samples equal before/after, same std/seed/params. DSP seeds use wall time, so perception is not strictly paired.
+- Outcomes before→after: command delta P95 .510951→.313229m/s; >.5m/s84→14; cross-termP95 .377977→.183218. Maximum command delta1.794766→2.053921; infeasible/fallback2→13; true tracking RMS .367770→.388347m; exact scheduler overruns11→21.
+- Largest remaining jumps occur at fail→successful recovery cycles327/336 and already in returned MPC speed. All13 failed fallback current stage0 affine Field residuals negative; not claimed safe.
+- Ground truth: exact bag odom stamp/pose joins; plant next-velocity consistency<7.82e-9. Dynamic box CV reconstructed min clearance after .332191m with ZOH/age sensitivity; static solid truth unavailable, collision=0 not a safety proof.
+- Validation: independent analytic boxSDF and CSV metrics checks passed; QP index/status/ref guards4500cycles; before build passed; new offline script syntax/diff checks passed; reproduction package/launch parse checked without extra nodes/simulations.
+- Delivered: scripts/analyze_ugv_yaw_only_validation.py; docs/ugv_yaw_only_noise_validation_20261012.md; raw runs, comparison/failed windows/figures, frozen binaries, reproduce.sh and manifest.
+- Acceptance: noise-model correction and height-mechanism elimination pass; overall control/safety/realtime acceptance partial, not unconditional. End RP-noise model investigation; preserve remaining QP feasibility/fallback/recovery and static geometry limitations, no next algorithm design implemented.
+
+## 2026-10-14 DSP 粒子风险/HOCBF 第二轮离线验证
+
+- Objective: verify raw DSP particle-risk semantics and boundary HOCBF feasibility without changing MF-MPSC, ACADO, production DSP, or online HOCBF code.
+- Evidence: `audit_reports/dsp_particle_risk_round2_20261014/`; fixed-set R uses native PHD mass with a C² smootherstep, while B is only a same-unit model budget absent event calibration. 195 rows keep artificial probes, independently generated boundary states, and historical actual states separate; A/B/C counts are 3/3/3, 6/6/72, and 36/0/6 respectively, with D model-condition flags recorded independently. A finite-input counterexample has `max_U psi2=-258.701654`; moving-particle finite-difference `psi2` error is `9.0662e-05`.
+- Cost: 7 snapshots × 3 zones × 400 cycles of 20 direct full-derivative queries; pooled transition P95 `732.857 us`, maximum `809.760 us` (`3.66%` and `4.05%` of 20 ms). No computation-driven need for risk compression was found at this scale.
+- Decision: R/B semantics and direct-query cost are CONDITIONAL/PASS within the audited scope; universal HOCBF feasibility is FAIL. Prioritize zero-gradient/input-infeasible control recovery and consistent moving-particle/non-inertial derivatives before any compression work.
+- Changed files: only new independent round-2 reports/scripts/results under `audit_reports/dsp_particle_risk_round2_20261014/`; no Git commit and no production controller changes.
+- Verification: boundary script rerun, Python syntax checks, C++ cost benchmark build and rerun, aggregate assertions passed. Stop here pending a separate request.
+
+## 2026-10-14 DSP 第三轮真实时序风险预警验证
+
+- Objective: run independent MARSIM/LiDAR/DSP scenes and evaluate raw eligible-particle R/HOCBF feasibility and future warning timing without changing MF-MPSC, ACADO, Field-HOCBF, or DSP code.
+- Scenes: archived static-PCD + two dynamic boxes + UGV turn; new static-cylinder PCD (center `(3.8890873,-3.8890873)`, radius `0.45 m`) + the same dynamic boxes/UGV turn. Frame/time alignment used a searched recorder/controller offset (`2.84 s` original, `2.32 s` cylinder) and sensor-pose P95 errors `0.123/0.100 m`.
+- Evidence: raw-particle HOCBF rows and physical truth are under `audit_reports/dsp_particle_risk_round3_20261014/`. Physical close threshold `0.5 m` occurred at `5.66 s` (original dynamic box) and `4.42 s` (cylinder scene). B=0.5 future R/infeasibility warnings led by `0.30/2.72 s` and `2.26/2.16 s`; actual current risk was near or after physical close. Static cylinder minimum clearance `0.249 m`; dynamic box minima `0.257 m` original and `0.049 m` cylinder scene.
+- Feasibility: real actual rows include A zero-gradient states and B input-insufficient states; representative cylinder B=0.5 row has `h=0.474262`, `psi1=1.239384`, `max_U psi2=-28.835278`, actual acceleration proxy `psi2=-40.317852`. Initial C rows where `h<0` remain separate.
+- Limits: low-level applied acceleration was not logged; actual `psi2` is a proxy. UGV yaw was derived from velocity because metrics lack quaternion. Three snapshot updates with reconstruction mismatch were excluded. Future warnings are nominal-risk diagnostics, not collision or online solver-failure claims.
+- Decision: real risk transition and predictive value are VERIFIED/CONDITIONAL within the recorded scenes; direct production MF-MPSC integration and any new control mechanism remain INCONCLUSIVE. No Git commit and no automatic next stage.
+- Changed files: only independent round-3 artifacts under `audit_reports/dsp_particle_risk_round3_20261014/` plus this task log entry; production code untouched.
+- Verification: independent MARSIM run, bag capture/replay, 21-stage reconstruction filtering, frame alignment checks, raw-risk/HOCBF analysis, physical truth join, event summary, plots and Python syntax checks completed.
+## 2026-10-14 DSP risk round 4 audit
+
+- Objective: verify causal snapshot timing, same-event attribution, feasibility classification, and incremental value of future DSP/HOCBF alerts without changing production control.
+- Evidence: round-3 CSV/NPZ/physical truth; production timestamp paths in `DSP-map/src/map_sim_example.cpp` and `marsim_ws/src/coni_mpc/src/num_sim/num_sim_non_one_point_node.cpp`.
+- Decision: cloud/header stamp is an observation timestamp; publish completion is not recorded. 34,716/67,320 diagnostic rows have negative snapshot age. Keep causal results conditional and do not call them complete online validation.
+- Changed files: only `audit_reports/dsp_particle_risk_round4_20261014/` scripts, tables, plots, and report.
+- Verification: scripts compile and run; round-3 production files unchanged; no ROS/hardware run.
+- Unresolved: per-particle query contribution, DSP obstacle-ID to physical truth-ID linkage, logged UGV quaternion/TF, and a controlled conventional-monitor comparison remain unavailable.
+
+
+## 2026-10-16: Use the previous figure-eight obstacle scene with current DSP control
+
+- Objective: run the current controller in the existing Gerono figure-eight
+  scene; preserve the single-UAV LiDAR → DSP → Field-HOCBF path at 50 Hz.
+- Baseline: HEAD `1e66bf5017cd93d07c2fa5a3c67b5cc2ab76f27f`, already dirty;
+  existing algorithm, solver, parameter and audit edits were preserved.
+- Evidence: `generateFigureEightStrategicObstacles()` and the main numerical
+  YAML define A=3.267921867 m, four cylinders at (±2.310769712, ±0.999984091)
+  and two at (0, ±1.797357027), radius 0.4 m, height 3 m.
+- Changes: `dsp_mpc_sim.launch` now selects figure_eight, uses the original
+  default formation offsets (single UAV0: [-1,0,2]), loads the matching PCD,
+  and disables the circle-specific moving boxes. Analytic obstacle injection
+  remains disabled so obstacle measurements reach control through DSP.
+  Added `scripts/generate_dsp_figure_eight_map.py` and the generated
+  `test_data/dsp_figure_eight/six_cylinders.pcd`; updated README startup notes.
+- Verification: XML/launch parameter expansion and independent PCD checks
+  passed (23,562 finite XYZI points covering all six cylinders). Isolated
+  startup on ROS master port 11416 reported the intended figure-eight,
+  50 Hz control, UAV0 offset, and field_hocbf available=true active=true.
+  Evidence: `/tmp/dsp_figure_eight_params_20261016.yaml` and
+  `/tmp/dsp_figure_eight_startup_20261016.log` (short startup, interrupted
+  after 18 wall seconds; not a complete avoidance experiment).
+- Shutdown limitation: the interrupted run emitted a Boost mutex lock error
+  during cleanup. ROS launch completed shutdown and the isolated master
+  exited; do not describe this as an all-process clean exit.
+- Limits: full two-lap avoidance and safety were not evaluated. Regenerate
+  the PCD after changing figure-eight geometry/cylinder dimensions. No
+  controller tuning or source rebuild was required for this scene change.
+
+
+## 2026-10-16: Configure DSP scene and speed through YAML
+
+- Objective: let users edit scene, per-scene v/w and lap count in
+  `parameters/dsp_mpc_scene.yaml`, retaining the original roslaunch command
+  and explicit launch overrides.
+- Implementation: added read-only `scripts/resolve_dsp_scene.py`; launch
+  consumers resolve map, moving-object flags, trajectory and formation
+  parameters from the same YAML. The numerical node accepts private v/w
+  parameters before constructing its trajectory; direct gflags remain the
+  fallback. Existing dirty changes were preserved.
+- Verification: both scene presets and temporary YAML-only scene/speed/lap
+  changes passed launch expansion checks; explicit overrides took priority;
+  invalid scene/nonfinite/nonpositive speeds were rejected. Package-local
+  `catkin_make --pkg coni_mpc -j2` passed. An isolated 8 s startup with sensors
+  disabled confirmed requested_speed=1, max_abs_yaw_rate~=1, and cruise lap
+  period 19.9252 s. No full avoidance comparison was performed.
+- Evidence: `/tmp/dsp_scene_yaml_build_20261016.log` and
+  `/tmp/dsp_scene_yaml_startup_20261016.log`. Restart after editing YAML.
+
+
+## 2026-10-16: Diagnose online figure-eight UAV–UAV contact
+
+- User reports peer collisions at startup and around 14 s. Read-only control
+  diagnosis; no controller/scenario tuning and no new simulation was run.
+- Current HEAD 5815782; dirty edits preserved. Runtime d970be76 initially
+  reported three UAVs, v/w=1, stage rollout, soft CBF, radius0.15m. User
+  restarted during collection; latest collision log is run075b25ba. Do not
+  treat the preceding run's live parameters as a full collision-run archive.
+- Verified event: latest rosout line1259 at1792133510.627631, +14.557s from
+  first log; UAV0–UAV2 distance0.292287m below0.3m threshold. Neighbor identity
+  is corroborated by matching coordinates/key uav:2 in line1256 and reciprocal
+  UAV2 record. Initial encounter has failures for0/1 but no recorded contact.
+- Current peer constraints reach setObstacles concurrently with Field-HOCBF;
+  binary disassembly corroborates this despite file modification timestamps.
+  The stale-binary/missing-peer-constraint hypothesis was rejected.
+- Latest log contains183 current-step failures, six previous-valid-control
+  fallback messages, and three throttled ACADO status-2 warnings. These are
+  observed failures, not a controlled proof that perception caused contact.
+- Evidence and limitations: /tmp/dsp_inter_uav_diagnosis_20261016/diagnosis.md,
+  archived rosout/events/manifest and previous-run parameter snapshot. No
+  original-paper experiment archive identified. Same-cycle QP/field rows,
+  executed controls and an equivalent historical baseline remain missing.

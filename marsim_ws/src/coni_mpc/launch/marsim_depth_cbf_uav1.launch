@@ -1,4 +1,5 @@
 <launch>
+  <arg name="scene_resolver" default="" />
   <!-- One UAV (UAV1), CPU Livox Mid-360, one static PCD obstacle and an
        optional deterministic dynamic obstacle rendered into the same cloud. -->
   <arg name="map_name"
@@ -20,9 +21,10 @@
   <arg name="start_rviz" default="false" />
   <arg name="sensor_pose_body_flu" default="false" />
 
-  <!-- In deterministic mode the renderer reads the exact initial position,
-       size and velocity from /box_validation/dynamic. -->
-  <rosparam if="$(arg deterministic_box_mode)" command="load"
+  <!-- In deterministic mode the renderer reads /box_validation/dynamic.
+       A scene resolver loads these definitions for either preset; only the
+       circle preset enables the renderer's moving objects. -->
+  <rosparam if="$(eval arg('deterministic_box_mode') or arg('scene_resolver') != '')" command="load"
             file="$(arg box_config)" ns="/box_validation" />
 
   <group if="$(arg start_marsim)">
@@ -43,6 +45,8 @@
           name="depth_cbf_map_pub" type="depth_cbf_m25_map_publisher_node"
           output="screen">
       <param name="map_name" value="$(arg map_name)" />
+      <param if="$(eval arg('scene_resolver') != '')" name="map_name"
+             command="$(arg scene_resolver) --key map_name" type="str" />
     </node>
 
     <!-- Deliberately do not include MARSIM single_drone.xml: it would also
@@ -77,6 +81,12 @@
       <param name="dyn_mode" value="0" />
       <param name="dyn_velocity" value="$(arg dynamic_obstacle_velocity)" />
       <param name="deterministic_box_mode" value="$(arg deterministic_box_mode)" />
+      <param if="$(eval arg('scene_resolver') != '')" name="dynobj_enable"
+             command="$(arg scene_resolver) --key dynobj_enable" type="int" />
+      <param if="$(eval arg('scene_resolver') != '')" name="dynobject_num"
+             command="$(arg scene_resolver) --key dynobject_num" type="int" />
+      <param if="$(eval arg('scene_resolver') != '')" name="deterministic_box_mode"
+             command="$(arg scene_resolver) --key deterministic_box_mode" type="bool" />
       <param name="sensor_pose_body_flu" value="$(arg sensor_pose_body_flu)" />
       <param name="use_uav_extra_model" value="0" />
       <param name="collisioncheck_enable" value="0" />
