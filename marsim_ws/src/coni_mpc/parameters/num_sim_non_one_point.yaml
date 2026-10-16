@@ -20,11 +20,11 @@ ugv_rollout_mode:           frozen
 car_trajectory_mode:        figure_eight   # obstacle_aware | circle | figure_eight
 
 # Limits for commands
-max_v_xy:                   1.5
-max_v_z:                    1.0
-max_yaw_rate:               3.14
-a_max_xy:                   6.0
-a_max_z:                    4.0
+max_v_xy:                  3 #1.5
+max_v_z:                   1.5 #1.0
+max_yaw_rate:              3.14 #3.14
+a_max_xy:                  10 #6.0
+a_max_z:                   4 #4.0
 
 # Common simulation/control timing for every Comment 3.4 controller.
 # The MPC prediction grid remains 20 x 0.1 s = 2.0 s.
@@ -35,7 +35,7 @@ sim_control_dt_sec:         0.02       # 50 Hz control loop, shared by the activ
 tau_v_xy:                   0.2
 tau_v_z:                    0.2
 
-num_uavs:                   4
+num_uavs:                   3
 world_frame_id:             map
 relative_frame_id:          base_link
 topic_prefix:               ""
@@ -72,7 +72,7 @@ estimation_noise:
   orientation_std: 0.0435
   imu_non_std: 0.025
   car_linear_velocity_std: 0.025
-  car_angular_velocity_std: 0.0435
+  car_angular_velocity_std: 0.0435  # UGV yaw rate only; no roll/pitch rate noise.
 
 # alpha1 / alpha2 directly configure both legacy and field-HOCBF poles.
 # Slack is controlled directly by cbf/slack_max. Zero fixes all CBF slacks
@@ -111,7 +111,7 @@ cbf:
   preview_margin: 0.0
   preview_steps: 5        # 降低预测步数，减少非惯性系下障碍物"相对高速运动"产生的极长拖尾遮挡
   obstacle_hysteresis_hold_cycles: 0
-  slack_max: 0   # direct upper bound: 0 = hard, >0 = bounded soft slack
+  slack_max: 5   # direct upper bound: 0 = hard, >0 = bounded soft slack
   R_slack: 500   # quadratic penalty on slack when slack_max > 0
 
 # Comment 3.4 baseline: independent Moving-Goal Polytopic HRVO (MG-PolyHRVO).

@@ -7,13 +7,19 @@
   <!-- One-command integration launch. The DSP node still needs its normal
        depth-cloud and pose inputs (or a rosbag publishing them). -->
   <arg name="start_dsp" default="true" />
-  <!-- Dedicated DSP-CBF validation scene: one UAV, three static square prisms,
-       one static L-shaped wall, and two dynamic obstacles.  Do not inherit
-       the four-UAV figure-eight
-       benchmark defaults from num_sim_non_one_point.yaml. -->
-  <arg name="num_uavs" default="1" />
+  <!-- Edit parameters/dsp_mpc_scene.yaml. Nonempty launch arguments override YAML. -->
+  <arg name="scene_config" default="$(dirname)/../parameters/dsp_mpc_scene.yaml" />
+  <arg name="scene" default="" />
+  <arg name="v" default="" />
+  <arg name="w" default="" />
+  <arg name="trajectory_laps" default="" />
+  <arg name="static_map_filename" default="" />
+  <arg name="scene_resolver"
+       default="python3 '$(dirname)/../scripts/resolve_dsp_scene.py' --config '$(arg scene_config)' --scene '$(arg scene)' --v '$(arg v)' --w '$(arg w)' --trajectory-laps '$(arg trajectory_laps)' --static-map '$(arg static_map_filename)'" />
+  <arg name="num_uavs" default="3" />
   <arg name="sim_duration_sec" default="" />
   <arg name="metrics_csv" default="" />
+  <arg name="world_command_provenance_csv" default="" />
   <arg name="run_tag" default="" />
   <!-- Field-HOCBF acceptance target: run the controller at 50 Hz. -->
   <arg name="sim_control_dt_sec" default="0.02" />
@@ -39,17 +45,11 @@
        explicitly only when compensating for a deliberately sparse cloud. -->
   <arg name="lidar_collision_point_margin" default="0.0" />
 
-  <!-- The static map contains three 1 m x 1 m square prisms distributed on
-       a radius-5 m ring plus one perpendicular two-arm wall near the top of
-       the UAV orbit.  The UAV nominal radius is 5.5 m, while the UGV radius
-       is 7 m, so these obstacles challenge the UAV and keep the UGV path
-       clear. -->
-  <arg name="ugv_circle_radius" default="7.0" />
-
-  <!-- Body-frame offset: +Y points to the UGV's left side.  With R=7 m,
-       +1.5 m shifts the UAV nominal circle inward to R=5.5 m, through the
-       static cylinder at radius 5 m, while the UGV itself remains clear. -->
-  <arg name="uav_reference_offsets" default="[[0.0, 1.5, 2.0]]" />
+  <!-- Figure-eight uses the original formation defaults (UAV0: [-1,0,2]).
+       Circle restores R_UGV=7 m and the inward UAV offset, giving R_UAV=5.5 m. -->
+  <arg name="ugv_circle_radius" default="" />
+  <arg name="uav_reference_offsets"
+       default="" />
 
   <!-- MARSIM publishes the ground-truth map and internally generated dynamic
        obstacle clouds in "world", while CoNi-MPC and this RViz configuration
@@ -62,17 +62,14 @@
        /quad0_pcl_render_node/sensor_cloud and sensor_pose for DSP. -->
   <include if="$(arg start_marsim_lidar)"
            file="$(dirname)/marsim_depth_cbf_uav1.launch">
-    <!-- A2_three_square_prisms_l_wall.pcd contains the three static square
-         prisms and the additional right-angle wall.  The deterministic box
-         configuration supplies two moving obstacles through the same
-         LiDAR/DSP path. -->
-    <arg name="map_name"
-         value="$(dirname)/../test_data/depth_cbf_m25/A2_three_square_prisms_l_wall.pcd" />
+    <!-- Resolver selects the physical map and dynamic objects from the scene
+         YAML. Regenerate the figure-eight PCD after changing its geometry. -->
+    <arg name="scene_resolver" value="$(arg scene_resolver)" />
     <arg name="use_intensity_pcd_publisher" value="true" />
     <arg name="uav_odom_topic" value="/coni_mpc/quad_odom0" />
-    <arg name="dynamic_obstacles" value="true" />
-    <arg name="dynamic_obstacle_count" value="2" />
-    <arg name="deterministic_box_mode" value="true" />
+    <arg name="dynamic_obstacles" value="$(eval arg('scene') == 'circle')" />
+    <arg name="dynamic_obstacle_count" value="$(eval 2 if arg('scene') == 'circle' else 0)" />
+    <arg name="deterministic_box_mode" value="$(eval arg('scene') == 'circle')" />
     <arg name="box_config"
          value="$(dirname)/../parameters/dsp_mpc_single_obstacles.yaml" />
     <arg name="start_marsim" value="true" />
@@ -100,6 +97,10 @@
         args="-d $(dirname)/../rviz/world.rviz" />
 
   <include file="$(dirname)/num_sim_non_one_point.launch">
+    <arg name="scene_resolver" value="$(arg scene_resolver)" />
+    <arg name="v" value="$(eval arg('v') or 1.0)" />
+    <arg name="w" value="$(eval arg('w') or 0.135)" />
+    <arg name="trajectory_laps" value="$(eval arg('trajectory_laps') or 2.0)" />
     <arg name="num_uavs" value="$(arg num_uavs)" />
     <arg name="world_frame_id" value="$(arg world_frame_id)" />
     <arg name="relative_frame_id" value="$(arg relative_frame_id)" />
@@ -114,14 +115,14 @@
     <arg name="lidar_collision_cloud_topic" value="$(arg lidar_collision_cloud_topic)" />
     <arg name="lidar_collision_timeout_sec" value="$(arg lidar_collision_timeout_sec)" />
     <arg name="lidar_collision_point_margin" value="$(arg lidar_collision_point_margin)" />
-    <arg name="ugv_circle_radius" value="$(arg ugv_circle_radius)" />
     <arg name="uav_reference_offsets" value="$(arg uav_reference_offsets)" />
+    <arg name="ugv_circle_radius" value="$(arg ugv_circle_radius)" />
     <!-- The old benchmark creates analytic cylinders directly inside the
          simulator.  Disable them here: obstacles must enter through LiDAR
          and DSP only. -->
     <arg name="obstacle_count" value="0" />
     <arg name="figure_eight_obstacles_enabled" value="false" />
-    <arg name="car_trajectory_mode" value="circle" />
+    <arg name="car_trajectory_mode" value="$(arg scene)" />
     <arg name="use_dynamic_obs" value="false" />
     <arg name="exclude_uav0_from_simulation" value="false" />
     <arg name="exclude_uav0_from_all_metrics" value="false" />
@@ -135,6 +136,7 @@
     <arg name="sim_control_dt_sec" value="$(arg sim_control_dt_sec)" />
     <arg name="sim_duration_sec" value="$(arg sim_duration_sec)" />
     <arg name="metrics_csv" value="$(arg metrics_csv)" />
+    <arg name="world_command_provenance_csv" value="$(arg world_command_provenance_csv)" />
     <arg name="run_tag" value="$(arg run_tag)" />
   </include>
 </launch>
