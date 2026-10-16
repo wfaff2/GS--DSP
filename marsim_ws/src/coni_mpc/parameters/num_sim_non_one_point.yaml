@@ -84,7 +84,7 @@ cbf:
   enabled: true
   use_in_sim: true        # 关闭后可完全禁用CBF
   use_field_hocbf: true
-  field_topic: /my_map/future_occupancy_3d
+  field_topic: /uav%d/my_map/future_occupancy_3d
   field_timeout: 0.3
   alpha1: 5
   alpha2: 5

@@ -30,7 +30,7 @@
   <arg name="cbf_use_in_sim" default=""></arg>
   <arg name="cbf_use_field_hocbf" default="true"></arg>
   <arg name="field_replay_diagnostics" default="false"></arg>
-  <arg name="cbf_field_topic" default="/my_map/future_occupancy_3d"></arg>
+  <arg name="cbf_field_topic" default="/uav%d/my_map/future_occupancy_3d"></arg>
   <arg name="cbf_slack_max" default=""></arg>
   <arg name="cbf_r_slack" default=""></arg>
   <arg name="lidar_collision_enabled" default=""></arg>
