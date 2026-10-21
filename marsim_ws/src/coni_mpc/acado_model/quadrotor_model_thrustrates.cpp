@@ -134,6 +134,13 @@ int main(int argc, char** argv){
   OnlineData            field_Ax, field_Ay, field_Az, field_b, field_active;
   // Appended runtime inverse time constants for first-order velocity tracking.
   OnlineData            tau_v_xy_inv, tau_v_z_inv;
+  // Appended world-frame velocity mapping.  Keep all legacy OnlineData
+  // indices unchanged: R_WN is row-major, followed by the world velocity of
+  // the non-inertial frame origin.
+  OnlineData            world_r00, world_r01, world_r02;
+  OnlineData            world_r10, world_r11, world_r12;
+  OnlineData            world_r20, world_r21, world_r22;
+  OnlineData            world_vg_x, world_vg_y, world_vg_z;
 
   // Optional voxel assembly exports separately: the live wrapper still uses
   // the existing affine Field-HOCBF OnlineData layout.
@@ -371,10 +378,12 @@ int main(int argc, char** argv){
   ocp.subjectTo(-v_z_max <= v_cmd_z <= v_z_max);
   ocp.subjectTo(-yaw_rate_max <= yaw_rate_cmd <= yaw_rate_max);
   
-  // Physical acceleration constraints (Mixed State-Control)
-  ocp.subjectTo(-a_max_xy <= acc_x + non_inertial_acc_x <= a_max_xy);
-  ocp.subjectTo(-a_max_xy <= acc_y + non_inertial_acc_y <= a_max_xy);
-  ocp.subjectTo(-a_max_z  <= acc_z + non_inertial_acc_z <= a_max_z);
+  // Physical acceleration constraints (Mixed State-Control).  acc is the
+  // vehicle's nominal actuation acceleration Lambda(u-v); non_inertial_acc is
+  // a coordinate-frame term that belongs in dot(v), not in the actuator bound.
+  ocp.subjectTo(-a_max_xy <= acc_x <= a_max_xy);
+  ocp.subjectTo(-a_max_xy <= acc_y <= a_max_xy);
+  ocp.subjectTo(-a_max_z  <= acc_z <= a_max_z);
 
   ocp.subjectTo(delta0 >= 0.0);
   ocp.subjectTo(delta1 >= 0.0);
@@ -475,16 +484,41 @@ int main(int argc, char** argv){
                  field_Az * (v_cmd_z + k_v_z  * v_z + k_p_z  * p_z) +
                  delta2 - field_b) >= 0.0);
 
+  // The executed world-frame velocity is
+  //   q = v_g^W + R_WN (u^N + omega^N x p^N).
+  // Constrain the same quantity at every MPC stage.  The legacy componentwise
+  // relative-command bounds above remain in force.
+  Expression commanded_transport_x = v_cmd_x + omega_cross_p_x;
+  Expression commanded_transport_y = v_cmd_y + omega_cross_p_y;
+  Expression commanded_transport_z = v_cmd_z + omega_cross_p_z;
+  Expression world_velocity_x = world_vg_x +
+      world_r00 * commanded_transport_x +
+      world_r01 * commanded_transport_y +
+      world_r02 * commanded_transport_z;
+  Expression world_velocity_y = world_vg_y +
+      world_r10 * commanded_transport_x +
+      world_r11 * commanded_transport_y +
+      world_r12 * commanded_transport_z;
+  Expression world_velocity_z = world_vg_z +
+      world_r20 * commanded_transport_x +
+      world_r21 * commanded_transport_y +
+      world_r22 * commanded_transport_z;
+  ocp.subjectTo(world_velocity_x * world_velocity_x +
+                world_velocity_y * world_velocity_y <=
+                v_xy_max * v_xy_max);
+  ocp.subjectTo(-v_z_max <= world_velocity_z <= v_z_max);
+
   // Online data layout (ACADO_NOD):
   // Each region occupies 22 values: center(3), axes(3), Q row-major(9),
   // center velocity(3), center acceleration(3), active(1).
   // [66..67] alpha1/alpha2, [68..76] non-inertial data,
   // [77..79] ref_x/ref_y/trust_factor, [80..84] field Ax/Ay/Az/b/active,
-  // [85..86] inverse XY/Z velocity-tracking time constants.
+  // [85..86] inverse XY/Z velocity-tracking time constants,
+  // [87..95] R_WN row-major, [96..98] world frame-origin velocity.
   if (voxel_field) {
     voxel_field->assemble(ocp, p_x, p_y, p_z);
   }
-  ocp.setNOD(87 + (voxel_field ? voxel_field->onlineDataSize() : 0));
+  ocp.setNOD(99 + (voxel_field ? voxel_field->onlineDataSize() : 0));
 
 
   if(!CODE_GEN)

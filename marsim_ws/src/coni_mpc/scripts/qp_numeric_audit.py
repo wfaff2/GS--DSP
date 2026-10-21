@@ -27,28 +27,32 @@ ARRAY_FIELDS = [
 ]
 
 
-def record_dtype() -> np.dtype:
+def record_dtype(ncon: int = NCON, nod_nodes: int = 1827) -> np.dtype:
     fields = [
         ("index", "<u8"), ("status", "<i4"), ("nwsr", "<i4"),
         ("objective", "<f8"), ("kkt", "<f8"),
     ]
-    fields.extend((name, ("<f8", (size,))) for name, size in ARRAY_FIELDS)
+    sizes = dict(ARRAY_FIELDS)
+    sizes.update(od=nod_nodes, lbAValues=ncon, ubAValues=ncon,
+                 A=ncon * NVAR, lbA=ncon, ubA=ncon, dual=NVAR + ncon)
+    fields.extend((name, ("<f8", (sizes[name],))) for name, _ in ARRAY_FIELDS)
     return np.dtype(fields, align=False)
 
 
 def load_capture(path: Path) -> np.ndarray:
     size = path.stat().st_size
-    dtype = record_dtype()
-    if size < HEADER_BYTES or (size - HEADER_BYTES) % dtype.itemsize:
-        raise ValueError(f"capture size {size} is not aligned to {dtype.itemsize}")
+    if size < HEADER_BYTES:
+        raise ValueError("capture header is truncated")
     with path.open("rb") as stream:
         header = stream.read(HEADER_BYTES)
     magic, version, nv, nc, nx, nu, nod = struct.unpack("<Q6I", header)
     expected_magic = 0x3150514D4F434343
-    if (magic, version, nv, nc, nx, nu, nod) != (
-        expected_magic, 1, NVAR, NCON, 147, 140, 1827
-    ):
+    if ((magic, version, nv, nx, nu) != (expected_magic, 1, NVAR, 147, 140)
+            or (nc, nod) not in ((200, 1827), (240, 2079))):
         raise ValueError(f"unexpected capture header {magic:x} {version} {nv} {nc} {nx} {nu} {nod}")
+    dtype = record_dtype(nc, nod)
+    if (size - HEADER_BYTES) % dtype.itemsize:
+        raise ValueError(f"capture size {size} is not aligned to {dtype.itemsize}")
     count = (size - HEADER_BYTES) // dtype.itemsize
     return np.memmap(path, mode="r", dtype=dtype, offset=HEADER_BYTES, shape=(count,))
 
@@ -60,7 +64,7 @@ def finite_bound(values: np.ndarray) -> np.ndarray:
 def qp_residuals(rec: np.void) -> Dict[str, float]:
     H = np.asarray(rec["H"]).reshape(NVAR, NVAR)
     g = np.asarray(rec["g"])
-    A = np.asarray(rec["A"]).reshape(NCON, NVAR)
+    A = np.asarray(rec["A"]).reshape(rec["lbA"].size, NVAR)
     lb, ub = np.asarray(rec["lb"]), np.asarray(rec["ub"])
     lbA, ubA = np.asarray(rec["lbA"]), np.asarray(rec["ubA"])
     x, y = np.asarray(rec["solution"]), np.asarray(rec["dual"])
@@ -168,18 +172,19 @@ def row_ints(value: str) -> List[int]:
     return [int(v) for v in value.split(";") if v]
 
 
-def boundary_audit(rows: List[Dict[str, str]]) -> Dict[str, object]:
+def boundary_audit(rows: List[Dict[str, str]], path_size: int = 10) -> Dict[str, object]:
     result = []
     for row in rows:
         changed = row_ints(row.get("changed_A_rows", ""))
         role_counts = {"acceleration": 0, "legacy_cbf": 0,
-                       "safe_set": 0, "field_hocbf": 0, "other": 0}
+                       "safe_set": 0, "field_hocbf": 0, "world_velocity": 0, "other": 0}
         for idx in changed:
-            within = idx % 10
+            within = idx % path_size
             role = ("acceleration" if within < 3 else
                     "legacy_cbf" if within in (3, 5, 7) else
                     "safe_set" if within in (4, 6, 8) else
-                    "field_hocbf" if within == 9 else "other")
+                    "field_hocbf" if within == 9 else
+                    "world_velocity" if within in (10, 11) else "other")
             role_counts[role] += 1
         result.append({
             "step": int(row["step"]), "variant": row["variant"],
@@ -215,13 +220,14 @@ def boundary_audit(rows: List[Dict[str, str]]) -> Dict[str, object]:
                               ("changed_ubA_role_counts", "changed_ubA_rows")):
             result[-1][key] = {name: 0 for name in role_counts}
             for idx in result[-1][rows_key]:
-                within = idx % 10
+                within = idx % path_size
                 role = ("acceleration" if within < 3 else
                         "legacy_cbf" if within in (3, 5, 7) else
                         "safe_set" if within in (4, 6, 8) else
-                        "field_hocbf" if within == 9 else "other")
+                        "field_hocbf" if within == 9 else
+                        "world_velocity" if within in (10, 11) else "other")
                 result[-1][key][role] += 1
-    return {"rows": result, "changed_row_encoding": "condensed path row = stage*10 + local row; local 9 is Field-HOCBF"}
+    return {"rows": result, "changed_row_encoding": f"condensed path row = stage*{path_size} + local row; local 9 is Field-HOCBF"}
 
 
 def main() -> int:
@@ -264,7 +270,7 @@ def main() -> int:
             writer.writeheader(); writer.writerows(event_rows)
     if args.counterfactual:
         cf_rows = parse_rows(args.counterfactual, args.steps)
-        summary["boundary_audit"] = boundary_audit(cf_rows)
+        summary["boundary_audit"] = boundary_audit(cf_rows, records[0]["lbA"].size // 20)
         with (args.output_dir / "qp_constraint_boundary_audit.csv").open("w", newline="") as stream:
             writer = csv.DictWriter(stream, fieldnames=[
                 "step", "variant", "valid", "status", "nwsr", "objective", "kkt",

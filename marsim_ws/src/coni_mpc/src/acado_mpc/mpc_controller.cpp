@@ -195,7 +195,9 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
     const Eigen::Vector3d& W_p_non,
     const NonInertialProfile* omega_non_profile,
     const NonInertialProfile* beta_non_profile,
-    const NonInertialProfile* a_car_non_profile) {
+    const NonInertialProfile* a_car_non_profile,
+    const Eigen::Vector3d* W_v_non,
+    const WorldVelocityFrameProfile* world_velocity_frame_profile) {
 
 #define GREEN std::string("\033[1;42m")
 #define RST std::string("\033[0m")
@@ -246,14 +248,66 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
             beta_non_profile != nullptr &&
             a_car_non_profile != nullptr));
   }
+  bool noninertial_update_ok = false;
   if (omega_non_profile != nullptr &&
       beta_non_profile != nullptr &&
       a_car_non_profile != nullptr) {
-    mpc_wrapper_.setNonInertialDataProfile(*omega_non_profile,
-                                           *beta_non_profile,
-                                           *a_car_non_profile);
+    noninertial_update_ok = omega_non_profile->allFinite() &&
+        beta_non_profile->allFinite() && a_car_non_profile->allFinite() &&
+        mpc_wrapper_.setNonInertialDataProfile(*omega_non_profile,
+                                               *beta_non_profile,
+                                               *a_car_non_profile);
   } else {
-    mpc_wrapper_.setNonInertialData(omega_non, beta_non, a_car_non);
+    noninertial_update_ok = omega_non.allFinite() && beta_non.allFinite() &&
+        a_car_non.allFinite() &&
+        mpc_wrapper_.setNonInertialData(omega_non, beta_non, a_car_non);
+  }
+
+  WorldVelocityFrameProfile legacy_world_velocity_frame_profile =
+      WorldVelocityFrameProfile::Zero();
+  const WorldVelocityFrameProfile* world_profile_to_apply =
+      world_velocity_frame_profile;
+  if (world_profile_to_apply == nullptr) {
+    const bool quaternion_ok = W_q_non.coeffs().allFinite() &&
+        std::isfinite(W_q_non.norm()) && W_q_non.norm() > 1.0e-9;
+    const bool identity_frame = quaternion_ok &&
+        W_q_non.normalized().toRotationMatrix().isApprox(
+            Eigen::Matrix3d::Identity(), 1.0e-9);
+    const bool have_valid_world_velocity =
+        W_v_non != nullptr && W_v_non->allFinite();
+    if (quaternion_ok && (have_valid_world_velocity || identity_frame)) {
+      const Eigen::Matrix<T, 3, 3> rotation =
+          W_q_non.normalized().toRotationMatrix().template cast<T>();
+      Eigen::Matrix<T, 3, 1> world_frame_velocity =
+          Eigen::Matrix<T, 3, 1>::Zero();
+      if (have_valid_world_velocity) {
+        world_frame_velocity = W_v_non->template cast<T>();
+      }
+      for (int k = 0; k < kSamples + 1; ++k) {
+        for (int row = 0; row < 3; ++row) {
+          for (int col = 0; col < 3; ++col) {
+            legacy_world_velocity_frame_profile(3 * row + col, k) =
+                rotation(row, col);
+          }
+        }
+        legacy_world_velocity_frame_profile.template block<3, 1>(9, k) =
+            world_frame_velocity;
+      }
+      world_profile_to_apply = &legacy_world_velocity_frame_profile;
+    }
+  }
+  const bool world_velocity_update_ok =
+      world_profile_to_apply != nullptr &&
+      mpc_wrapper_.setWorldVelocityFrameProfile(*world_profile_to_apply);
+  if (!noninertial_update_ok || !world_velocity_update_ok) {
+    ROS_ERROR("MPC: Invalid non-inertial/world-velocity stage profile.");
+    ++obstacle_update_fail_count_;
+    solve_from_scratch_ = true;
+    latest_slack_ = T(0);
+    last_solve_ok_ = false;
+    resetPredictionsToSafeState();
+    preparationThread();
+    return makeFailureFallback("stage-profile update failure");
   }
   const bool field_active = params.cbf_use_field_hocbf_;
   const bool previous_field_enabled = last_field_enabled_;

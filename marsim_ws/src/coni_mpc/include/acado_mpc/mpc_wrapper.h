@@ -84,11 +84,16 @@ static constexpr int kSafeSetConstraintSize = kMaxObstacles;
 static constexpr int kFieldConstraintOffset =
     kSafeSetConstraintOffset + kSafeSetConstraintSize;
 static constexpr int kFieldConstraintSize = 1;
+static constexpr int kWorldVelocityConstraintOffset =
+    kFieldConstraintOffset + kFieldConstraintSize;
+static constexpr int kWorldVelocityConstraintSize = 2;
+// Tiny inner numerical guard for RTI's tangent approximation of the speed disk.
+static constexpr double kWorldVelocityNumericalGuard = 1.0e-5;
 // Must match the discretization exported by the ACADO model source.
 static constexpr double kModelDt = 0.1;
 static_assert(kPathConstraintSize == kAccelerationConstraintSize +
                   kCbfConstraintSize + kSafeSetConstraintSize +
-                  kFieldConstraintSize,
+                  kFieldConstraintSize + kWorldVelocityConstraintSize,
               "MPC: Path-constraint size does not match the model layout.");
 // Must match the model-side online-data layout exported by
 // acado_model/quadrotor_model_thrustrates.cpp:
@@ -110,10 +115,14 @@ static constexpr int kOdTrustFactorIndex = kOdRefYIndex + 1;
 static constexpr int kOdFieldOffset = kOdTrustFactorIndex + 1;
 static constexpr int kOdInvTauVxyIndex = kOdFieldOffset + 5;
 static constexpr int kOdInvTauVzIndex = kOdInvTauVxyIndex + 1;
+static constexpr int kOdWorldRotationOffset = kOdInvTauVzIndex + 1;
+static constexpr int kOdWorldFrameVelocityOffset = kOdWorldRotationOffset + 9;
 static_assert(kOdTrustFactorIndex < kOdSize,
               "MPC: ACADO online data size does not match model layout.");
 static_assert(kOdInvTauVzIndex < kOdSize,
               "MPC: ACADO online-data layout does not fit ACADO_NOD.");
+static_assert(kOdWorldFrameVelocityOffset + 2 < kOdSize,
+              "MPC: World-velocity OnlineData does not fit ACADO_NOD.");
 
 /**
  * @brief Wrapper for the ACADO MPC implementation
@@ -132,6 +141,8 @@ class MpcWrapper
       std::vector<Obstacle, Eigen::aligned_allocator<Obstacle>>;
   using ObstacleProfile = Eigen::Matrix<T, 7, kSamples + 1>;
   using Vec3Profile = Eigen::Matrix<T, 3, kSamples + 1>;
+  // R_WN row-major (rows 0..8), followed by v_g^W (rows 9..11).
+  using WorldVelocityFrameProfile = Eigen::Matrix<T, 12, kSamples + 1>;
   using ObstacleProfileVector =
       std::vector<ObstacleProfile, Eigen::aligned_allocator<ObstacleProfile>>;
   // Ax, Ay, Az, b, active, diagnostic slack weight.
@@ -169,6 +180,8 @@ class MpcWrapper
     const Eigen::Ref<const Vec3Profile>& omega_non_profile,
     const Eigen::Ref<const Vec3Profile>& beta_non_profile,
     const Eigen::Ref<const Vec3Profile>& a_car_non_profile);
+  bool setWorldVelocityFrameProfile(
+    const Eigen::Ref<const WorldVelocityFrameProfile>& profile);
   // bool setCameraParameters(
   //   const Eigen::Ref<const Eigen::Matrix<T, 3, 1>>& p_B_C,
   //   Eigen::Quaternion<T>& q_B_C);

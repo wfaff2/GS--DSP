@@ -2,6 +2,8 @@
 """Checks independent KKT definitions and rejection of corrupted evidence."""
 import sys
 import unittest
+import struct
+import tempfile
 from pathlib import Path
 import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
@@ -45,5 +47,21 @@ class QpAuditTest(unittest.TestCase):
         self.assertEqual(qp_residuals(r)['complementarity_inf'], 1)
         r['g'][0] = np.nan
         with self.assertRaises(ValueError): qp_residuals(r)
+
+    def test_old_and_world_velocity_capture_contracts(self):
+        for nc, nod in ((200, 1827), (240, 2079)):
+            dtype = record_dtype(nc, nod)
+            records = np.zeros(1, dtype=dtype)
+            records['H'][0] = np.eye(140).ravel()
+            records['lb'] = -1e20; records['ub'] = 1e20
+            records['lbA'] = -1e20; records['ubA'] = 1e20
+            with tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / 'capture.bin'
+                path.write_bytes(struct.pack('<Q6I', 0x3150514D4F434343,
+                    1, 140, nc, 147, 140, nod) + records.tobytes())
+                loaded = load_capture(path)
+                self.assertEqual(loaded[0]['lbA'].size, nc)
+                self.assertEqual(loaded[0]['od'].size, nod)
+                self.assertEqual(qp_residuals(loaded[0])['primal_inf'], 0.)
 
 if __name__ == '__main__': unittest.main()

@@ -275,6 +275,10 @@ add_executable(qp_counterfactual_tool test/qp_counterfactual_tool.cpp)
 target_link_libraries(qp_counterfactual_tool acado_mpc)
 
 if(CATKIN_ENABLE_TESTING)
+        catkin_add_gtest(mpc_physical_limits_test test/mpc_physical_limits_test.cpp)
+        if(TARGET mpc_physical_limits_test)
+                target_link_libraries(mpc_physical_limits_test acado_mpc gtest_main Eigen3::Eigen)
+        endif()
         add_test(NAME polytopic_vo_hrvo_smoke_test
                  COMMAND polytopic_vo_hrvo_smoke_test)
         catkin_add_gtest(point_cloud_preprocessor_test

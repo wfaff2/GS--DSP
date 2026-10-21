@@ -3348,6 +3348,15 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
                                      x_snapshot(1),
                                      x_snapshot(2));
       Eigen::Vector3d p_rel = W_q_non.inverse() * (quad_pos_world - car_pos);
+      if (solve_ok && !control_system_ptr_->isInertialFrame()) {
+        // Use the same estimated relative position as the accepted stage-0
+        // constraint. Using simulator truth here would change omega x p
+        // after optimization whenever position noise is enabled.
+        Eigen::Vector3d estimated_position_world, estimated_velocity_world;
+        control_system_ptr_->getEstimatedWorldKinematics(
+            estimated_position_world, estimated_velocity_world);
+        p_rel = W_q_non.inverse() * (estimated_position_world - car_pos);
+      }
       if (world_command_provenance_enabled_) {
         provenance_block_start = steadyNowSec();
       last_world_command_provenance_.quad_position_world = quad_pos_world;

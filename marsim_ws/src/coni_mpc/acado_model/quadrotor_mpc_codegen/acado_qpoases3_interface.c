@@ -80,30 +80,31 @@ static void coni_qp_capture_record(int status, double objective, double kkt) {
   coni_qp_write(&objective, sizeof(objective), 1);
   coni_qp_write(&kkt, sizeof(kkt), 1);
   /* Pre-feedback ACADO variables: RTI linearization/reference context. */
-  coni_qp_write(acadoVariables.x, sizeof(real_t), 147);
-  coni_qp_write(acadoVariables.u, sizeof(real_t), 140);
-  coni_qp_write(acadoVariables.x0, sizeof(real_t), 7);
-  coni_qp_write(acadoVariables.od, sizeof(real_t), 1827);
-  coni_qp_write(acadoVariables.y, sizeof(real_t), 280);
-  coni_qp_write(acadoVariables.yN, sizeof(real_t), 7);
-  coni_qp_write(acadoVariables.W, sizeof(real_t), 3920);
-  coni_qp_write(acadoVariables.WN, sizeof(real_t), 49);
-  coni_qp_write(acadoVariables.lbValues, sizeof(real_t), 140);
-  coni_qp_write(acadoVariables.ubValues, sizeof(real_t), 140);
-  coni_qp_write(acadoVariables.lbAValues, sizeof(real_t), 200);
-  coni_qp_write(acadoVariables.ubAValues, sizeof(real_t), 200);
+  coni_qp_write(acadoVariables.x, sizeof(real_t), sizeof(acadoVariables.x) / sizeof(real_t));
+  coni_qp_write(acadoVariables.u, sizeof(real_t), sizeof(acadoVariables.u) / sizeof(real_t));
+  coni_qp_write(acadoVariables.x0, sizeof(real_t), sizeof(acadoVariables.x0) / sizeof(real_t));
+  coni_qp_write(acadoVariables.od, sizeof(real_t), sizeof(acadoVariables.od) / sizeof(real_t));
+  coni_qp_write(acadoVariables.y, sizeof(real_t), sizeof(acadoVariables.y) / sizeof(real_t));
+  coni_qp_write(acadoVariables.yN, sizeof(real_t), sizeof(acadoVariables.yN) / sizeof(real_t));
+  coni_qp_write(acadoVariables.W, sizeof(real_t), sizeof(acadoVariables.W) / sizeof(real_t));
+  coni_qp_write(acadoVariables.WN, sizeof(real_t), sizeof(acadoVariables.WN) / sizeof(real_t));
+  coni_qp_write(acadoVariables.lbValues, sizeof(real_t), sizeof(acadoVariables.lbValues) / sizeof(real_t));
+  coni_qp_write(acadoVariables.ubValues, sizeof(real_t), sizeof(acadoVariables.ubValues) / sizeof(real_t));
+  coni_qp_write(acadoVariables.lbAValues, sizeof(real_t), sizeof(acadoVariables.lbAValues) / sizeof(real_t));
+  coni_qp_write(acadoVariables.ubAValues, sizeof(real_t), sizeof(acadoVariables.ubAValues) / sizeof(real_t));
   /* Exact condensed qpOASES-e arrays and returned primal/dual solution. */
-  coni_qp_write(acadoWorkspace.H, sizeof(real_t), 19600);
-  coni_qp_write(acadoWorkspace.g, sizeof(real_t), 140);
-  coni_qp_write(acadoWorkspace.A, sizeof(real_t), 28000);
-  coni_qp_write(acadoWorkspace.lb, sizeof(real_t), 140);
-  coni_qp_write(acadoWorkspace.ub, sizeof(real_t), 140);
-  coni_qp_write(acadoWorkspace.lbA, sizeof(real_t), 200);
-  coni_qp_write(acadoWorkspace.ubA, sizeof(real_t), 200);
-  coni_qp_write(acadoWorkspace.x, sizeof(real_t), 140);
-  coni_qp_write(acadoWorkspace.y, sizeof(real_t), 340);
+  coni_qp_write(acadoWorkspace.H, sizeof(real_t), sizeof(acadoWorkspace.H) / sizeof(real_t));
+  coni_qp_write(acadoWorkspace.g, sizeof(real_t), sizeof(acadoWorkspace.g) / sizeof(real_t));
+  coni_qp_write(acadoWorkspace.A, sizeof(real_t), sizeof(acadoWorkspace.A) / sizeof(real_t));
+  coni_qp_write(acadoWorkspace.lb, sizeof(real_t), sizeof(acadoWorkspace.lb) / sizeof(real_t));
+  coni_qp_write(acadoWorkspace.ub, sizeof(real_t), sizeof(acadoWorkspace.ub) / sizeof(real_t));
+  coni_qp_write(acadoWorkspace.lbA, sizeof(real_t), sizeof(acadoWorkspace.lbA) / sizeof(real_t));
+  coni_qp_write(acadoWorkspace.ubA, sizeof(real_t), sizeof(acadoWorkspace.ubA) / sizeof(real_t));
+  coni_qp_write(acadoWorkspace.x, sizeof(real_t), sizeof(acadoWorkspace.x) / sizeof(real_t));
+  coni_qp_write(acadoWorkspace.y, sizeof(real_t), sizeof(acadoWorkspace.y) / sizeof(real_t));
   fflush(coni_qp_capture);
 }
+
 
 
 
@@ -120,7 +121,7 @@ int acado_solve( void )
 
 	acado_nWSR = QPOASES_NWSRMAX;
 
-	QProblemCON( &qp, 140,200,HST_POSDEF );
+	QProblemCON( &qp, 140,240,HST_POSDEF );
 	Options_setToMPC( &options );
 	QProblem_setOptions( &qp,options );
 

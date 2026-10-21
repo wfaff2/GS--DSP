@@ -91,6 +91,14 @@ MpcWrapper<T>::MpcWrapper() {
       static_cast<AcadoScalar>(1.0 / 0.2));
   acado_online_data_.row(kOdInvTauVzIndex).setConstant(
       static_cast<AcadoScalar>(1.0 / 0.2));
+  for (int row = 0; row < 9; ++row) {
+    acado_online_data_.row(kOdWorldRotationOffset + row).setConstant(
+        static_cast<AcadoScalar>((row == 0 || row == 4 || row == 8)
+                                     ? 1.0 : 0.0));
+  }
+  for (int axis = 0; axis < 3; ++axis) {
+    acado_online_data_.row(kOdWorldFrameVelocityOffset + axis).setZero();
+  }
   setTrajectoryReferenceDataLocked(hover_states, hover_inputs);
   acado_states_ = reference_state_guess_;
   acado_inputs_ = reference_input_guess_;
@@ -210,6 +218,13 @@ bool MpcWrapper<T>::setLimits(T max_v_xy, T max_v_z, T max_yaw_rate,
   path_upper_bounds(0) = a_max_xy;
   path_upper_bounds(1) = a_max_xy;
   path_upper_bounds(2) = a_max_z;
+  path_lower_bounds(kWorldVelocityConstraintOffset) =
+      -static_cast<T>(1.0e12);
+  const T guarded_world_xy = max_v_xy *
+      static_cast<T>(1.0 - kWorldVelocityNumericalGuard);
+  path_upper_bounds(kWorldVelocityConstraintOffset) = guarded_world_xy * guarded_world_xy;
+  path_lower_bounds(kWorldVelocityConstraintOffset + 1) = -max_v_z;
+  path_upper_bounds(kWorldVelocityConstraintOffset + 1) = max_v_z;
 
   acado_lower_bounds_ = lower_bounds.replicate(1, kSamples).template cast<AcadoScalar>();
   acado_upper_bounds_ = upper_bounds.replicate(1, kSamples).template cast<AcadoScalar>();
@@ -388,6 +403,11 @@ bool MpcWrapper<T>::setNonInertialDataProfile(
     const Eigen::Ref<const Vec3Profile>& omega_non_profile,
     const Eigen::Ref<const Vec3Profile>& beta_non_profile,
     const Eigen::Ref<const Vec3Profile>& a_car_non_profile) {
+  if (!omega_non_profile.allFinite() || !beta_non_profile.allFinite() ||
+      !a_car_non_profile.allFinite()) {
+    ROS_ERROR("MPC: Non-inertial stage profile contains non-finite values.");
+    return false;
+  }
   ScopedContext context(*this);
 
   for (int k = 0; k < kSamples + 1; ++k) {
@@ -398,6 +418,47 @@ bool MpcWrapper<T>::setNonInertialDataProfile(
           static_cast<AcadoScalar>(beta_non_profile(axis, k));
       acado_online_data_(kOdCarAccOffset + axis, k) =
           static_cast<AcadoScalar>(a_car_non_profile(axis, k));
+    }
+  }
+  return true;
+}
+
+template <typename T>
+bool MpcWrapper<T>::setWorldVelocityFrameProfile(
+    const Eigen::Ref<const WorldVelocityFrameProfile>& profile) {
+  if (!profile.allFinite()) {
+    ROS_ERROR("MPC: World-velocity frame profile contains non-finite values.");
+    return false;
+  }
+
+  constexpr double kRotationTolerance = 1.0e-5;
+  for (int k = 0; k < kSamples + 1; ++k) {
+    Eigen::Matrix<T, 3, 3> rotation;
+    for (int row = 0; row < 3; ++row) {
+      for (int col = 0; col < 3; ++col) {
+        rotation(row, col) = profile(3 * row + col, k);
+      }
+    }
+    if (!(rotation.transpose() * rotation)
+             .isApprox(Eigen::Matrix<T, 3, 3>::Identity(),
+                       static_cast<T>(kRotationTolerance)) ||
+        std::abs(static_cast<double>(rotation.determinant()) - 1.0) >
+            kRotationTolerance) {
+      ROS_ERROR_STREAM("MPC: Invalid R_WN at world-velocity profile stage "
+                       << k << ".");
+      return false;
+    }
+  }
+
+  ScopedContext context(*this);
+  for (int k = 0; k < kSamples + 1; ++k) {
+    for (int row = 0; row < 9; ++row) {
+      acado_online_data_(kOdWorldRotationOffset + row, k) =
+          static_cast<AcadoScalar>(profile(row, k));
+    }
+    for (int axis = 0; axis < 3; ++axis) {
+      acado_online_data_(kOdWorldFrameVelocityOffset + axis, k) =
+          static_cast<AcadoScalar>(profile(9 + axis, k));
     }
   }
   return true;
@@ -529,18 +590,70 @@ bool MpcWrapper<T>::updateLocked(
   }
 
   acado_initial_state_ = state.template cast<AcadoScalar>();
-  if (feedback_diagnostics_enabled_) {
-    feedback_diagnostics_.nominal = acado_inputs_.col(0).template head<4>().template cast<double>();
-    feedback_diagnostics_.start_mono = std::chrono::duration<double>(
-        std::chrono::steady_clock::now().time_since_epoch()).count();
+  // A tangent approximation of q_x^2 + q_y^2 <= vmax^2 is an outer
+  // approximation of the speed disk. A successful single RTI QP therefore
+  // does not certify the nonlinear velocity bound (its Jacobian even vanishes
+  // at q_xy=0). Reprepare only when the actual rollout violates the envelope.
+  const auto physical_limits_satisfied = [&]() {
+    constexpr double tolerance = 1.0e-7;  // m/s and m/s^2, not squared speed
+    if (!acado_states_.allFinite() || !acado_inputs_.allFinite()) return false;
+    for (int k = 0; k < kSamples; ++k) {
+      Eigen::Matrix<AcadoScalar, 3, 3> rotation;
+      for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j)
+          rotation(i, j) = acado_online_data_(kOdWorldRotationOffset + 3*i + j, k);
+      const Eigen::Matrix<AcadoScalar, 3, 1> omega =
+          acado_online_data_.template block<3, 1>(kOdOmegaNonOffset, k);
+      const Eigen::Matrix<AcadoScalar, 3, 1> world =
+          acado_online_data_.template block<3, 1>(kOdWorldFrameVelocityOffset, k) +
+          rotation * (acado_inputs_.template block<3, 1>(0, k) +
+                      omega.cross(acado_states_.template block<3, 1>(0, k)));
+      // Test against the configured physical envelope, not the slightly
+      // tightened optimization bound. This avoids chasing QP roundoff at the
+      // disk boundary while still rejecting a physically over-limit command.
+      const double xy_max = std::sqrt(static_cast<double>(
+          acado_state_upper_bounds_(kWorldVelocityConstraintOffset, k))) /
+          (1.0 - kWorldVelocityNumericalGuard);
+      const double z_max = static_cast<double>(
+          acado_state_upper_bounds_(kWorldVelocityConstraintOffset + 1, k));
+      if (!world.allFinite() || world.template head<2>().norm() > xy_max + tolerance ||
+          std::abs(world.z()) > z_max + tolerance) return false;
+      for (int axis = 0; axis < 3; ++axis) {
+        const AcadoScalar inverse_tau = acado_online_data_(
+            axis == 2 ? kOdInvTauVzIndex : kOdInvTauVxyIndex, k);
+        const double acceleration = static_cast<double>(inverse_tau *
+            (acado_inputs_(axis, k) - acado_states_(axis + 3, k)));
+        if (acceleration < acado_state_lower_bounds_(axis, k) - tolerance ||
+            acceleration > acado_state_upper_bounds_(axis, k) + tolerance) return false;
+      }
+    }
+    return true;
+  };
+  int feedback_status = 0;
+  bool limits_ok = false;
+  constexpr int max_envelope_refinements = 16;
+  for (int refinement = 0; refinement <= max_envelope_refinements; ++refinement) {
+    if (feedback_diagnostics_enabled_) {
+      feedback_diagnostics_.nominal = acado_inputs_.col(0).template head<4>().template cast<double>();
+      feedback_diagnostics_.start_mono = std::chrono::duration<double>(
+          std::chrono::steady_clock::now().time_since_epoch()).count();
+    }
+    feedback_status = acado_feedbackStep();
+    if (feedback_diagnostics_enabled_) {
+      feedback_diagnostics_.end_mono = std::chrono::duration<double>(
+          std::chrono::steady_clock::now().time_since_epoch()).count();
+      feedback_diagnostics_.status = feedback_status;
+      for (int i = 0; i < 4; ++i) feedback_diagnostics_.increment(i) = acadoWorkspace.x[i];
+      feedback_diagnostics_.expanded = acado_inputs_.col(0).template head<4>().template cast<double>();
+    }
+    if (feedback_status != 0) break;
+    limits_ok = physical_limits_satisfied();
+    if (limits_ok || refinement == max_envelope_refinements) break;
+    feedback_status = acado_preparationStep();
+    if (feedback_status != 0) break;
   }
-  const int feedback_status = acado_feedbackStep();
-  if (feedback_diagnostics_enabled_) {
-    feedback_diagnostics_.end_mono = std::chrono::duration<double>(
-        std::chrono::steady_clock::now().time_since_epoch()).count();
-    feedback_diagnostics_.status = feedback_status;
-    for (int i = 0; i < 4; ++i) feedback_diagnostics_.increment(i) = acadoWorkspace.x[i];
-    feedback_diagnostics_.expanded = acado_inputs_.col(0).template head<4>().template cast<double>();
+  if (feedback_status == 0 && !limits_ok) {
+    ROS_WARN_THROTTLE(1.0, "MPC: nonlinear physical-limit residual remains after refinement; rejecting solve");
   }
   if (feedback_status != 0) {
     ROS_WARN_STREAM_THROTTLE(
@@ -550,14 +663,16 @@ bool MpcWrapper<T>::updateLocked(
   // Keep the command that was actually returned by this solve as the
   // next-cycle slew-rate anchor.  The two-step field refinement restores the
   // saved value between its feedback passes through setPreviousInput().
-  previous_input_ = acado_inputs_.col(0).template cast<T>();
+  if (feedback_status == 0 && limits_ok) {
+    previous_input_ = acado_inputs_.col(0).template cast<T>();
+  }
   acado_is_prepared_ = false;
 
   if (do_preparation) {
     acado_preparationStep();
     acado_is_prepared_ = true;
   }
-  return feedback_status == 0;
+  return feedback_status == 0 && limits_ok;
 }
 
 template <typename T>

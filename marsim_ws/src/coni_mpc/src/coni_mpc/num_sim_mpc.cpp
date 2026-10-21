@@ -1960,7 +1960,11 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
   Eigen::Vector3d world_p_model = Eigen::Vector3d::Zero();
   if (!isInertialFrame()) {
     world_q_model = getCarOrientation();
-    world_q_model.normalize();
+    if (world_q_model.coeffs().allFinite() && world_q_model.norm() > 1.0e-9) {
+      world_q_model.normalize();
+    } else {
+      world_q_model = Eigen::Quaterniond::Identity();
+    }
     world_p_model = getCarPosition();
   }
   if (!reference_window_.points.empty()) {
@@ -1984,6 +1988,55 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
   buildNonInertialDataProfile(omega_non_profile,
                               beta_non_profile,
                               a_car_non_profile);
+  using WorldVelocityFrameProfile =
+      acado_mpc::MpcController<double>::WorldVelocityFrameProfile;
+  WorldVelocityFrameProfile world_velocity_frame_profile =
+      WorldVelocityFrameProfile::Zero();
+  auto set_world_velocity_frame_stage =
+      [&](int stage, const Eigen::Quaterniond& W_q_non,
+          const Eigen::Vector3d& W_v_non) {
+        if (!W_q_non.coeffs().allFinite() ||
+            !std::isfinite(W_q_non.norm()) || W_q_non.norm() <= 1.0e-9 ||
+            !W_v_non.allFinite()) {
+          world_velocity_frame_profile.col(stage).setConstant(
+              std::numeric_limits<double>::quiet_NaN());
+          return;
+        }
+        const Eigen::Matrix3d rotation =
+            W_q_non.normalized().toRotationMatrix();
+        for (int row = 0; row < 3; ++row) {
+          for (int col = 0; col < 3; ++col) {
+            world_velocity_frame_profile(3 * row + col, stage) =
+                rotation(row, col);
+          }
+        }
+        world_velocity_frame_profile.block<3, 1>(9, stage) = W_v_non;
+      };
+  if (isInertialFrame()) {
+    for (int stage = 0; stage < acado_mpc::kSamples + 1; ++stage) {
+      set_world_velocity_frame_stage(
+          stage, Eigen::Quaterniond::Identity(), Eigen::Vector3d::Zero());
+    }
+  } else {
+    const CarState_t fallback_state = carStateFromOdom(car_odom_);
+    const bool have_window = !car_trajectory_window_.empty();
+    for (int stage = 0; stage < acado_mpc::kSamples + 1; ++stage) {
+      const CarState_t& car_state =
+          have_window && static_cast<std::size_t>(stage) <
+                             car_trajectory_window_.size()
+              ? car_trajectory_window_[static_cast<std::size_t>(stage)]
+              : (have_window ? car_trajectory_window_.back() : fallback_state);
+      set_world_velocity_frame_stage(
+          stage,
+          Eigen::Quaterniond(car_state(6), car_state(7), car_state(8),
+                             car_state(9)),
+          Eigen::Vector3d(car_state(3), car_state(4), car_state(5)));
+    }
+    // Stage 0 must use the same current estimator-side platform pose and
+    // linear velocity used by the execution mapping.
+    set_world_velocity_frame_stage(
+        0, getCarOrientation(), getCarLinearVelocity());
+  }
   std::shared_ptr<const FieldSnapshot> field_snapshot;
   {
     std::lock_guard<std::mutex> lock(field_snapshot_mutex_);
@@ -2309,6 +2362,10 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
   const NonInertialProfile* a_car_profile_arg =
       debug_force_legacy_noninertial_constant_profile ? nullptr
                                                       : &a_car_non_profile;
+  Eigen::Vector3d current_world_frame_velocity = Eigen::Vector3d::Zero();
+  if (!isInertialFrame()) {
+    current_world_frame_velocity = getCarLinearVelocity();
+  }
 #if CONI_MPC_EXTERNAL_FIELD_MICRO_ITERATIONS
   // Save the applied-input anchor before the first solve.  The second
   // OsqpEigen refinement must use the same anchor as the first QP.
@@ -2318,7 +2375,8 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
   auto command = mpc_controller_.run(
       state_estimate_, reference_window_, mpc_params_, world_q_model,
       world_p_model, omega_profile_arg, beta_profile_arg,
-      a_car_profile_arg);
+      a_car_profile_arg, &current_world_frame_velocity,
+      &world_velocity_frame_profile);
 #if CONI_MPC_EXTERNAL_FIELD_MICRO_ITERATIONS
   // The OsqpEigen field controller performs two outer solves and restores
   // the anchor before the refinement solve.
@@ -2346,7 +2404,8 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
     const auto refined_command = mpc_controller_.run(
         state_estimate_, reference_window_, mpc_params_, world_q_model,
         world_p_model, omega_profile_arg, beta_profile_arg,
-        a_car_profile_arg);
+        a_car_profile_arg, &current_world_frame_velocity,
+        &world_velocity_frame_profile);
     if (mpc_controller_.getLastSolveOk()) {
       command = refined_command;
       field_debug_profile = refined_field_debug_profile;

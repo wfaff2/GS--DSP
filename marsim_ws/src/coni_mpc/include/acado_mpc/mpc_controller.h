@@ -97,6 +97,8 @@ public:
 
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   using NonInertialProfile = Eigen::Matrix<T, 3, kSamples + 1>;
+  using WorldVelocityFrameProfile =
+      typename MpcWrapper<T>::WorldVelocityFrameProfile;
 
   static_assert(kStateSize == 7,
                 "MpcController: Wrong model size. Number of states does not match.");
@@ -128,7 +130,9 @@ public:
       const Eigen::Vector3d& W_p_non = Eigen::Vector3d::Zero(),
       const NonInertialProfile* omega_non_profile = nullptr,
       const NonInertialProfile* beta_non_profile = nullptr,
-      const NonInertialProfile* a_car_non_profile = nullptr);
+      const NonInertialProfile* a_car_non_profile = nullptr,
+      const Eigen::Vector3d* W_v_non = nullptr,
+      const WorldVelocityFrameProfile* world_velocity_frame_profile = nullptr);
 
   void setFeedbackDiagnosticsEnabled(bool enabled) { mpc_wrapper_.setFeedbackDiagnosticsEnabled(enabled); }
   const auto& getFeedbackDiagnostics() const { return mpc_wrapper_.getFeedbackDiagnostics(); }

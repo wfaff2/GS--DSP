@@ -1021,3 +1021,14 @@
   archived rosout/events/manifest and previous-run parameter snapshot. No
   original-paper experiment archive identified. Same-cycle QP/field rows,
   executed controls and an equivalent historical baseline remain missing.
+
+## 2026-10-21 — ACADO physical acceleration and world-command speed bounds
+
+- Objective: correct nominal actuator acceleration bounds and include the executed world velocity envelope in MPC; preserve user YAML/docs and planar Field-HOCBF.
+- Baseline: HEAD `dddca8cbcbe2a208ff087b80d89c29c91440f1cf`, with two dirty YAMLs and existing untracked docs/audit reports. Original YAML/doc SHA256 checks passed unchanged.
+- Implementation: acceleration rows now constrain Lambda(u-v); appended stagewise R_WN/v_g^W OnlineData; appended world horizontal squared-norm and vertical speed rows. Regenerated live ACADO: N=20, NX=7, NU=7, NOD=99, NPAC=12 (240 condensed rows).
+- Numerical/execution consistency: 0.001% inner horizontal speed guard; verify actual predicted physical limits to 1e-7; at most 16 additional preparation/feedback steps only when residual exceeds limits; reject unconverged solves. Preserve previous input anchor on rejection. Accepted commands use the same estimated relative position as MPC for world conversion. External clamp/failure fallback retained.
+- Compatibility: dimension-aware QP capture/replay/audit; legacy captures remain readable offline, current replay binaries reject other solver contracts.
+- Verification: coni_mpc package build; 5 C++ tests (100 independent 3D transforms, translated/rotating frames, per-stage data and instance isolation, infeasible rejection); 5 Python capture/audit tests; 4/4 exact QP replays. Two simulation-only 3 s runs (inertial/noninertial, active UAVs 1/2, no obstacles/CBF, UGV 5.2 m/s) yielded 600 successful controls, zero fallbacks, maximum external clamp change 4.75e-8 m/s, max controller wall time 9.04 ms in these runs.
+- Records: `audit_reports/physical_limits_20261021_174255/` (commands, raw CSV/logs, pre-generation backup, hashes, summaries, runnable smoke scripts).
+- Limits: nominal predicted limits and sampled success-path verification; no claim of actuator identification, global 20 ms deadline, failure-fallback safety, 3D Field-HOCBF, or recursive feasibility. No physical hardware used.

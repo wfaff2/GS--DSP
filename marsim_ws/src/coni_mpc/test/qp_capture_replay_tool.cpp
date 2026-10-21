@@ -13,8 +13,8 @@
 
 namespace {
 constexpr std::uint64_t kMagic = UINT64_C(0x3150514d4f434343);
-constexpr std::size_t kNvar = 140;
-constexpr std::size_t kNcon = 200;
+constexpr std::size_t kNvar = ACADO_QP_NV;
+constexpr std::size_t kNcon = ACADO_NPAC * ACADO_N;
 
 struct Record {
   std::uint64_t index = 0;
@@ -40,12 +40,12 @@ bool readRecord(std::istream& in, Record& r) {
   auto get = [&](std::vector<double>& v, std::size_t n) {
     v.resize(n); return read(in, v.data(), n);
   };
-  return get(r.x,147) && get(r.u,140) && get(r.x0,7) && get(r.od,1827) &&
-      get(r.y,280) && get(r.yN,7) && get(r.W,3920) && get(r.WN,49) &&
-      get(r.lbValues,140) && get(r.ubValues,140) && get(r.lbAValues,200) &&
-      get(r.ubAValues,200) && get(r.H,19600) && get(r.g,140) &&
-      get(r.A,28000) && get(r.lb,140) && get(r.ub,140) && get(r.lbA,200) &&
-      get(r.ubA,200) && get(r.solution,140) && get(r.dual,340);
+  return get(r.x,(ACADO_NX * (ACADO_N + 1))) && get(r.u,kNvar) && get(r.x0,7) && get(r.od,(ACADO_NOD * (ACADO_N + 1))) &&
+      get(r.y,(ACADO_NY * ACADO_N)) && get(r.yN,7) && get(r.W,(ACADO_NY * ACADO_NY * ACADO_N)) && get(r.WN,(ACADO_NYN * ACADO_NYN)) &&
+      get(r.lbValues,kNvar) && get(r.ubValues,kNvar) && get(r.lbAValues,kNcon) &&
+      get(r.ubAValues,kNcon) && get(r.H,(kNvar * kNvar)) && get(r.g,kNvar) &&
+      get(r.A,(kNvar * kNcon)) && get(r.lb,kNvar) && get(r.ub,kNvar) && get(r.lbA,kNcon) &&
+      get(r.ubA,kNcon) && get(r.solution,kNvar) && get(r.dual,(kNvar + kNcon));
 }
 
 template <typename T, std::size_t N>
@@ -91,7 +91,7 @@ int run(int argc, char** argv) {
   std::uint64_t magic=0; std::uint32_t version=0,nv=0,nc=0,nx=0,nu=0,nod=0;
   if (!read(in,&magic,1) || !read(in,&version,1) || !read(in,&nv,1) ||
       !read(in,&nc,1) || !read(in,&nx,1) || !read(in,&nu,1) || !read(in,&nod,1) ||
-      magic!=kMagic || version!=1 || nv!=140 || nc!=200 || nx!=147 || nu!=140 || nod!=1827) {
+      magic!=kMagic || version!=1 || nv!=kNvar || nc!=kNcon || nx!=(ACADO_NX * (ACADO_N + 1)) || nu!=kNvar || nod!=(ACADO_NOD * (ACADO_N + 1))) {
     std::cerr << "invalid capture header\n"; return 3;
   }
   const std::size_t limit = argc > 2 ? std::stoull(argv[2]) : std::numeric_limits<std::size_t>::max();
@@ -102,23 +102,23 @@ int run(int argc, char** argv) {
     loadVariables(r);
     const int prep = acado_preparationStep();
     if (prep != 0) { std::cerr << "prep failed at record " << r.index << " status=" << prep << "\n"; return 5; }
-    const double prep_h_error = maxDiff(acadoWorkspace.H,r.H,19600);
-    const double prep_a_error = maxDiff(acadoWorkspace.A,r.A,28000);
+    const double prep_h_error = maxDiff(acadoWorkspace.H,r.H,(kNvar * kNvar));
+    const double prep_a_error = maxDiff(acadoWorkspace.A,r.A,(kNvar * kNcon));
     max_h=std::max(max_h,prep_h_error);
     max_a=std::max(max_a,prep_a_error);
     const int status = acado_feedbackStep();
-    const double qp_vector_error = std::max({maxDiff(acadoWorkspace.g,r.g,140),
-        maxDiff(acadoWorkspace.lb,r.lb,140), maxDiff(acadoWorkspace.ub,r.ub,140),
-        maxDiff(acadoWorkspace.lbA,r.lbA,200), maxDiff(acadoWorkspace.ubA,r.ubA,200)});
+    const double qp_vector_error = std::max({maxDiff(acadoWorkspace.g,r.g,kNvar),
+        maxDiff(acadoWorkspace.lb,r.lb,kNvar), maxDiff(acadoWorkspace.ub,r.ub,kNvar),
+        maxDiff(acadoWorkspace.lbA,r.lbA,kNcon), maxDiff(acadoWorkspace.ubA,r.ubA,kNcon)});
     max_b=std::max(max_b,qp_vector_error);
-    max_x=std::max(max_x,maxDiff(acadoWorkspace.x,r.solution,140));
-    max_y=std::max(max_y,maxDiff(acadoWorkspace.y,r.dual,340));
+    max_x=std::max(max_x,maxDiff(acadoWorkspace.x,r.solution,kNvar));
+    max_y=std::max(max_y,maxDiff(acadoWorkspace.y,r.dual,(kNvar + kNcon)));
     max_obj=std::max(max_obj,std::abs(objectiveFromWorkspace()-r.objective));
     max_kkt=std::max(max_kkt,std::abs(acado_getKKT()-r.kkt));
     if (status==r.status && acado_getNWSR()==r.nwsr &&
         prep_h_error <= 1e-10 && prep_a_error <= 1e-10 &&
         qp_vector_error <= 1e-10 &&
-        maxDiff(acadoWorkspace.x,r.solution,140) <= 1e-8) ++ok;
+        maxDiff(acadoWorkspace.x,r.solution,kNvar) <= 1e-8) ++ok;
     ++count;
   }
   std::cout << std::setprecision(17)
