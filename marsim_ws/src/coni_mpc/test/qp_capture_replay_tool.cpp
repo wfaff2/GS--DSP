@@ -91,7 +91,7 @@ int run(int argc, char** argv) {
   std::uint64_t magic=0; std::uint32_t version=0,nv=0,nc=0,nx=0,nu=0,nod=0;
   if (!read(in,&magic,1) || !read(in,&version,1) || !read(in,&nv,1) ||
       !read(in,&nc,1) || !read(in,&nx,1) || !read(in,&nu,1) || !read(in,&nod,1) ||
-      magic!=kMagic || version!=1 || nv!=kNvar || nc!=kNcon || nx!=(ACADO_NX * (ACADO_N + 1)) || nu!=kNvar || nod!=(ACADO_NOD * (ACADO_N + 1))) {
+      magic!=kMagic || version!=2 || nv!=kNvar || nc!=kNcon || nx!=(ACADO_NX * (ACADO_N + 1)) || nu!=kNvar || nod!=(ACADO_NOD * (ACADO_N + 1))) {
     std::cerr << "invalid capture header\n"; return 3;
   }
   const std::size_t limit = argc > 2 ? std::stoull(argv[2]) : std::numeric_limits<std::size_t>::max();

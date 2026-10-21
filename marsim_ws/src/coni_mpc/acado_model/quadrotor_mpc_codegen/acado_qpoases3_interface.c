@@ -53,7 +53,7 @@ static void coni_qp_capture_open(void) {
   coni_qp_capture = fopen(path, "wb");
   if (coni_qp_capture == 0) return;
   const uint64_t magic = UINT64_C(0x3150514d4f434343); /* CCCOMQP1 */
-  const uint32_t version = 1;
+  const uint32_t version = 2; /* world acceleration norm and world yaw rows */
   const uint32_t nv = ACADO_QP_NV;
 	const uint32_t nc = ACADO_NPAC * ACADO_N;
   const uint32_t nx_nodes = ACADO_NX * (ACADO_N + 1);
@@ -104,6 +104,7 @@ static void coni_qp_capture_record(int status, double objective, double kkt) {
   coni_qp_write(acadoWorkspace.y, sizeof(real_t), sizeof(acadoWorkspace.y) / sizeof(real_t));
   fflush(coni_qp_capture);
 }
+
 
 
 

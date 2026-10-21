@@ -74,11 +74,12 @@ TEST(MpcPhysicalLimits, GeneratedRowsMatchIndependentThreeDimensionalMapping) {
     }
     Eigen::Matrix<double, kPathConstraintSize * (1 + kStateSize + kInputSize), 1> out;
     acado_evaluatePathConstraints(in.data(), out.data());
-    const Eigen::Vector3d physical = Eigen::Vector3d(5., 5., 4.).cwiseProduct(u.head<3>() - x.segment<3>(3));
+    const Eigen::Vector3d physical = rotation *
+        Eigen::Vector3d(5., 5., 4.).cwiseProduct(u.head<3>() - x.segment<3>(3));
     const Eigen::Vector3d world = vg + rotation * (u.head<3>() + omega.cross(x.head<3>()));
-    EXPECT_NEAR(out(0), physical.x(), 1e-11);
-    EXPECT_NEAR(out(1), physical.y(), 1e-11);
-    EXPECT_NEAR(out(2), physical.z(), 1e-11);
+    EXPECT_NEAR(out(0), physical.head<2>().squaredNorm(), 1e-9);
+    EXPECT_NEAR(out(1), physical.z(), 1e-11);
+    EXPECT_NEAR(out(2), u(3) + omega.z(), 1e-11);
     EXPECT_NEAR(out(kWorldVelocityConstraintOffset), world.head<2>().squaredNorm(), 1e-10);
     EXPECT_NEAR(out(kWorldVelocityConstraintOffset + 1), world.z(), 1e-11);
   }
@@ -115,7 +116,7 @@ TEST(MpcPhysicalLimits, ColdSolveHonorsTranslatedWorldEnvelopeAndPhysicalAcceler
     EXPECT_LE(world.head<2>().norm(), 5. + 1e-6) << "stage=" << k;
     EXPECT_LE(std::abs(world.z()), 3. + 1e-6);
     const Eigen::Vector3d acceleration = 5. * (controls.col(k).head<3>() - predicted.col(k).segment<3>(3));
-    EXPECT_LE(acceleration.head<2>().cwiseAbs().maxCoeff(), 10. + 1e-6);
+    EXPECT_LE(acceleration.head<2>().norm(), 10. + 1e-6);
     EXPECT_LE(std::abs(acceleration.z()), 4. + 1e-6);
   }
 }
@@ -175,5 +176,150 @@ TEST(MpcPhysicalLimits, InfeasibleWorldEnvelopeDoesNotReplaceAcceptedInputAnchor
   State initial = State::Zero(); initial(2) = 1.;
   EXPECT_FALSE(wrapper->solve(initial));
   EXPECT_TRUE(wrapper->getPreviousInput().isApprox(previous));
+}
+
+TEST(MpcPhysicalLimits, WorldFeasibleRelativeVelocityMayExceedFormerComponentLimits) {
+  auto wrapper = configured();
+  const Eigen::Vector3d vg(12., -11., 8.);
+  ASSERT_TRUE(wrapper->setWorldVelocityFrameProfile(frame(Eigen::Matrix3d::Identity(), vg)));
+  State initial = State::Zero(); initial(2) = 1.; initial.segment<3>(3) = -vg;
+  States refs = initial.replicate(1, kSamples + 1);
+  Inputs desired = Inputs::Zero();
+  for (int k = 0; k <= kSamples; ++k) {
+    refs.col(k).head<3>() = initial.head<3>() - vg * (.1*k);
+    desired.col(k).head<3>() = -vg;
+  }
+  ASSERT_TRUE(wrapper->setTrajectory(refs, desired));
+  ASSERT_TRUE(wrapper->solve(initial));
+  Eigen::Matrix<double, kInputSize, kSamples> controls;
+  wrapper->getInputs(controls);
+  EXPECT_LT(controls(0,0), -5.);
+  EXPECT_GT(controls(1,0), 5.);
+  EXPECT_LT(controls(2,0), -3.);
+  for (int k=0; k<kSamples; ++k) {
+    const Eigen::Vector3d world = vg + controls.col(k).head<3>();
+    EXPECT_LE(world.head<2>().norm(), 5.+1e-6);
+    EXPECT_LE(std::abs(world.z()), 3.+1e-6);
+  }
+}
+
+TEST(MpcPhysicalLimits, RelativeYawMayCancelPlatformRotationBeyondFormerYawBound) {
+  auto wrapper = configured();
+  const Eigen::Vector3d omega(0., 0., 4.);
+  ASSERT_TRUE(wrapper->setNonInertialData(omega,
+      Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero()));
+  auto frames = frame(Eigen::Matrix3d::Identity(), Eigen::Vector3d::Zero());
+  for (int k=0; k<=kSamples; ++k) {
+    const Eigen::Matrix3d rotation = Eigen::AngleAxisd(.4*k, Eigen::Vector3d::UnitZ()).toRotationMatrix();
+    for (int i=0; i<3; ++i) for(int j=0; j<3; ++j) frames(3*i+j,k)=rotation(i,j);
+  }
+  ASSERT_TRUE(wrapper->setWorldVelocityFrameProfile(frames));
+  State initial=State::Zero(); initial(2)=1.;
+  States refs=initial.replicate(1,kSamples+1); Inputs desired=Inputs::Zero();
+  for(int k=0;k<=kSamples;++k) { refs(6,k)=-.4*k; desired(3,k)=-4.; }
+  ASSERT_TRUE(wrapper->setTrajectory(refs,desired));
+  ASSERT_TRUE(wrapper->solve(initial));
+  Eigen::Matrix<double,kInputSize,kSamples> controls;wrapper->getInputs(controls);
+  EXPECT_LT(controls(3,0),-3.14);
+  for(int k=0;k<kSamples;++k) EXPECT_LE(std::abs(controls(3,k)+4.),3.14+1e-6);
+}
+
+TEST(MpcPhysicalLimits, WorldYawUpperAndLowerBoundsIncludePlatformRate) {
+  for (double sign : {-1.,1.}) {
+    auto wrapper=configured();
+    ASSERT_TRUE(wrapper->setLimits(5.,3.,1.,10.,4.,0.));
+    ASSERT_TRUE(wrapper->setNonInertialData(Eigen::Vector3d(0.,0.,sign*.8),
+        Eigen::Vector3d::Zero(),Eigen::Vector3d::Zero()));
+    State initial=State::Zero(); initial(2)=1.;
+    States refs=initial.replicate(1,kSamples+1);Inputs desired=Inputs::Zero();
+    for(int k=0;k<=kSamples;++k) {refs(6,k)=sign*.3*k;desired(3,k)=sign*3.;}
+    ASSERT_TRUE(wrapper->setTrajectory(refs,desired));
+    ASSERT_TRUE(wrapper->solve(initial));
+    Eigen::Matrix<double,kInputSize,kSamples> controls;wrapper->getInputs(controls);
+    for(int k=0;k<kSamples;++k) EXPECT_LE(std::abs(controls(3,k)+sign*.8),1.+1e-6);
+    EXPECT_GT(sign*(controls(3,0)+sign*.8),.99);
+  }
+}
+
+TEST(MpcPhysicalLimits, HorizontalAccelerationIsACircleRatherThanAnAxisAlignedBox) {
+  auto wrapper=configured();
+  State initial=State::Zero();initial(2)=1.;
+  States refs=initial.replicate(1,kSamples+1);refs.row(0).setConstant(50.);refs.row(1).setConstant(50.);
+  Inputs desired=Inputs::Zero();desired.row(0).setConstant(5.);desired.row(1).setConstant(5.);
+  ASSERT_TRUE(wrapper->setTrajectory(refs,desired));
+  ASSERT_TRUE(wrapper->solve(initial));
+  Eigen::Matrix<double,kInputSize,kSamples> controls;States predicted;
+  wrapper->getInputs(controls);wrapper->getStates(predicted);
+  for(int k=0;k<kSamples;++k) {
+    const Eigen::Vector3d acceleration=5.*(controls.col(k).head<3>()-predicted.col(k).segment<3>(3));
+    EXPECT_LE(acceleration.head<2>().norm(),10.+1e-6);
+    EXPECT_LE(std::abs(acceleration.z()),4.+1e-6);
+  }
+  EXPECT_GT(controls(0,0),1.);
+  EXPECT_GT(controls(1,0),1.);
+  EXPECT_LE(controls.col(0).head<2>().norm(),2.+1e-6);
+}
+
+TEST(MpcPhysicalLimits, TiltedFrameColdSolveChecksWorldAccelerationAndVelocity) {
+  auto wrapper=configured();
+  const Eigen::Matrix3d rotation=(Eigen::AngleAxisd(.7,Eigen::Vector3d::UnitZ())*
+      Eigen::AngleAxisd(.4,Eigen::Vector3d::UnitY())).toRotationMatrix();
+  ASSERT_TRUE(wrapper->setWorldVelocityFrameProfile(frame(rotation,Eigen::Vector3d::Zero())));
+  State initial=State::Zero();initial(2)=1.;
+  States refs=initial.replicate(1,kSamples+1);
+  Inputs desired=Inputs::Zero();
+  const Eigen::Vector3d acceleration_non=rotation.transpose()*Eigen::Vector3d(1.,2.,.5);
+  // Seed a feasible exact first-order rollout, so the frame test is distinct
+  // from the deliberately infeasible cold nominal used by the stress test.
+  for(int k=0;k<=kSamples;++k) {
+    desired.col(k).head<3>()=refs.col(k).segment<3>(3)+.2*acceleration_non;
+    if(k<kSamples) {
+      const Eigen::Vector3d v=refs.col(k).segment<3>(3);
+      const Eigen::Vector3d u=desired.col(k).head<3>();
+      refs.col(k+1).segment<3>(3)=u+(v-u)*std::exp(-.5);
+      refs.col(k+1).head<3>()=refs.col(k).head<3>()+.1*u+.2*(v-u)*(1.-std::exp(-.5));
+    }
+  }
+  ASSERT_TRUE(wrapper->setTrajectory(refs,desired));
+  ASSERT_TRUE(wrapper->solve(initial));
+  Eigen::Matrix<double,kInputSize,kSamples> controls;States predicted;
+  wrapper->getInputs(controls);wrapper->getStates(predicted);
+  for(int k=0;k<kSamples;++k) {
+    const Eigen::Vector3d acceleration=rotation*(5.*(controls.col(k).head<3>()-predicted.col(k).segment<3>(3)));
+    const Eigen::Vector3d velocity=rotation*controls.col(k).head<3>();
+    EXPECT_LE(acceleration.head<2>().norm(),10.+1e-6);
+    EXPECT_LE(std::abs(acceleration.z()),4.+1e-6);
+    EXPECT_LE(velocity.head<2>().norm(),5.+1e-6);
+    EXPECT_LE(std::abs(velocity.z()),3.+1e-6);
+  }
+}
+
+TEST(MpcPhysicalLimits, TiltedFrameStressNeverAcceptsUnconvergedPhysicalEnvelope) {
+  auto wrapper=configured();
+  const Eigen::Matrix3d rotation=(Eigen::AngleAxisd(.7,Eigen::Vector3d::UnitZ())*
+      Eigen::AngleAxisd(.4,Eigen::Vector3d::UnitY())).toRotationMatrix();
+  ASSERT_TRUE(wrapper->setWorldVelocityFrameProfile(frame(rotation,Eigen::Vector3d::Zero())));
+  State initial=State::Zero();initial(2)=1.;
+  States refs=initial.replicate(1,kSamples+1);refs.topRows<3>().setConstant(30.);
+  Inputs desired=Inputs::Zero();desired.topRows<3>().setConstant(5.);
+  ASSERT_TRUE(wrapper->setTrajectory(refs,desired));
+  const auto anchor=wrapper->getPreviousInput();
+  const bool accepted=wrapper->solve(initial);
+  Eigen::Matrix<double,kInputSize,kSamples> controls;States predicted;
+  wrapper->getInputs(controls);wrapper->getStates(predicted);
+  double residual=0.;
+  for(int k=0;k<kSamples;++k) {
+    const Eigen::Vector3d a=rotation*(5.*(controls.col(k).head<3>()-predicted.col(k).segment<3>(3)));
+    const Eigen::Vector3d v=rotation*controls.col(k).head<3>();
+    residual=std::max({residual,a.head<2>().norm()-10.,std::abs(a.z())-4.,
+                       v.head<2>().norm()-5.,std::abs(v.z())-3.});
+  }
+  if(accepted) EXPECT_LE(residual,1e-7);
+  else {
+    EXPECT_TRUE(wrapper->getPreviousInput().isApprox(anchor));
+    EXPECT_GT(residual,1e-7);
+  }
+  std::cout << "tilted_stress_accepted=" << accepted
+            << " max_physical_residual=" << std::setprecision(17) << residual << '\n';
 }
 }  // namespace

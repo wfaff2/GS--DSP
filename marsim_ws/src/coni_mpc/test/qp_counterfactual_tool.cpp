@@ -40,7 +40,7 @@ double maxDiff(const double* a,const std::vector<double>& b){double m=0;for(std:
 int run(int argc,char**argv){
   if(argc<3){std::cerr<<"usage: qp_counterfactual_tool CAPTURE.bin profiles.csv [step ...]\n";return 2;}
   std::ifstream in(argv[1],std::ios::binary);if(!in)return 2;auto profiles=readProfiles(argv[2]);
-  std::uint64_t magic=0;std::uint32_t version=0,nv=0,nc=0,nx=0,nu=0,nod=0;if(!read(in,&magic,1)||!read(in,&version,1)||!read(in,&nv,1)||!read(in,&nc,1)||!read(in,&nx,1)||!read(in,&nu,1)||!read(in,&nod,1)||magic!=kMagic||version!=1||nv!=kNvar||nc!=kNcon||nx!=ACADO_NX*(ACADO_N+1)||nu!=ACADO_NU*ACADO_N||nod!=ACADO_NOD*(ACADO_N+1)){std::cerr<<"capture contract differs from linked solver\n";return 3;}
+  std::uint64_t magic=0;std::uint32_t version=0,nv=0,nc=0,nx=0,nu=0,nod=0;if(!read(in,&magic,1)||!read(in,&version,1)||!read(in,&nv,1)||!read(in,&nc,1)||!read(in,&nx,1)||!read(in,&nu,1)||!read(in,&nod,1)||magic!=kMagic||version!=2||nv!=kNvar||nc!=kNcon||nx!=ACADO_NX*(ACADO_N+1)||nu!=ACADO_NU*ACADO_N||nod!=ACADO_NOD*(ACADO_N+1)){std::cerr<<"capture contract differs from linked solver\n";return 3;}
   std::vector<std::uint64_t>want;for(int i=3;i<argc;++i)want.push_back(std::stoull(argv[i]));
   if(acado_initializeSolver()!=0)return 4;std::cout<<"step,variant,valid,status,nwsr,objective,kkt,residual,dH,dA,dg,dlb,dub,dlbA,dubA,changed_A_rows,changed_lbA_rows,changed_ubA_rows,u0,u1,u2,u3,delta_u0_from_A,delta_u1_from_A,delta_u2_from_A,delta_u3_from_A\n";
   std::size_t seen=0; bool have_previous=false; Record previous;

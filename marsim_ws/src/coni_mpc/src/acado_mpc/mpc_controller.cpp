@@ -596,15 +596,8 @@ acado_mpc_common::ControlCommand MpcController<T>::updateControlCommand(
     bool /* field_active */) {
   Eigen::Matrix<T, kInputSize, 1> input_bounded = input.template cast<T>();
 
-  // Bound inputs for sanity.
-  input_bounded(INPUT::kVelCmdX) = std::max(-params_.max_v_xy_,
-                                           std::min(params_.max_v_xy_, input_bounded(INPUT::kVelCmdX)));
-  input_bounded(INPUT::kVelCmdY) = std::max(-params_.max_v_xy_,
-                                           std::min(params_.max_v_xy_, input_bounded(INPUT::kVelCmdY)));
-  input_bounded(INPUT::kVelCmdZ) = std::max(-params_.max_v_z_,
-                                           std::min(params_.max_v_z_, input_bounded(INPUT::kVelCmdZ)));
-  input_bounded(INPUT::kYawRate) = std::max(-params_.max_yaw_rate_,
-                                           std::min(params_.max_yaw_rate_, input_bounded(INPUT::kYawRate)));
+  // The solver validates finite commands against world-frame physical
+  // envelopes.  Do not reintroduce relative-frame velocity/yaw clipping here.
   for (int slack_idx = INPUT::kSlack0; slack_idx <= INPUT::kSlack2; ++slack_idx) {
     if (std::isfinite(static_cast<double>(params_.cbf_slack_max_))) {
       input_bounded(slack_idx) =

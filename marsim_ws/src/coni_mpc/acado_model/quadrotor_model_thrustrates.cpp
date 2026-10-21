@@ -201,6 +201,15 @@ int main(int argc, char** argv){
   Expression acc_x = (v_cmd_x - v_x) * tau_v_xy_inv;
   Expression acc_y = (v_cmd_y - v_y) * tau_v_xy_inv;
   Expression acc_z = (v_cmd_z - v_z) * tau_v_z_inv;
+  // Nominal physical acceleration in world coordinates.  acc already is the
+  // actuation term Lambda(u-v); the non-inertial terms belong only in dot(v)
+  // and must not be added again here.
+  Expression world_acc_x = world_r00 * acc_x + world_r01 * acc_y + world_r02 * acc_z;
+  Expression world_acc_y = world_r10 * acc_x + world_r11 * acc_y + world_r12 * acc_z;
+  Expression world_acc_z = world_r20 * acc_x + world_r21 * acc_y + world_r22 * acc_z;
+  // The execution path composes the relative yaw command with the rotating
+  // frame's z angular rate.  This is the yaw-only mapping used by this model.
+  Expression world_yaw_rate = yaw_rate_cmd + omega_non_z;
 
   // Non-inertial compensation terms:
   // a_ni = -2 * (omega x v) - (beta x p) - omega x (omega x p) - a_car_non
@@ -372,18 +381,13 @@ int main(int argc, char** argv){
   // Add system dynamics
   ocp.subjectTo( f );
   ocp.setNU(7);
-  // Add constraints
-  ocp.subjectTo(-v_xy_max <= v_cmd_x <= v_xy_max);
-  ocp.subjectTo(-v_xy_max <= v_cmd_y <= v_xy_max);
-  ocp.subjectTo(-v_z_max <= v_cmd_z <= v_z_max);
-  ocp.subjectTo(-yaw_rate_max <= yaw_rate_cmd <= yaw_rate_max);
-  
-  // Physical acceleration constraints (Mixed State-Control).  acc is the
-  // vehicle's nominal actuation acceleration Lambda(u-v); non_inertial_acc is
-  // a coordinate-frame term that belongs in dot(v), not in the actuator bound.
-  ocp.subjectTo(-a_max_xy <= acc_x <= a_max_xy);
-  ocp.subjectTo(-a_max_xy <= acc_y <= a_max_xy);
-  ocp.subjectTo(-a_max_z  <= acc_z <= a_max_z);
+  // The first three path rows are world-frame physical envelopes.  Relative
+  // velocity/yaw controls are intentionally unbounded; the wrapper supplies
+  // qpOASES infinity sentinels for those four input-bound slots at runtime.
+  ocp.subjectTo(world_acc_x * world_acc_x + world_acc_y * world_acc_y <=
+                a_max_xy * a_max_xy);
+  ocp.subjectTo(-a_max_z <= world_acc_z <= a_max_z);
+  ocp.subjectTo(-yaw_rate_max <= world_yaw_rate <= yaw_rate_max);
 
   ocp.subjectTo(delta0 >= 0.0);
   ocp.subjectTo(delta1 >= 0.0);
@@ -486,8 +490,7 @@ int main(int argc, char** argv){
 
   // The executed world-frame velocity is
   //   q = v_g^W + R_WN (u^N + omega^N x p^N).
-  // Constrain the same quantity at every MPC stage.  The legacy componentwise
-  // relative-command bounds above remain in force.
+  // Constrain the same quantity at every MPC stage.
   Expression commanded_transport_x = v_cmd_x + omega_cross_p_x;
   Expression commanded_transport_y = v_cmd_y + omega_cross_p_y;
   Expression commanded_transport_z = v_cmd_z + omega_cross_p_z;

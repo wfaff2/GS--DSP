@@ -27,7 +27,7 @@ ARRAY_FIELDS = [
 ]
 
 
-def record_dtype(ncon: int = NCON, nod_nodes: int = 1827) -> np.dtype:
+def record_dtype(ncon: int = NCON, nod_nodes: int = 1827, version: int = 1) -> np.dtype:
     fields = [
         ("index", "<u8"), ("status", "<i4"), ("nwsr", "<i4"),
         ("objective", "<f8"), ("kkt", "<f8"),
@@ -36,7 +36,7 @@ def record_dtype(ncon: int = NCON, nod_nodes: int = 1827) -> np.dtype:
     sizes.update(od=nod_nodes, lbAValues=ncon, ubAValues=ncon,
                  A=ncon * NVAR, lbA=ncon, ubA=ncon, dual=NVAR + ncon)
     fields.extend((name, ("<f8", (sizes[name],))) for name, _ in ARRAY_FIELDS)
-    return np.dtype(fields, align=False)
+    return np.dtype(fields, align=False, metadata={"capture_version": version})
 
 
 def load_capture(path: Path) -> np.ndarray:
@@ -47,10 +47,10 @@ def load_capture(path: Path) -> np.ndarray:
         header = stream.read(HEADER_BYTES)
     magic, version, nv, nc, nx, nu, nod = struct.unpack("<Q6I", header)
     expected_magic = 0x3150514D4F434343
-    if ((magic, version, nv, nx, nu) != (expected_magic, 1, NVAR, 147, 140)
-            or (nc, nod) not in ((200, 1827), (240, 2079))):
+    if ((magic, nv, nx, nu) != (expected_magic, NVAR, 147, 140)
+            or (version, nc, nod) not in ((1, 200, 1827), (1, 240, 2079), (2, 240, 2079))):
         raise ValueError(f"unexpected capture header {magic:x} {version} {nv} {nc} {nx} {nu} {nod}")
-    dtype = record_dtype(nc, nod)
+    dtype = record_dtype(nc, nod, version)
     if (size - HEADER_BYTES) % dtype.itemsize:
         raise ValueError(f"capture size {size} is not aligned to {dtype.itemsize}")
     count = (size - HEADER_BYTES) // dtype.itemsize
@@ -172,15 +172,18 @@ def row_ints(value: str) -> List[int]:
     return [int(v) for v in value.split(";") if v]
 
 
-def boundary_audit(rows: List[Dict[str, str]], path_size: int = 10) -> Dict[str, object]:
+def boundary_audit(rows: List[Dict[str, str]], path_size: int = 10,
+                   capture_version: int = 1) -> Dict[str, object]:
     result = []
     for row in rows:
         changed = row_ints(row.get("changed_A_rows", ""))
         role_counts = {"acceleration": 0, "legacy_cbf": 0,
-                       "safe_set": 0, "field_hocbf": 0, "world_velocity": 0, "other": 0}
+                       "safe_set": 0, "field_hocbf": 0, "world_velocity": 0,
+                       "world_yaw_rate": 0, "other": 0}
         for idx in changed:
             within = idx % path_size
-            role = ("acceleration" if within < 3 else
+            role = ("world_yaw_rate" if within == 2 and capture_version >= 2 else
+                    "acceleration" if within < 3 else
                     "legacy_cbf" if within in (3, 5, 7) else
                     "safe_set" if within in (4, 6, 8) else
                     "field_hocbf" if within == 9 else
@@ -221,7 +224,8 @@ def boundary_audit(rows: List[Dict[str, str]], path_size: int = 10) -> Dict[str,
             result[-1][key] = {name: 0 for name in role_counts}
             for idx in result[-1][rows_key]:
                 within = idx % path_size
-                role = ("acceleration" if within < 3 else
+                role = ("world_yaw_rate" if within == 2 and capture_version >= 2 else
+                        "acceleration" if within < 3 else
                         "legacy_cbf" if within in (3, 5, 7) else
                         "safe_set" if within in (4, 6, 8) else
                         "field_hocbf" if within == 9 else
@@ -270,7 +274,8 @@ def main() -> int:
             writer.writeheader(); writer.writerows(event_rows)
     if args.counterfactual:
         cf_rows = parse_rows(args.counterfactual, args.steps)
-        summary["boundary_audit"] = boundary_audit(cf_rows, records[0]["lbA"].size // 20)
+        summary["boundary_audit"] = boundary_audit(cf_rows, records[0]["lbA"].size // 20,
+            records.dtype.metadata.get("capture_version", 1))
         with (args.output_dir / "qp_constraint_boundary_audit.csv").open("w", newline="") as stream:
             writer = csv.DictWriter(stream, fieldnames=[
                 "step", "variant", "valid", "status", "nwsr", "objective", "kkt",

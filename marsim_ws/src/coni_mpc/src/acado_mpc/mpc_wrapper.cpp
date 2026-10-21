@@ -54,6 +54,9 @@
 
 namespace acado_mpc {
 
+// acado_common.h defines real_t inside this namespace through mpc_wrapper.h.
+#include <qpOASES_e/Constants.h>
+
 extern "C" {
 ACADOworkspace acadoWorkspace;
 ACADOvariables acadoVariables;
@@ -198,15 +201,21 @@ bool MpcWrapper<T>::setLimits(T max_v_xy, T max_v_z, T max_yaw_rate,
     slack_upper = static_cast<T>(std::numeric_limits<AcadoScalar>::max());
   }
 
-  lower_bounds << -max_v_xy, -max_v_xy, -max_v_z, -max_yaw_rate,
+  const T qp_unbounded = static_cast<T>(QPOASES_INFTY);
+  lower_bounds << -qp_unbounded, -qp_unbounded, -qp_unbounded, -qp_unbounded,
                   static_cast<T>(0.0), static_cast<T>(0.0), static_cast<T>(0.0);
-  upper_bounds << max_v_xy, max_v_xy, max_v_z, max_yaw_rate,
+  upper_bounds << qp_unbounded, qp_unbounded, qp_unbounded, qp_unbounded,
                   slack_upper, slack_upper, slack_upper;
   path_lower_bounds.setZero();
   path_upper_bounds.setConstant(static_cast<T>(1.0e12));
-  path_lower_bounds(0) = -a_max_xy;
-  path_lower_bounds(1) = -a_max_xy;
-  path_lower_bounds(2) = -a_max_z;
+  path_lower_bounds(0) = -static_cast<T>(1.0e12);
+  const T guarded_world_acc_xy = a_max_xy *
+      static_cast<T>(1.0 - kPhysicalNormNumericalGuard);
+  path_upper_bounds(0) = guarded_world_acc_xy * guarded_world_acc_xy;
+  path_lower_bounds(1) = -a_max_z;
+  path_upper_bounds(1) = a_max_z;
+  path_lower_bounds(kWorldYawRateConstraintIndex) = -max_yaw_rate;
+  path_upper_bounds(kWorldYawRateConstraintIndex) = max_yaw_rate;
   // Constraints 4, 6, 8 correspond to obs_active * h >= 0.0 without slack.
   // Enforcing hard state constraints at shooting nodes in sampled MPC causes QP infeasibility
   // whenever disturbance, lag, or proximity momentarily makes h < 0.
@@ -215,13 +224,10 @@ bool MpcWrapper<T>::setLimits(T max_v_xy, T max_v_z, T max_yaw_rate,
   path_lower_bounds(4) = -static_cast<T>(1.0e12);
   path_lower_bounds(6) = -static_cast<T>(1.0e12);
   path_lower_bounds(8) = -static_cast<T>(1.0e12);
-  path_upper_bounds(0) = a_max_xy;
-  path_upper_bounds(1) = a_max_xy;
-  path_upper_bounds(2) = a_max_z;
   path_lower_bounds(kWorldVelocityConstraintOffset) =
       -static_cast<T>(1.0e12);
   const T guarded_world_xy = max_v_xy *
-      static_cast<T>(1.0 - kWorldVelocityNumericalGuard);
+      static_cast<T>(1.0 - kPhysicalNormNumericalGuard);
   path_upper_bounds(kWorldVelocityConstraintOffset) = guarded_world_xy * guarded_world_xy;
   path_lower_bounds(kWorldVelocityConstraintOffset + 1) = -max_v_z;
   path_upper_bounds(kWorldVelocityConstraintOffset + 1) = max_v_z;
@@ -613,18 +619,37 @@ bool MpcWrapper<T>::updateLocked(
       // disk boundary while still rejecting a physically over-limit command.
       const double xy_max = std::sqrt(static_cast<double>(
           acado_state_upper_bounds_(kWorldVelocityConstraintOffset, k))) /
-          (1.0 - kWorldVelocityNumericalGuard);
+          (1.0 - kPhysicalNormNumericalGuard);
       const double z_max = static_cast<double>(
           acado_state_upper_bounds_(kWorldVelocityConstraintOffset + 1, k));
       if (!world.allFinite() || world.template head<2>().norm() > xy_max + tolerance ||
           std::abs(world.z()) > z_max + tolerance) return false;
-      for (int axis = 0; axis < 3; ++axis) {
-        const AcadoScalar inverse_tau = acado_online_data_(
-            axis == 2 ? kOdInvTauVzIndex : kOdInvTauVxyIndex, k);
-        const double acceleration = static_cast<double>(inverse_tau *
-            (acado_inputs_(axis, k) - acado_states_(axis + 3, k)));
-        if (acceleration < acado_state_lower_bounds_(axis, k) - tolerance ||
-            acceleration > acado_state_upper_bounds_(axis, k) + tolerance) return false;
+      Eigen::Matrix<AcadoScalar, 3, 1> relative_acceleration;
+      relative_acceleration.x() = acado_online_data_(kOdInvTauVxyIndex, k) *
+          (acado_inputs_(0, k) - acado_states_(3, k));
+      relative_acceleration.y() = acado_online_data_(kOdInvTauVxyIndex, k) *
+          (acado_inputs_(1, k) - acado_states_(4, k));
+      relative_acceleration.z() = acado_online_data_(kOdInvTauVzIndex, k) *
+          (acado_inputs_(2, k) - acado_states_(5, k));
+      const Eigen::Matrix<AcadoScalar, 3, 1> world_acceleration =
+          rotation * relative_acceleration;
+      const double world_acc_xy_max = std::sqrt(static_cast<double>(
+          acado_state_upper_bounds_(0, k))) /
+          (1.0 - kPhysicalNormNumericalGuard);
+      const double world_acc_z_max = static_cast<double>(
+          acado_state_upper_bounds_(1, k));
+      const double world_yaw_rate = static_cast<double>(
+          acado_inputs_(3, k) + omega.z());
+      const double world_yaw_rate_max = static_cast<double>(
+          acado_state_upper_bounds_(kWorldYawRateConstraintIndex, k));
+      if (!world_acceleration.allFinite() ||
+          world_acceleration.template head<2>().norm() >
+              world_acc_xy_max + tolerance ||
+          std::abs(static_cast<double>(world_acceleration.z())) >
+              world_acc_z_max + tolerance ||
+          !std::isfinite(world_yaw_rate) ||
+          std::abs(world_yaw_rate) > world_yaw_rate_max + tolerance) {
+        return false;
       }
     }
     return true;

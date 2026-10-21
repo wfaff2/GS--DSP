@@ -73,10 +73,12 @@ static constexpr int kOdSize = ACADO_NOD;     // number of online data
 static constexpr int kPathConstraintSize = ACADO_NPAC; // number of path constraints
 // Must match the obstacle count exported by acado_model/quadrotor_model_thrustrates.cpp.
 static constexpr int kMaxObstacles = 3;
-// Must match the mixed acceleration constraints exported by
-// acado_model/quadrotor_model_thrustrates.cpp.
-static constexpr int kAccelerationConstraintSize = 3;
-static constexpr int kCbfConstraintOffset = kAccelerationConstraintSize;
+// Must match the world-frame physical-envelope rows exported by
+// acado_model/quadrotor_model_thrustrates.cpp: horizontal acceleration norm,
+// vertical acceleration, then world yaw rate.
+static constexpr int kAccelerationConstraintSize = 2;
+static constexpr int kWorldYawRateConstraintIndex = 2;
+static constexpr int kCbfConstraintOffset = 3;
 static constexpr int kCbfConstraintSize = kMaxObstacles;
 static constexpr int kSafeSetConstraintOffset =
     kCbfConstraintOffset + kCbfConstraintSize;
@@ -87,14 +89,18 @@ static constexpr int kFieldConstraintSize = 1;
 static constexpr int kWorldVelocityConstraintOffset =
     kFieldConstraintOffset + kFieldConstraintSize;
 static constexpr int kWorldVelocityConstraintSize = 2;
-// Tiny inner numerical guard for RTI's tangent approximation of the speed disk.
-static constexpr double kWorldVelocityNumericalGuard = 1.0e-5;
+// Tiny inner numerical guard for RTI tangent approximations of physical norm
+// envelopes (currently horizontal acceleration and horizontal velocity).
+static constexpr double kPhysicalNormNumericalGuard = 1.0e-5;
 // Must match the discretization exported by the ACADO model source.
 static constexpr double kModelDt = 0.1;
-static_assert(kPathConstraintSize == kAccelerationConstraintSize +
+static_assert(kPathConstraintSize == kAccelerationConstraintSize + 1 +
                   kCbfConstraintSize + kSafeSetConstraintSize +
                   kFieldConstraintSize + kWorldVelocityConstraintSize,
               "MPC: Path-constraint size does not match the model layout.");
+static_assert(kWorldYawRateConstraintIndex == kAccelerationConstraintSize &&
+                  kCbfConstraintOffset == kWorldYawRateConstraintIndex + 1,
+              "MPC: Physical-envelope and CBF path-row offsets are inconsistent.");
 // Must match the model-side online-data layout exported by
 // acado_model/quadrotor_model_thrustrates.cpp:
 // Each obstacle occupies center(3), axes(3), rotation(9), velocity(3),

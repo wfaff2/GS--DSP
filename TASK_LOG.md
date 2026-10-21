@@ -1032,3 +1032,11 @@
 - Verification: coni_mpc package build; 5 C++ tests (100 independent 3D transforms, translated/rotating frames, per-stage data and instance isolation, infeasible rejection); 5 Python capture/audit tests; 4/4 exact QP replays. Two simulation-only 3 s runs (inertial/noninertial, active UAVs 1/2, no obstacles/CBF, UGV 5.2 m/s) yielded 600 successful controls, zero fallbacks, maximum external clamp change 4.75e-8 m/s, max controller wall time 9.04 ms in these runs.
 - Records: `audit_reports/physical_limits_20261021_174255/` (commands, raw CSV/logs, pre-generation backup, hashes, summaries, runnable smoke scripts).
 - Limits: nominal predicted limits and sampled success-path verification; no claim of actuator identification, global 20 ms deadline, failure-fallback safety, 3D Field-HOCBF, or recursive feasibility. No physical hardware used.
+
+## 2026-10-21 — World-frame speed/yaw/acceleration envelopes
+
+- Objective: remove relative xyz/yaw physical component limits, constrain world yaw and horizontal acceleration norm. Baseline HEAD cbe0326; user dirty YAML/docs preserved byte-for-byte.
+- Changed: generator + wrapper/controller, regenerated ACADO; rows 0/1/2 now world a_xy² / a_z / yaw rate, rows3..11 unchanged; NOD99/NPAC12, input0..3 qpOASES infinity, slack bounds retained. Norm guards and max16 residual refinement retained. Capture version2 disambiguates changed row semantics; offline v1 support retained.
+- Verified: coni_mpc build, 11 C++ tests, 6 Python tests, 5/5 exact v2 QP replays, v1 native replay rejection. Three normal two-UAV checks (including w2) total900 controls/0 fallback.
+- Boundary: extra w4 yaw stress yielded145/300 residual rejections, QPstatus0 and finite state/input/objective, max controller wall92.9ms; nonlinear feasibility not reached within16 refinements. Known tilted infeasible-nominal stress also rejected; no physical-limit/iteration tuning. Precise per-stage/refinement residual capture remains needed for stress root cause. External world speed/yaw clamp retained; fallback acceleration safety not established.
+- Details: docs/world_physical_envelopes.md; raw artifacts/repro scripts audit_reports/world_envelopes_20261021_203132/. No physical hardware, commit, or push this turn.
