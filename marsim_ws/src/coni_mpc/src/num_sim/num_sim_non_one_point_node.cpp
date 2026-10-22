@@ -1958,6 +1958,9 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
     bool solve_ok = false;
     bool fallback_used = false;
     bool fallback_previous_valid = false;
+    int applied_plan_stage = -1;
+    bool fallback_plan_exhausted = false;
+    std::uint64_t plan_generation = 0;
     double sim_time = std::numeric_limits<double>::quiet_NaN();
     double state_stamp_sec = std::numeric_limits<double>::quiet_NaN();
     double ugv_stamp_sec = std::numeric_limits<double>::quiet_NaN();
@@ -3303,6 +3306,12 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
           control_system_ptr_->getLastCommandUsedFallback();
       last_world_command_provenance_.fallback_previous_valid =
           control_system_ptr_->getLastFallbackHadPreviousValid();
+      last_world_command_provenance_.applied_plan_stage =
+          control_system_ptr_->getLastAppliedPlanStage();
+      last_world_command_provenance_.fallback_plan_exhausted =
+          control_system_ptr_->getLastFallbackPlanExhausted();
+      last_world_command_provenance_.plan_generation =
+          control_system_ptr_->getPlanGeneration();
       const auto& predicted_inputs = control_system_ptr_->getLastPredictedInputs();
       if (predicted_inputs.cols() > 0) {
         last_world_command_provenance_.acado_stage0 <<
@@ -3368,11 +3377,7 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
       last_world_command_provenance_.omega_cross_p_non = omega_non.cross(p_rel);
         provenance_collection_sec += steadyNowSec() - provenance_block_start;
       }
-      if (!solve_ok && control_system_ptr_->isInertialFrame()) {
-        // Keep consistent fallback behavior across modes on solver failure:
-        // maintain current relative position to the moving non-inertial frame.
-        v_world_cmd = v_non + W_q_non * omega_non.cross(p_rel);
-      } else if (!control_system_ptr_->isInertialFrame()) {
+      if (!control_system_ptr_->isInertialFrame()) {
         // Convert velocity command from non-inertial frame to world frame.
         Eigen::Vector3d v_rel_cmd(command.velocity_cmd.x(),
                                   command.velocity_cmd.y(),
@@ -3576,7 +3581,8 @@ static void writeWorldCommandProvenanceHeader(std::ostream& out) {
          "qp_nominal0,qp_nominal1,qp_nominal2,qp_nominal3,qp_increment0,qp_increment1,qp_increment2,qp_increment3,"
          "estimate_px_n,estimate_py_n,estimate_pz_n,omega_profile0_x,omega_profile0_y,omega_profile0_z,"
          "raw_ugv_vx,raw_ugv_vy,raw_ugv_vz,raw_ugv_omega_x,raw_ugv_omega_y,raw_ugv_omega_z,"
-         "solve_quad_px_w,solve_quad_py_w,solve_quad_pz_w\n";
+         "solve_quad_px_w,solve_quad_py_w,solve_quad_pz_w,"
+         "applied_plan_stage,fallback_plan_exhausted,plan_generation\n";
 }
 
 static void writeWorldCommandProvenanceRow(
@@ -3618,7 +3624,9 @@ static void writeWorldCommandProvenanceRow(
       << ',' << provenanceDouble(p.collection_ms) << ',' << v4(p.qp_nominal) << ',' << v4(p.qp_increment)
       << ',' << v3(p.estimate_position) << ',' << v3(p.omega_profile0)
       << ',' << v3(p.raw_ugv_velocity) << ',' << v3(p.raw_ugv_omega)
-      << ',' << v3(p.solve_quad_position) << '\n';
+      << ',' << v3(p.solve_quad_position)
+      << ',' << p.applied_plan_stage << ',' << (p.fallback_plan_exhausted ? 1 : 0)
+      << ',' << p.plan_generation << '\n';
 }
 
 static void writeUgvHorizonDetailRows(

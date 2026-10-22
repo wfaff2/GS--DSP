@@ -54,6 +54,7 @@
 
 #include <Eigen/Eigen>
 #include <cmath>
+#include <cstdint>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PointStamped.h>
 #include <nav_msgs/Path.h>
@@ -145,6 +146,11 @@ public:
   bool getLastFallbackHadPreviousValid() const {
     return last_fallback_had_previous_valid_;
   }
+  int getLastAppliedPlanStage() const { return last_applied_plan_stage_; }
+  bool getLastFallbackPlanExhausted() const {
+    return last_fallback_plan_exhausted_;
+  }
+  std::uint64_t getPlanGeneration() const { return plan_generation_; }
   double getPredictionDt() const { return static_cast<double>(mpc_wrapper_.getTimestep()); }
   const Eigen::Matrix<T, kStateSize, kSamples + 1>& getPredictedStates() const {
     return predicted_states_;
@@ -160,22 +166,12 @@ public:
     return mpc_wrapper_.setPreviousInput(input);
   }
   // Restore the last successful rollout if a refinement solve fails after a
-  // successful first micro-iteration.
+  // successful first micro-iteration. This also restores the corresponding
+  // open-loop fallback plan without counting it as a new plan generation.
   void restoreSuccessfulPrediction(
       const Eigen::Ref<const Eigen::Matrix<T, kStateSize, kSamples + 1>>& states,
       const Eigen::Ref<const Eigen::Matrix<T, kInputSize, kSamples>>& inputs,
-      T latest_slack) {
-    if (!states.allFinite() || !inputs.allFinite() ||
-        !std::isfinite(static_cast<double>(latest_slack))) {
-      return;
-    }
-    predicted_states_ = states;
-    predicted_inputs_ = inputs;
-    mpc_wrapper_.setPreviousInput(inputs.col(0));
-    latest_slack_ = latest_slack;
-    last_solve_ok_ = true;
-    solve_from_scratch_ = true;
-  }
+      T latest_slack);
   void setWarmStart(bool enable);
   void requestSolveFromScratch(const std::string& reason = std::string());
 
@@ -190,6 +186,14 @@ private:
       const Eigen::Ref<const Eigen::Matrix<T, kInputSize, 1>> input,
       ros::Time& time,
       bool field_active);
+
+  acado_mpc_common::ControlCommand commandFromInput(
+      const Eigen::Ref<const Eigen::Matrix<T, kInputSize, 1>>& input,
+      Eigen::Matrix<T, kInputSize, 1>* applied_input = nullptr) const;
+  bool cacheSuccessfulPlan(
+      const Eigen::Ref<const Eigen::Matrix<T, kInputSize, kSamples>>& inputs,
+      bool increment_generation);
+  acado_mpc_common::ControlCommand makeFailureFallback(const char* reason);
 
   bool publishPrediction(
       const Eigen::Ref<const Eigen::Matrix<T, kStateSize, kSamples + 1>> states,
@@ -234,10 +238,15 @@ private:
   bool last_solve_ok_;
   std::size_t nonfinite_recovery_count_;
   std::size_t obstacle_update_fail_count_;
-  // The last command that was produced by a successful, finite MPC solve.
-  // Failed/invalid solves must never overwrite this command.
-  acado_mpc_common::ControlCommand last_valid_control_;
-  bool has_last_valid_control_;
+  // The complete input sequence from the most recent final, finite successful
+  // solve. Failed/invalid solves and prediction resets never overwrite it.
+  Eigen::Matrix<T, kInputSize, kSamples> last_successful_inputs_ =
+      Eigen::Matrix<T, kInputSize, kSamples>::Zero();
+  bool has_successful_plan_ = false;
+  int fallback_plan_cursor_ = 0;
+  int last_applied_plan_stage_ = -1;
+  bool last_fallback_plan_exhausted_ = false;
+  std::uint64_t plan_generation_ = 0;
   bool last_command_used_fallback_ = false;
   bool last_fallback_had_previous_valid_ = false;
   typename MpcWrapper<T>::FieldHocbfProfile last_field_profile_ =

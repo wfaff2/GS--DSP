@@ -1,0 +1,25 @@
+<launch>
+  <test test-name="route_a_fallback_test"
+        pkg="coni_mpc"
+        type="route_a_fallback_test"
+        time-limit="180">
+    <param name="Q_p_xy" value="10.0" />
+    <param name="Q_p_z" value="10.0" />
+    <param name="Q_v" value="2.0" />
+    <param name="Q_yaw" value="1.0" />
+    <param name="R_v_xy" value="2.0" />
+    <param name="R_v_z" value="2.0" />
+    <param name="R_yaw_rate" value="1.0" />
+    <param name="max_v_xy" value="5.0" />
+    <param name="max_v_z" value="3.0" />
+    <param name="max_yaw_rate" value="3.14" />
+    <param name="a_max_xy" value="10.0" />
+    <param name="a_max_z" value="4.0" />
+    <param name="tau_v_xy" value="0.2" />
+    <param name="tau_v_z" value="0.2" />
+    <param name="print_info" value="false" />
+    <param name="cbf/enabled" value="false" />
+    <param name="cbf/use_field_hocbf" value="false" />
+    <param name="cbf/slack_max" value="10.0" />
+  </test>
+</launch>

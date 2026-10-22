@@ -355,6 +355,15 @@ class NumSimMpc final : public MpcBase
   bool getLastFallbackHadPreviousValid() const {
     return mpc_controller_.getLastFallbackHadPreviousValid();
   }
+  int getLastAppliedPlanStage() const {
+    return mpc_controller_.getLastAppliedPlanStage();
+  }
+  bool getLastFallbackPlanExhausted() const {
+    return mpc_controller_.getLastFallbackPlanExhausted();
+  }
+  std::uint64_t getPlanGeneration() const {
+    return mpc_controller_.getPlanGeneration();
+  }
   const auto& getLastPredictedInputs() const {
     return mpc_controller_.getPredictedInputs();
   }

@@ -49,6 +49,7 @@
 
 #include "acado_mpc/mpc_controller.h"
 
+#include <algorithm>
 #include <ctime>
 #include <cmath>
 
@@ -109,9 +110,7 @@ MpcController<T>::MpcController(
     last_preparation_time_sec_(0.0),
     last_solve_ok_(true),
     nonfinite_recovery_count_(0u),
-    obstacle_update_fail_count_(0u),
-    last_valid_control_(),
-    has_last_valid_control_(false) {
+    obstacle_update_fail_count_(0u) {
   const std::string predicted_topic =
       acado_mpc_common::resolveTopicName(topic + std::to_string(id));
   const std::string predicted_world_topic =
@@ -187,6 +186,111 @@ acado_mpc_common::ControlCommand MpcController<T>::off() {
 }
 
 template<typename T>
+acado_mpc_common::ControlCommand MpcController<T>::commandFromInput(
+    const Eigen::Ref<const Eigen::Matrix<T, kInputSize, 1>>& input,
+    Eigen::Matrix<T, kInputSize, 1>* applied_input) const {
+  Eigen::Matrix<T, kInputSize, 1> selected_input = input;
+  for (int slack_idx = INPUT::kSlack0; slack_idx <= INPUT::kSlack2; ++slack_idx) {
+    if (std::isfinite(static_cast<double>(params_.cbf_slack_max_))) {
+      selected_input(slack_idx) = std::max<T>(
+          0.0, std::min(params_.cbf_slack_max_, selected_input(slack_idx)));
+    } else {
+      selected_input(slack_idx) = std::max<T>(0.0, selected_input(slack_idx));
+    }
+  }
+  if (applied_input != nullptr) {
+    *applied_input = selected_input;
+  }
+
+  acado_mpc_common::ControlCommand command;
+  command.velocity_cmd.x() = selected_input(INPUT::kVelCmdX);
+  command.velocity_cmd.y() = selected_input(INPUT::kVelCmdY);
+  command.velocity_cmd.z() = selected_input(INPUT::kVelCmdZ);
+  command.yaw_rate = selected_input(INPUT::kYawRate);
+  command.slack = aggregateObstacleSlack<T>(selected_input);
+  return command;
+}
+
+template<typename T>
+bool MpcController<T>::cacheSuccessfulPlan(
+    const Eigen::Ref<const Eigen::Matrix<T, kInputSize, kSamples>>& inputs,
+    bool increment_generation) {
+  if (!inputs.allFinite()) return false;
+  for (int stage = 0; stage < kSamples; ++stage) {
+    const auto command = commandFromInput(inputs.col(stage));
+    if (!command.velocity_cmd.allFinite() ||
+        !std::isfinite(command.yaw_rate) || !std::isfinite(command.slack)) {
+      return false;
+    }
+  }
+
+  last_successful_inputs_ = inputs;
+  has_successful_plan_ = true;
+  fallback_plan_cursor_ = std::min(1, kSamples - 1);
+  last_applied_plan_stage_ = 0;
+  last_fallback_plan_exhausted_ = false;
+  if (increment_generation) ++plan_generation_;
+  return true;
+}
+
+template<typename T>
+acado_mpc_common::ControlCommand MpcController<T>::makeFailureFallback(
+    const char* reason) {
+  last_command_used_fallback_ = true;
+  last_fallback_had_previous_valid_ = has_successful_plan_;
+  if (has_successful_plan_) {
+    const int selected_stage = std::max(
+        0, std::min(fallback_plan_cursor_, kSamples - 1));
+    Eigen::Matrix<T, kInputSize, 1> applied_input;
+    const auto command = commandFromInput(
+        last_successful_inputs_.col(selected_stage), &applied_input);
+    latest_slack_ = static_cast<T>(command.slack);
+    mpc_wrapper_.setPreviousInput(applied_input);
+    last_applied_plan_stage_ = selected_stage;
+    last_fallback_plan_exhausted_ = selected_stage == kSamples - 1;
+    if (fallback_plan_cursor_ < kSamples - 1) ++fallback_plan_cursor_;
+    ROS_WARN_STREAM_THROTTLE(
+        0.5, "[MpcController] applying cached plan stage " << selected_stage
+                 << " after " << reason
+                 << (last_fallback_plan_exhausted_ ? " (terminal hold)" : ""));
+    return command;
+  }
+
+  const Eigen::Matrix<T, kInputSize, 1> zero_input =
+      Eigen::Matrix<T, kInputSize, 1>::Zero();
+  mpc_wrapper_.setPreviousInput(zero_input);
+  latest_slack_ = T(0);
+  last_applied_plan_stage_ = -1;
+  last_fallback_plan_exhausted_ = false;
+  ROS_WARN_STREAM_THROTTLE(
+      0.5, "[MpcController] no successful plan after " << reason
+                                                        << "; using zero command");
+  return acado_mpc_common::ControlCommand();
+}
+
+template<typename T>
+void MpcController<T>::restoreSuccessfulPrediction(
+    const Eigen::Ref<const Eigen::Matrix<T, kStateSize, kSamples + 1>>& states,
+    const Eigen::Ref<const Eigen::Matrix<T, kInputSize, kSamples>>& inputs,
+    T latest_slack) {
+  if (!has_successful_plan_ || !states.allFinite() || !inputs.allFinite() ||
+      !std::isfinite(static_cast<double>(latest_slack)) ||
+      !cacheSuccessfulPlan(inputs, /*increment_generation=*/false)) {
+    return;
+  }
+  predicted_states_ = states;
+  predicted_inputs_ = inputs;
+  Eigen::Matrix<T, kInputSize, 1> applied_input;
+  const auto command = commandFromInput(inputs.col(0), &applied_input);
+  mpc_wrapper_.setPreviousInput(applied_input);
+  latest_slack_ = static_cast<T>(command.slack);
+  last_solve_ok_ = true;
+  last_command_used_fallback_ = false;
+  last_fallback_had_previous_valid_ = false;
+  solve_from_scratch_ = true;
+}
+
+template<typename T>
 acado_mpc_common::ControlCommand MpcController<T>::run(
     const acado_mpc_common::QuadRelativeEstimate& state_estimate,
     const acado_mpc_common::RelativeTrajectory& reference_trajectory,
@@ -205,21 +309,7 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
   mpc_wrapper_.resetFeedbackDiagnostics();
   last_command_used_fallback_ = false;
   last_fallback_had_previous_valid_ = false;
-
-  auto makeFailureFallback = [this](const char* reason) {
-    last_command_used_fallback_ = true;
-    last_fallback_had_previous_valid_ = has_last_valid_control_;
-    if (has_last_valid_control_) {
-      ROS_WARN_STREAM_THROTTLE(
-          0.5, "[MpcController] keeping previous valid control after "
-                   << reason);
-      return last_valid_control_;
-    }
-    ROS_WARN_STREAM_THROTTLE(
-        0.5, "[MpcController] no previous valid control after " << reason
-                                                                  << "; using zero command");
-    return acado_mpc_common::ControlCommand();
-  };
+  last_fallback_plan_exhausted_ = false;
 
   ros::Time call_time = ros::Time::now();
   if (params.changed_) {
@@ -505,12 +595,17 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
     ++nonfinite_recovery_count_;
     solve_from_scratch_ = true;
     last_solve_ok_ = false;
-    ROS_ERROR("[MPC][RECOVERY] invalid control command; keeping previous valid control");
+    ROS_ERROR("[MPC][RECOVERY] invalid control command; selecting cached plan fallback");
     preparationThread();
     return makeFailureFallback("invalid control command");
   }
-  last_valid_control_ = command;
-  has_last_valid_control_ = true;
+  if (!cacheSuccessfulPlan(predicted_inputs_, /*increment_generation=*/true)) {
+    ++nonfinite_recovery_count_;
+    solve_from_scratch_ = true;
+    last_solve_ok_ = false;
+    ROS_ERROR("[MPC][RECOVERY] failed to cache complete finite input plan");
+    return makeFailureFallback("invalid successful input plan");
+  }
   return command;
 #undef GREEN
 #undef RST
@@ -594,27 +689,9 @@ acado_mpc_common::ControlCommand MpcController<T>::updateControlCommand(
     const Eigen::Ref<const Eigen::Matrix<T, kInputSize, 1>> input,
     ros::Time& time,
     bool /* field_active */) {
-  Eigen::Matrix<T, kInputSize, 1> input_bounded = input.template cast<T>();
-
   // The solver validates finite commands against world-frame physical
-  // envelopes.  Do not reintroduce relative-frame velocity/yaw clipping here.
-  for (int slack_idx = INPUT::kSlack0; slack_idx <= INPUT::kSlack2; ++slack_idx) {
-    if (std::isfinite(static_cast<double>(params_.cbf_slack_max_))) {
-      input_bounded(slack_idx) =
-          std::max<T>(0.0, std::min(params_.cbf_slack_max_, input_bounded(slack_idx)));
-    } else {
-      input_bounded(slack_idx) = std::max<T>(0.0, input_bounded(slack_idx));
-    }
-  }
-
-  acado_mpc_common::ControlCommand command;
-
-  command.velocity_cmd.x() = input_bounded(INPUT::kVelCmdX);
-  command.velocity_cmd.y() = input_bounded(INPUT::kVelCmdY);
-  command.velocity_cmd.z() = input_bounded(INPUT::kVelCmdZ);
-  command.yaw_rate = input_bounded(INPUT::kYawRate);
-  command.slack = aggregateObstacleSlack<T>(input_bounded);
-  return command;
+  // envelopes. Do not reintroduce relative-frame velocity/yaw clipping here.
+  return commandFromInput(input);
 }
 
 template<typename T>

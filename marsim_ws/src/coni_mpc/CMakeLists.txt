@@ -275,6 +275,16 @@ add_executable(qp_counterfactual_tool test/qp_counterfactual_tool.cpp)
 target_link_libraries(qp_counterfactual_tool acado_mpc)
 
 if(CATKIN_ENABLE_TESTING)
+        find_package(rostest REQUIRED)
+        add_rostest_gtest(route_a_fallback_test
+                test/route_a_fallback.test
+                test/route_a_fallback_test.cpp)
+        if(TARGET route_a_fallback_test)
+                target_link_libraries(route_a_fallback_test
+                        acado_mpc
+                        ${catkin_LIBRARIES}
+                        Eigen3::Eigen)
+        endif()
         catkin_add_gtest(mpc_physical_limits_test test/mpc_physical_limits_test.cpp)
         if(TARGET mpc_physical_limits_test)
                 target_link_libraries(mpc_physical_limits_test acado_mpc gtest_main Eigen3::Eigen)
