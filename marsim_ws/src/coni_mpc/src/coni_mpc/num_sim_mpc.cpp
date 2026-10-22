@@ -448,29 +448,26 @@ relative_est_pub_[quad_id] =
   }
   pnh_.param("cbf/field_replay_diagnostics",
              field_replay_diagnostics_enabled_, false);
+  pnh_.param("cbf/field_timeout", field_timeout_, field_timeout_);
   field_hocbf_config_.gamma1 = mpc_params_.cbf_alpha1_;
   field_hocbf_config_.gamma2 = mpc_params_.cbf_alpha2_;
   pnh_.param("cbf/field_sigma", field_hocbf_config_.sigma,
              field_hocbf_config_.sigma);
-  pnh_.param("cbf/field_d_safe", field_hocbf_config_.d_safe,
-             field_hocbf_config_.d_safe);
+  pnh_.param("cbf/field_distance_margin", field_hocbf_config_.distance_margin,
+             field_hocbf_config_.distance_margin);
+  pnh_.param("cbf/field_voxel_size", field_hocbf_config_.voxel_size,
+             field_hocbf_config_.voxel_size);
+  pnh_.param("cbf/field_distance_epsilon", field_hocbf_config_.distance_epsilon,
+             field_hocbf_config_.distance_epsilon);
+  pnh_.param("cbf/field_occupancy_weight_alpha", field_hocbf_config_.occupancy_alpha,
+             field_hocbf_config_.occupancy_alpha);
   pnh_.param("cbf/field_prune_radius", field_hocbf_config_.prune_radius,
              field_hocbf_config_.prune_radius);
-  pnh_.param("cbf/field_max_vertical_delta",
-             field_hocbf_config_.max_vertical_delta,
-             field_hocbf_config_.max_vertical_delta);
-  pnh_.param("cbf/field_min_occupancy", field_hocbf_config_.min_occupancy,
-             field_hocbf_config_.min_occupancy);
-  int seed_count_param = static_cast<int>(field_hocbf_config_.seed_count);
-  int max_count_param = static_cast<int>(field_hocbf_config_.max_count);
-  pnh_.param("cbf/field_seed_count", seed_count_param, seed_count_param);
-  pnh_.param("cbf/field_max_count", max_count_param, max_count_param);
-  field_hocbf_config_.seed_count =
-      static_cast<std::size_t>(std::max(1, seed_count_param));
-  field_hocbf_config_.max_count =
-      static_cast<std::size_t>(std::max(1, max_count_param));
-  pnh_.param("cbf/field_separation", field_hocbf_config_.separation,
-             field_hocbf_config_.separation);
+  field_hocbf_config_.uav_radius = uav_radius_;
+  if (!std::isfinite(field_timeout_) || field_timeout_ <= 0.0 ||
+      !field_hocbf::validConfig(field_hocbf_config_)) {
+    throw std::invalid_argument("Invalid conservative Field-HOCBF configuration");
+  }
   if (field_hocbf_enabled_) {
     std::string field_topic = "/my_map/future_occupancy_3d";
     pnh_.param("cbf/field_topic", field_topic, field_topic);
@@ -491,13 +488,15 @@ relative_est_pub_[quad_id] =
                     << field_topic << ", retaining the latest DSP snapshot");
     ROS_INFO_STREAM("[MPC UAV " << quad_id << "] field-HOCBF YAML config: "
                     << "sigma=" << field_hocbf_config_.sigma
-                    << " d_safe=" << field_hocbf_config_.d_safe
+                    << " distance_margin=" << field_hocbf_config_.distance_margin
+                    << " uav_radius=" << field_hocbf_config_.uav_radius
+                    << " voxel_size=" << field_hocbf_config_.voxel_size
+                    << " distance_epsilon=" << field_hocbf_config_.distance_epsilon
+                    << " occupancy_alpha=" << field_hocbf_config_.occupancy_alpha
                     << " alpha1=" << field_hocbf_config_.gamma1
                     << " alpha2=" << field_hocbf_config_.gamma2
                     << " prune_radius=" << field_hocbf_config_.prune_radius
-                    << " seed=" << field_hocbf_config_.seed_count
-                    << " max=" << field_hocbf_config_.max_count
-                    << " separation=" << field_hocbf_config_.separation);
+                    << " timeout=" << field_timeout_);
   }
   pnh_.param("estimation_noise/position_std",
              estimation_position_noise_std_, estimation_position_noise_std_);
@@ -592,10 +591,14 @@ void NumSimMpc::setCarOdom(const nav_msgs::Odometry &car_odom)
 void NumSimMpc::fieldOccupancyCallback(
     const sensor_msgs::PointCloud2::ConstPtr& message) {
   if (!message) return;
+  const auto mark_invalid = [&]() {
+    std::lock_guard<std::mutex> lock(field_snapshot_mutex_);
+    field_input_status_ = "invalid";
+  };
   if (message->header.stamp.isZero()) {
     ROS_WARN_STREAM_THROTTLE(1.0, "[MPC UAV " << quad_id
         << "] rejecting field cloud with zero timestamp");
-    return;
+    mark_invalid(); return;
   }
   std::string frame = message->header.frame_id;
   if (!frame.empty() && frame.front() == '/') frame.erase(frame.begin());
@@ -603,7 +606,7 @@ void NumSimMpc::fieldOccupancyCallback(
     ROS_WARN_STREAM_THROTTLE(1.0, "[MPC UAV " << quad_id
         << "] rejecting field cloud in frame '" << message->header.frame_id
         << "' (expected map)");
-    return;
+    mark_invalid(); return;
   }
   // The DSP publisher provides x/y/z, vx/vy/vz, occupancy and stage_index.
   // prediction_time is accepted when present for backward compatibility, but
@@ -617,7 +620,7 @@ void NumSimMpc::fieldOccupancyCallback(
     if (it == message->fields.end() || it->count != 1) {
       ROS_WARN_STREAM_THROTTLE(1.0, "[MPC UAV " << quad_id
           << "] field cloud missing scalar field " << required[i]);
-      return;
+      mark_invalid(); return;
     }
     fields[i] = &*it;
   }
@@ -644,18 +647,66 @@ void NumSimMpc::fieldOccupancyCallback(
       default: return false;
     }
   };
+  auto datatype_size = [](std::uint8_t datatype) -> std::size_t {
+    switch (datatype) {
+      case sensor_msgs::PointField::INT8:
+      case sensor_msgs::PointField::UINT8: return 1;
+      case sensor_msgs::PointField::INT16:
+      case sensor_msgs::PointField::UINT16: return 2;
+      case sensor_msgs::PointField::INT32:
+      case sensor_msgs::PointField::UINT32:
+      case sensor_msgs::PointField::FLOAT32: return 4;
+      case sensor_msgs::PointField::FLOAT64: return 8;
+      default: return 0;
+    }
+  };
+  for (const auto* field : fields) {
+    const std::size_t size = datatype_size(field->datatype);
+    if (size == 0 || size > message->point_step ||
+        field->offset > message->point_step - size) {
+      ROS_WARN_STREAM_THROTTLE(1.0, "[MPC UAV " << quad_id
+          << "] rejecting invalid field schema for " << field->name);
+      mark_invalid(); return;
+    }
+  }
+  if (prediction_time_field != nullptr) {
+    const std::size_t size = datatype_size(prediction_time_field->datatype);
+    if (size == 0 || size > message->point_step ||
+        prediction_time_field->offset > message->point_step - size) {
+      ROS_WARN_STREAM_THROTTLE(1.0, "[MPC UAV " << quad_id
+          << "] rejecting invalid prediction_time field schema");
+      mark_invalid(); return;
+    }
+  }
   auto snapshot = std::make_shared<FieldSnapshot>();
   snapshot->stamp = message->header.stamp;
   snapshot->frame_id = frame;
   const std::size_t count = static_cast<std::size_t>(message->width) * message->height;
+  const std::size_t expected_row_step =
+      static_cast<std::size_t>(message->width) * message->point_step;
+  if (message->is_bigendian || message->point_step == 0 ||
+      message->row_step != expected_row_step ||
+      (message->height > 0 && message->row_step >
+          message->data.size() / message->height) ||
+      count > message->data.size() / message->point_step) {
+    ROS_WARN_STREAM_THROTTLE(1.0, "[MPC UAV " << quad_id
+        << "] rejecting structurally truncated field cloud");
+    mark_invalid(); return;
+  }
   snapshot->points.reserve(count);
+  bool reject_snapshot = false;
   for (std::size_t i = 0; i < count; ++i) {
     const std::size_t base = i * message->point_step;
-    if (base + message->point_step > message->data.size()) break;
+    if (base + message->point_step > message->data.size()) {
+      reject_snapshot = true;
+      break;
+    }
     double values[8]{};
     bool valid = true;
     for (std::size_t f = 0; f < fields.size(); ++f) {
-      if (fields[f]->offset >= message->point_step ||
+      const std::size_t size = datatype_size(fields[f]->datatype);
+      if (size == 0 || size > message->point_step ||
+          fields[f]->offset > message->point_step - size ||
           !read(message->data.data() + base + fields[f]->offset,
                 fields[f]->datatype, values[f]) || !std::isfinite(values[f])) {
         valid = false;
@@ -664,7 +715,9 @@ void NumSimMpc::fieldOccupancyCallback(
     }
     double prediction_time = static_cast<double>(values[7]) * 0.1;
     if (valid && prediction_time_field != nullptr) {
-      if (prediction_time_field->offset >= message->point_step ||
+      const std::size_t size = datatype_size(prediction_time_field->datatype);
+      if (size == 0 || size > message->point_step ||
+          prediction_time_field->offset > message->point_step - size ||
           !read(message->data.data() + base + prediction_time_field->offset,
                 prediction_time_field->datatype, prediction_time) ||
           !std::isfinite(prediction_time)) {
@@ -674,7 +727,13 @@ void NumSimMpc::fieldOccupancyCallback(
     const double rounded_stage = std::round(values[7]);
     if (!valid || values[6] < 0.0 || values[6] > 1.0 ||
         values[7] < 0.0 || rounded_stage > acado_mpc::kSamples ||
-        std::abs(values[7] - rounded_stage) > 1e-6) continue;
+        std::abs(values[7] - rounded_stage) > 1e-6) {
+      reject_snapshot = true;
+      break;
+    }
+    // Zero/non-positive occupancy is a valid non-occupied row, not a malformed
+    // snapshot. Do not retain it in the occupied-stage representation.
+    if (!(values[6] > 0.0)) continue;
     field_hocbf::Point point;
     point.position_world = Eigen::Vector3d(values[0], values[1], values[2]);
     point.velocity_world = Eigen::Vector3d(values[3], values[4], values[5]);
@@ -686,8 +745,14 @@ void NumSimMpc::fieldOccupancyCallback(
     snapshot->last_occupied_stage =
         std::max(snapshot->last_occupied_stage, point.stage_index);
   }
+  if (reject_snapshot) {
+    ROS_WARN_STREAM_THROTTLE(1.0, "[MPC UAV " << quad_id
+        << "] rejecting invalid field row; preserving previous snapshot");
+    mark_invalid(); return;
+  }
   std::lock_guard<std::mutex> lock(field_snapshot_mutex_);
   snapshot->snapshot_id = ++field_snapshot_counter_;
+  field_input_status_ = snapshot->points.empty() ? "valid_empty" : "valid_nonempty";
   field_snapshot_ = std::move(snapshot);
 }
 
@@ -2038,9 +2103,11 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
         0, getCarOrientation(), getCarLinearVelocity());
   }
   std::shared_ptr<const FieldSnapshot> field_snapshot;
+  std::string field_input_status;
   {
     std::lock_guard<std::mutex> lock(field_snapshot_mutex_);
     field_snapshot = field_snapshot_;
+    field_input_status = field_input_status_;
   }
   if (command_diagnostics_enabled_) {
     command_context_diagnostics_.snapshot_id = field_snapshot ? field_snapshot->snapshot_id : 0;
@@ -2052,14 +2119,14 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
   const double field_dt = std::max(1.0e-3, mpc_controller_.getPredictionDt());
   const double field_age = field_snapshot && !field_snapshot->stamp.isZero()
       ? std::max(0.0, (field_now - field_snapshot->stamp).toSec()) : 0.0;
-  const bool field_available = field_hocbf_enabled_ && field_snapshot &&
-      !field_snapshot->stamp.isZero() &&
-      !field_snapshot->points.empty();
-  if (field_available && field_age > field_dt * acado_mpc::kSamples) {
-    ROS_WARN_STREAM_THROTTLE(1.0, "[MPC UAV " << quad_id
-        << "] DSP prediction age=" << field_age
-        << " s exceeds its horizon; extrapolating the last voxel stage");
-  }
+  const bool field_snapshot_valid = field_snapshot &&
+      !field_snapshot->stamp.isZero();
+  const bool field_stale = field_snapshot_valid && field_age > field_timeout_;
+  const bool field_available = field_hocbf_enabled_ && field_snapshot_valid &&
+      !field_stale;
+  const std::string field_status = field_input_status == "invalid" ? "invalid" :
+      (!field_snapshot_valid ? "missing" :
+       (field_stale ? "stale" : field_input_status));
   using FieldNominalPrediction =
       Eigen::Matrix<double, acado_mpc::kStateSize, acado_mpc::kSamples + 1>;
   FieldHocbfDebugProfile field_debug_profile{};
@@ -2075,7 +2142,14 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
           std::vector<field_replay::StageRecord>* replay_stages_out) {
         FieldHocbfProfile profile = FieldHocbfProfile::Zero();
         profile_active_out = false;
-        if (!field_available) return profile;
+        if (!field_available) {
+          if (debug_profile_out != nullptr) {
+            for (auto& debug : *debug_profile_out) {
+              debug.field_status = field_status;
+            }
+          }
+          return profile;
+        }
         if (replay_stages_out != nullptr) {
           replay_stages_out->clear();
           replay_stages_out->reserve(acado_mpc::kSamples + 1);
@@ -2095,6 +2169,7 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
               ? car_trajectory_window_[stage] : carStateFromOdom(car_odom_);
         };
         for (int stage = 0; stage <= acado_mpc::kSamples; ++stage) {
+          const auto construction_start = std::chrono::steady_clock::now();
           const int source_stage = std::min(
               source_horizon, stage + source_shift);
           // Once the DSP horizon is exhausted, retain its final voxel slice
@@ -2147,18 +2222,21 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
             if (point.stage_index != static_cast<std::uint32_t>(source_stage)) {
               continue;
             }
-            const Eigen::Vector3d world_position =
-                point.position_world + point.velocity_world * extrapolation_time;
+            const Eigen::Vector3d world_position = point.position_world;
             field_hocbf::KinematicPoint transformed;
             transformed.occupancy = point.occupancy;
             transformed.source_id = point.source_id;
             if (isInertialFrame()) {
               transformed.position = world_position;
-              transformed.velocity = point.velocity_world;
+              transformed.velocity.setZero();
               transformed.acceleration.setZero();
+              transformed.published_velocity_diagnostic = point.velocity_world;
             } else {
               transformed.position = R_nw * (world_position - car_position);
               transformed.velocity =
+                  -R_nw * car_velocity -
+                  omega_non.cross(transformed.position);
+              transformed.published_velocity_diagnostic =
                   R_nw * (point.velocity_world - car_velocity) -
                   omega_non.cross(transformed.position);
               transformed.acceleration =
@@ -2178,11 +2256,11 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
           double selected_relative_speed_max = 0.0;
           for (const auto& point : selected) {
             const Eigen::Vector3d relative_velocity =
-                nominal_velocity - point.velocity;
+                nominal_velocity - point.published_velocity_diagnostic;
             selected_relative_velocity_sum += relative_velocity;
             selected_relative_speed_max = std::max(
                 selected_relative_speed_max,
-                relative_velocity.head<2>().norm());
+                relative_velocity.norm());
           }
           Eigen::Vector3d nominal_a_non = Eigen::Vector3d::Zero();
           if (!isInertialFrame()) {
@@ -2213,13 +2291,17 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
             record.nominal_velocity = nominal_velocity;
             record.lambda = lambda_vec;
             record.config = field_hocbf_config_;
+            record.selection_stats = prune_stats;
             record.selected_source_ids = prune_stats.selected_source_ids;
             record.expected = constraint;
             replay_stages_out->push_back(record);
           }
           if (debug_profile_out != nullptr) {
             auto& debug = (*debug_profile_out)[static_cast<std::size_t>(stage)];
-            debug.valid = !selected.empty();
+            debug.valid = true;
+            debug.field_status = field_status == "valid_nonempty"
+                ? (selected.empty() ? "valid_empty" : "valid_nonempty")
+                : field_status;
             debug.active = constraint.active;
             debug.h = constraint.h;
             debug.hdot = constraint.hdot;
@@ -2248,6 +2330,9 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
             debug.A = constraint.A;
             debug.nominal_position = nominal_position;
             debug.nominal_velocity = nominal_velocity;
+            debug.construction_time_us =
+                std::chrono::duration<double, std::micro>(
+                    std::chrono::steady_clock::now() - construction_start).count();
           }
           if (!constraint.active) continue;
           const double g1 = field_hocbf_config_.gamma1;
@@ -2283,13 +2368,13 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
       nullptr, field_profile_active, &field_debug_profile,
       field_replay_diagnostics_enabled_ ? &field_replay_stages : nullptr);
   mpc_params_.cbf_field_hocbf_profile_ = field_profile;
-  // The latest nonempty field owns the safety path even when pruning leaves a
-  // stage inactive. This prevents legacy risk regions from being mixed with
-  // a valid field snapshot. A new empty snapshot relinquishes priority.
+  // Every fresh structurally valid snapshot owns the field path, including a
+  // valid empty snapshot. Missing and stale snapshots do not.
   mpc_params_.cbf_use_field_hocbf_ = enable_cbf && field_available;
   if (field_hocbf_enabled_) {
     ROS_INFO_STREAM_THROTTLE(1.0, "[MPC UAV " << quad_id
         << "] field_hocbf available=" << (field_available ? "true" : "false")
+        << " status=" << field_status
         << " active=" << (field_profile_active ? "true" : "false")
         << " age=" << field_age);
   }

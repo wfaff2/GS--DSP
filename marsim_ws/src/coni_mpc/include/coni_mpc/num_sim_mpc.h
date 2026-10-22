@@ -95,6 +95,9 @@ class NumSimMpc final : public MpcBase
         Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN());
     double selected_relative_speed_max =
         std::numeric_limits<double>::quiet_NaN();
+    double construction_time_us =
+        std::numeric_limits<double>::quiet_NaN();
+    std::string field_status = "missing";
     Eigen::Vector3d A = Eigen::Vector3d::Zero();
     Eigen::Vector3d nominal_position = Eigen::Vector3d::Zero();
     Eigen::Vector3d nominal_velocity = Eigen::Vector3d::Zero();
@@ -453,6 +456,7 @@ class NumSimMpc final : public MpcBase
   ros::Subscriber field_occupancy_subscriber_;
   std::mutex field_snapshot_mutex_;
   std::shared_ptr<const FieldSnapshot> field_snapshot_;
+  std::string field_input_status_ = "missing";
   std::uint64_t field_snapshot_counter_ = 0;
   std::uint64_t last_written_field_snapshot_id_ =
       std::numeric_limits<std::uint64_t>::max();
@@ -461,6 +465,7 @@ class NumSimMpc final : public MpcBase
   field_replay::CycleRecord last_field_replay_cycle_;
   bool last_field_replay_cycle_valid_ = false;
   bool field_hocbf_enabled_ = false;
+  double field_timeout_ = 0.3;
   field_hocbf::Config field_hocbf_config_;
   std::unique_ptr<VoxelOnlineDataPool> voxel_online_data_pool_;
   double car_radius_;

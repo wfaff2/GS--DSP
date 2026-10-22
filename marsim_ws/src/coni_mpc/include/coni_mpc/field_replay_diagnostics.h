@@ -18,7 +18,7 @@ namespace field_replay {
 // The file is an append-only stream. All scalars are written individually;
 // no Eigen object, compiler padding, or platform-dependent size_t is stored.
 static constexpr std::uint64_t kFileMagic = 0x3147504c52464843ULL;  // CHFRLPG1
-static constexpr std::uint32_t kVersion = 1;
+static constexpr std::uint32_t kVersion = 2;
 enum class RecordType : std::uint32_t { kSnapshot = 1, kCycle = 2 };
 
 struct SnapshotRecord {
@@ -44,6 +44,7 @@ struct StageRecord {
   Eigen::Vector3d nominal_velocity = Eigen::Vector3d::Zero();
   Eigen::Vector3d lambda = Eigen::Vector3d::Zero();
   field_hocbf::Config config;
+  field_hocbf::PruneStats selection_stats;
   std::vector<std::uint64_t> selected_source_ids;
   field_hocbf::Constraint expected;
   double profile_b = 0.0;
@@ -115,24 +116,31 @@ inline bool quat(std::istream& in, Eigen::Quaterniond& q) {
   q = Eigen::Quaterniond(w, x, y, z); return true;
 }
 inline bool config(std::ostream& out, const field_hocbf::Config& c) {
-  return scalar(out,c.sigma)&&scalar(out,c.d_safe)&&scalar(out,c.gamma1)&&scalar(out,c.gamma2)&&
-      scalar(out,c.prune_radius)&&scalar(out,c.max_vertical_delta)&&scalar(out,c.min_occupancy)&&
-      scalar(out,static_cast<std::uint64_t>(c.seed_count))&&
-      scalar(out,static_cast<std::uint64_t>(c.max_count))&&scalar(out,c.separation);
+  return scalar(out,c.sigma)&&scalar(out,c.distance_margin)&&scalar(out,c.uav_radius)&&
+      scalar(out,c.voxel_size)&&scalar(out,c.distance_epsilon)&&scalar(out,c.occupancy_alpha)&&
+      scalar(out,c.gamma1)&&scalar(out,c.gamma2)&&scalar(out,c.prune_radius);
 }
 inline bool config(std::istream& in, field_hocbf::Config& c) {
-  std::uint64_t seed=0,max=0;
-  if (!scalar(in,c.sigma)||!scalar(in,c.d_safe)||!scalar(in,c.gamma1)||!scalar(in,c.gamma2)||
-      !scalar(in,c.prune_radius)||!scalar(in,c.max_vertical_delta)||!scalar(in,c.min_occupancy)||
-      !scalar(in,seed)||!scalar(in,max)||!scalar(in,c.separation)) return false;
-  c.seed_count=static_cast<std::size_t>(seed); c.max_count=static_cast<std::size_t>(max); return true;
+  return scalar(in,c.sigma)&&scalar(in,c.distance_margin)&&scalar(in,c.uav_radius)&&
+      scalar(in,c.voxel_size)&&scalar(in,c.distance_epsilon)&&scalar(in,c.occupancy_alpha)&&
+      scalar(in,c.gamma1)&&scalar(in,c.gamma2)&&scalar(in,c.prune_radius);
+}
+inline bool mat3(std::ostream& out, const Eigen::Matrix3d& m) {
+  for (int r=0;r<3;++r) for (int c=0;c<3;++c) if(!scalar(out,m(r,c))) return false;
+  return true;
+}
+inline bool mat3(std::istream& in, Eigen::Matrix3d& m) {
+  for (int r=0;r<3;++r) for (int c=0;c<3;++c) if(!scalar(in,m(r,c))) return false;
+  return true;
 }
 inline bool constraint(std::ostream& out, const field_hocbf::Constraint& c) {
-  return vec3(out,c.A)&&scalar(out,c.b)&&scalar(out,c.max_occupancy)&&scalar(out,c.h)&&
+  return vec3(out,c.A)&&vec3(out,c.gradient)&&mat3(out,c.hessian)&&
+      scalar(out,c.b)&&scalar(out,c.max_occupancy)&&scalar(out,c.h)&&
       scalar(out,c.hdot)&&scalar(out,c.lf2)&&scalar(out,c.d_min)&&scalar(out,c.d_softmin)&&boolean(out,c.active);
 }
 inline bool constraint(std::istream& in, field_hocbf::Constraint& c) {
-  return vec3(in,c.A)&&scalar(in,c.b)&&scalar(in,c.max_occupancy)&&scalar(in,c.h)&&
+  return vec3(in,c.A)&&vec3(in,c.gradient)&&mat3(in,c.hessian)&&
+      scalar(in,c.b)&&scalar(in,c.max_occupancy)&&scalar(in,c.h)&&
       scalar(in,c.hdot)&&scalar(in,c.lf2)&&scalar(in,c.d_min)&&scalar(in,c.d_softmin)&&boolean(in,c.active);
 }
 inline bool header(std::ostream& out, RecordType type) {
@@ -166,7 +174,13 @@ inline bool writeCycle(std::ostream& out, const CycleRecord& r) {
         !detail::vec3(out,s.car_position)||!detail::vec3(out,s.car_velocity)||!detail::quat(out,s.world_q_non)||
         !detail::vec3(out,s.omega_non)||!detail::vec3(out,s.beta_non)||!detail::vec3(out,s.a_car_non)||
         !detail::vec3(out,s.nominal_position)||!detail::vec3(out,s.nominal_velocity)||!detail::vec3(out,s.lambda)||
-        !detail::config(out,s.config)||!detail::scalar(out,static_cast<std::uint64_t>(s.selected_source_ids.size()))) return false;
+        !detail::config(out,s.config)||
+        !detail::scalar(out,static_cast<std::uint64_t>(s.selection_stats.candidate_count))||
+        !detail::scalar(out,static_cast<std::uint64_t>(s.selection_stats.eligible_count))||
+        !detail::scalar(out,static_cast<std::uint64_t>(s.selection_stats.selected_count))||
+        !detail::scalar(out,static_cast<std::uint64_t>(s.selection_stats.invalid_count))||
+        !detail::boolean(out,s.selection_stats.input_valid)||
+        !detail::scalar(out,static_cast<std::uint64_t>(s.selected_source_ids.size()))) return false;
     for (auto id:s.selected_source_ids) if (!detail::scalar(out,id)) return false;
     if (!detail::constraint(out,s.expected)||!detail::scalar(out,s.profile_b)) return false;
   }
@@ -203,11 +217,19 @@ inline bool readNext(std::istream& in, RecordType& type, SnapshotRecord& snapsho
       !detail::vec3(in,cycle.truth_car_position)||!detail::vec3(in,cycle.truth_car_velocity)||
       !detail::quat(in,cycle.truth_world_q_non)||!detail::vec3(in,cycle.truth_omega_non)||!detail::scalar(in,n)||n>(1ULL<<20)) return false;
   cycle.quad_id=qid; cycle.stages.clear(); cycle.stages.resize(static_cast<std::size_t>(n));
-  for(auto& s:cycle.stages){ std::uint64_t ids=0; if(!detail::scalar(in,s.stage)||!detail::scalar(in,s.source_stage)||!detail::scalar(in,s.extrapolation_time)||
+  for(auto& s:cycle.stages){ std::uint64_t ids=0,candidates=0,eligible=0,selected=0,invalid=0; if(!detail::scalar(in,s.stage)||!detail::scalar(in,s.source_stage)||!detail::scalar(in,s.extrapolation_time)||
       !detail::vec3(in,s.car_position)||!detail::vec3(in,s.car_velocity)||!detail::quat(in,s.world_q_non)||!detail::vec3(in,s.omega_non)||
       !detail::vec3(in,s.beta_non)||!detail::vec3(in,s.a_car_non)||!detail::vec3(in,s.nominal_position)||!detail::vec3(in,s.nominal_velocity)||
-      !detail::vec3(in,s.lambda)||!detail::config(in,s.config)||!detail::scalar(in,ids)||ids>(1ULL<<32)) return false;
+      !detail::vec3(in,s.lambda)||!detail::config(in,s.config)||
+      !detail::scalar(in,candidates)||!detail::scalar(in,eligible)||!detail::scalar(in,selected)||
+      !detail::scalar(in,invalid)||!detail::boolean(in,s.selection_stats.input_valid)||
+      !detail::scalar(in,ids)||ids>(1ULL<<32)) return false;
+    s.selection_stats.candidate_count=static_cast<std::size_t>(candidates);
+    s.selection_stats.eligible_count=static_cast<std::size_t>(eligible);
+    s.selection_stats.selected_count=static_cast<std::size_t>(selected);
+    s.selection_stats.invalid_count=static_cast<std::size_t>(invalid);
     s.selected_source_ids.resize(static_cast<std::size_t>(ids)); for(auto& id:s.selected_source_ids) if(!detail::scalar(in,id)) return false;
+    s.selection_stats.selected_source_ids=s.selected_source_ids;
     if(!detail::constraint(in,s.expected)||!detail::scalar(in,s.profile_b)) return false; }
   return true;
 }
@@ -219,10 +241,12 @@ inline field_hocbf::Constraint replayStage(const SnapshotRecord& snapshot, const
   const Eigen::Matrix3d R_nw=stage.world_q_non.inverse().toRotationMatrix();
   field_hocbf::KinematicPoints candidates;
   for(const auto& p:snapshot.points){ if(p.stage_index!=stage.source_stage) continue;
-    const Eigen::Vector3d wp=p.position_world+p.velocity_world*stage.extrapolation_time; field_hocbf::KinematicPoint t;
+    const Eigen::Vector3d wp=p.position_world; field_hocbf::KinematicPoint t;
     t.occupancy=p.occupancy; t.source_id=p.source_id;
-    if(cycle.inertial_frame){ t.position=wp; t.velocity=p.velocity_world; t.acceleration.setZero(); }
-    else { t.position=R_nw*(wp-stage.car_position); t.velocity=R_nw*(p.velocity_world-stage.car_velocity)-stage.omega_non.cross(t.position);
+    if(cycle.inertial_frame){ t.position=wp; t.velocity.setZero(); t.acceleration.setZero();
+      t.published_velocity_diagnostic=p.velocity_world; }
+    else { t.position=R_nw*(wp-stage.car_position); t.velocity=-R_nw*stage.car_velocity-stage.omega_non.cross(t.position);
+      t.published_velocity_diagnostic=R_nw*(p.velocity_world-stage.car_velocity)-stage.omega_non.cross(t.position);
       t.acceleration=-stage.a_car_non-2.0*stage.omega_non.cross(t.velocity)-stage.beta_non.cross(t.position)-stage.omega_non.cross(stage.omega_non.cross(t.position)); }
     candidates.push_back(t); }
   const Eigen::Vector3d& np=nominal_position_override?*nominal_position_override:stage.nominal_position;

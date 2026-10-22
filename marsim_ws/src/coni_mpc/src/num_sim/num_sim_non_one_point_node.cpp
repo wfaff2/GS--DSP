@@ -962,7 +962,9 @@ static void writeFieldHocbfHeader(std::ostream& out) {
          "mpc_predicted_position_z,mpc_predicted_velocity_x,"
          "mpc_predicted_velocity_y,mpc_predicted_velocity_z,"
          "actual_position_x,actual_position_y,actual_position_z,"
-         "actual_velocity_x,actual_velocity_y,actual_velocity_z\n";
+         "actual_velocity_x,actual_velocity_y,actual_velocity_z,"
+         "field_status,field_construction_time_us,"
+         "mpc_feedback_time_ms,mpc_preparation_time_ms,mpc_core_time_ms\n";
 }
 
 static void writeFieldHocbfRows(
@@ -1025,7 +1027,12 @@ static void writeFieldHocbfRows(
         << fmtDouble(step_debug.position.z()) << ","
         << fmtDouble(step_debug.velocity.x()) << ","
         << fmtDouble(step_debug.velocity.y()) << ","
-        << fmtDouble(step_debug.velocity.z()) << "\n";
+        << fmtDouble(step_debug.velocity.z()) << ","
+        << debug.field_status << ","
+        << fmtDouble(debug.construction_time_us) << ","
+        << fmtDouble(step_debug.feedback_time_ms) << ","
+        << fmtDouble(step_debug.preparation_time_ms) << ","
+        << fmtDouble(step_debug.core_time_ms) << "\n";
   }
 }
 

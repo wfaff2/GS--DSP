@@ -90,13 +90,13 @@ cbf:
   alpha2: 5
   safety_margin: 0.35
   field_sigma: 0.12
-  field_d_safe: 0.48
+  # 3-D certified voxel clearance: d_cert subtracts uav_radius and the voxel
+  # circumsphere separately, so this value is the remaining surface margin.
+  field_distance_margin: 0.20
+  field_voxel_size: 0.15
+  field_distance_epsilon: 1.0e-6
+  field_occupancy_weight_alpha: 0.0
   field_prune_radius: 2.0
-  field_max_vertical_delta: 0.60
-  field_min_occupancy: 0.15
-  field_seed_count: 8
-  field_max_count: 35
-  field_separation: 0.15
   # Preparation/model-generation API only; not a live controller mode selector.
   voxel_field:
     n_obs: 60                  # Generation-time dimension, requires new NOD

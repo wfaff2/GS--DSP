@@ -17,14 +17,18 @@ fh::KinematicPoints transformed(const fr::SnapshotRecord& snapshot,
   for (const auto& p : snapshot.points) {
     if (p.stage_index != stage.source_stage) continue;
     fh::KinematicPoint t;
-    const Eigen::Vector3d wp = p.position_world + p.velocity_world * stage.extrapolation_time;
+    const Eigen::Vector3d wp = p.position_world;
     t.source_id = p.source_id;
     t.occupancy = p.occupancy;
     if (cycle.inertial_frame) {
-      t.position = wp; t.velocity = p.velocity_world;
+      t.position = wp; t.velocity.setZero();
+      t.published_velocity_diagnostic = p.velocity_world;
     } else {
       t.position = R * (wp - stage.car_position);
-      t.velocity = R * (p.velocity_world - stage.car_velocity) - stage.omega_non.cross(t.position);
+      t.velocity = -R * stage.car_velocity - stage.omega_non.cross(t.position);
+      t.published_velocity_diagnostic =
+          R * (p.velocity_world - stage.car_velocity) -
+          stage.omega_non.cross(t.position);
       t.acceleration = -stage.a_car_non - 2. * stage.omega_non.cross(t.velocity) -
           stage.beta_non.cross(t.position) - stage.omega_non.cross(stage.omega_non.cross(t.position));
     }

@@ -276,6 +276,13 @@ target_link_libraries(qp_counterfactual_tool acado_mpc)
 
 if(CATKIN_ENABLE_TESTING)
         find_package(rostest REQUIRED)
+        add_rostest_gtest(field_snapshot_integration_test
+                test/field_snapshot_integration.test
+                test/field_snapshot_integration_test.cpp)
+        if(TARGET field_snapshot_integration_test)
+                target_link_libraries(field_snapshot_integration_test
+                        NumericalCoNiMPC ${catkin_LIBRARIES} Eigen3::Eigen)
+        endif()
         add_rostest_gtest(route_a_fallback_test
                 test/route_a_fallback.test
                 test/route_a_fallback_test.cpp)

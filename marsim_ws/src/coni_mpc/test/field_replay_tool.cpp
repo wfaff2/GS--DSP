@@ -24,6 +24,8 @@ double error(double a, double b) {
 
 double maxConstraintError(const fh::Constraint& a, const fh::Constraint& b) {
   return std::max({(a.A-b.A).cwiseAbs().maxCoeff(), error(a.b,b.b),
+                   (a.gradient-b.gradient).cwiseAbs().maxCoeff(),
+                   (a.hessian-b.hessian).cwiseAbs().maxCoeff(),
                    error(a.h,b.h), error(a.hdot,b.hdot), error(a.lf2,b.lf2),
                    error(a.d_min,b.d_min), error(a.d_softmin,b.d_softmin),
                    error(a.max_occupancy,b.max_occupancy),
@@ -51,8 +53,9 @@ int selfTest() {
   cycle.inertial_frame=true;
   fr::StageRecord stage; stage.nominal_position=Eigen::Vector3d(1.4,2.1,0.4);
   stage.nominal_velocity=Eigen::Vector3d(0.2,0.0,0.0); stage.lambda=Eigen::Vector3d::Constant(5.0);
-  stage.config.prune_radius=2.0; stage.config.max_vertical_delta=1.0;
+  stage.config.prune_radius=2.0;
   fh::PruneStats expected_stats; stage.expected=fr::replayStage(source,cycle,stage,&expected_stats);
+  stage.selection_stats=expected_stats;
   stage.selected_source_ids=expected_stats.selected_source_ids;
   const Eigen::Vector3d kv=(stage.config.gamma1+stage.config.gamma2)*stage.lambda.cwiseInverse()-Eigen::Vector3d::Ones();
   const Eigen::Vector3d kp=(stage.config.gamma1*stage.config.gamma2)*stage.lambda.cwiseInverse();

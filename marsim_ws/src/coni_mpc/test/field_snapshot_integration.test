@@ -1,0 +1,14 @@
+<launch>
+  <test test-name="field_snapshot_integration_test" pkg="coni_mpc"
+        type="field_snapshot_integration_test" time-limit="90">
+    <rosparam command="load" file="$(find coni_mpc)/parameters/num_sim_non_one_point.yaml" />
+    <param name="frame_mode" value="inertial" />
+    <param name="print_info" value="false" />
+    <param name="estimation_noise/position_std" value="0.0" />
+    <param name="estimation_noise/relative_velocity_std" value="0.0" />
+    <param name="estimation_noise/orientation_std" value="0.0" />
+    <param name="estimation_noise/imu_non_std" value="0.0" />
+    <param name="estimation_noise/car_linear_velocity_std" value="0.0" />
+    <param name="estimation_noise/car_angular_velocity_std" value="0.0" />
+  </test>
+</launch>
