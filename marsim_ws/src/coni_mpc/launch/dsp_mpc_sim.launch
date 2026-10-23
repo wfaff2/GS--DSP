@@ -1,8 +1,8 @@
 <launch>
-  <!-- This integration uses the standalone simulator and MARSIM renderer,
-       neither of which publishes /clock.  Override a stale global ROS
-       simulated-time setting so timer-driven sensor/DSP nodes advance. -->
-  <param name="/use_sim_time" value="false" />
+  <!-- The numerical simulator owns /clock. Sensors, moving obstacles and DSP
+       follow the same timeline, even when a control cycle takes longer in wall time. -->
+  <arg name="sim_publish_clock" default="true" />
+  <param name="/use_sim_time" value="$(arg sim_publish_clock)" />
 
   <!-- One-command integration launch. The DSP node still needs its normal
        depth-cloud and pose inputs (or a rosbag publishing them). -->
@@ -231,9 +231,11 @@
     <arg name="exclude_uav0_from_all_metrics" value="false" />
     <!-- dsp_mpc_rviz above is the only RViz instance for this launch. -->
     <arg name="use_rviz" value="false" />
-    <!-- Sensor and DSP nodes run on wall time at 10 Hz.  Pace the simulator
-         in real time and allow the first LiDAR/DSP profiles to arrive before
-         the first MPC iteration. -->
+    <!-- Pacing limits wall speed; it never changes the logical timestep.
+         Warmup publishes initial odometry and advances the same /clock. -->
+    <arg name="sim_publish_clock" value="$(arg sim_publish_clock)" />
+    <arg name="sim_wait_for_field"
+         value="$(eval arg('start_dsp') and arg('start_marsim_lidar') and arg('cbf_use_field_hocbf'))" />
     <arg name="sim_realtime_pacing" value="true" />
     <arg name="sim_startup_delay_sec" value="3.0" />
     <arg name="sim_control_dt_sec" value="$(arg sim_control_dt_sec)" />

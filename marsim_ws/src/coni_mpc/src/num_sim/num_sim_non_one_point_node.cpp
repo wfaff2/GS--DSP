@@ -25,6 +25,7 @@
  *
  */
 #include "num_sim/Simulator.h"
+#include "num_sim/simulation_clock.h"
 #include "num_sim/System.h"
 #include "acado_mpc/mpc_controller.h"
 #include "acado_mpc/mpc_common.h"
@@ -146,8 +147,10 @@ class LidarCollisionMonitor {
     if (!enabled_ || !has_cloud_ || !position.allFinite()) {
       return false;
     }
-    if (timeout_sec_ > 0.0 &&
-        (ros::WallTime::now() - last_receipt_wall_).toSec() > timeout_sec_) {
+    const double idle_sec = ros::Time::isSimTime()
+        ? (ros::Time::now() - last_receipt_ros_).toSec()
+        : (ros::WallTime::now() - last_receipt_wall_).toSec();
+    if (timeout_sec_ > 0.0 && idle_sec > timeout_sec_) {
       return false;
     }
     pcl::PointXYZ query;
@@ -227,6 +230,7 @@ class LidarCollisionMonitor {
     kdtree_.setInputCloud(cloud_);
     last_cloud_stamp_ = message->header.stamp;
     last_receipt_wall_ = ros::WallTime::now();
+    last_receipt_ros_ = ros::Time::now();
     has_cloud_ = true;
   }
 
@@ -242,6 +246,7 @@ class LidarCollisionMonitor {
       new pcl::PointCloud<pcl::PointXYZ>()};
   mutable pcl::KdTreeFLANN<pcl::PointXYZ> kdtree_;
   ros::WallTime last_receipt_wall_;
+  ros::Time last_receipt_ros_;
   ros::Time last_cloud_stamp_;
 };
 
@@ -2174,6 +2179,14 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
     cycle_quad_odom_snapshot_valid_ = true;
   }
 
+  void publishInitialSensorOdometry(int i, const ros::Time& stamp) {
+    auto odom = buildQuadOdomFromState(getStateSnapshot(), i, stamp);
+    // The plant is deliberately held during sensor warmup.
+    odom.twist.twist = geometry_msgs::Twist();
+    control_system_ptr_->publishSensorOdometry(odom);
+    publishUavTf(odom, i);
+  }
+
   void commitCycleQuadOdomSnapshot() {
     if (!cycle_quad_odom_snapshot_valid_) {
       return;
@@ -2896,7 +2909,8 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
     control_system_ptr_->setCarTrajectoryWindow(car_window);
     const auto& car_point = car_window.front();
     car_odom.header.frame_id = acado_mpc_common::worldFrameId();
-    car_odom.header.stamp = ros::Time::now();
+    car_odom.header.stamp = cycle_quad_odom_snapshot_valid_
+        ? cycle_quad_odom_snapshot_.header.stamp : ros::Time::now();
     car_odom.pose.pose.position.x = car_point(0);
     car_odom.pose.pose.position.y = car_point(1);
     car_odom.pose.pose.position.z = car_point(2);
@@ -2945,7 +2959,8 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
     control_system_ptr_->setCarTrajectoryWindow(car_window);
     const auto& car_point = car_window.front();
     car_odom.header.frame_id = acado_mpc_common::worldFrameId();
-    car_odom.header.stamp = ros::Time::now();
+    car_odom.header.stamp = cycle_quad_odom_snapshot_valid_
+        ? cycle_quad_odom_snapshot_.header.stamp : ros::Time::now();
     car_odom.pose.pose.position.x = car_point(0);
     car_odom.pose.pose.position.y = car_point(1);
     car_odom.pose.pose.position.z = car_point(2);
@@ -5293,6 +5308,14 @@ int main(int argc, char **argv)
   ros::NodeHandle nh; 
   ros::NodeHandle pnh("~");
 
+  bool sim_publish_clock = false;
+  pnh.param("sim_publish_clock", sim_publish_clock, sim_publish_clock);
+  if (sim_publish_clock && !ros::Time::isSimTime()) {
+    ROS_ERROR("sim_publish_clock requires /use_sim_time=true; refusing mixed clocks");
+    return 2;
+  }
+  num_sim::SimulationClock simulation_clock(nh, sim_publish_clock);
+
   // Optional scene-file parameters; direct node runs retain their gflags values.
   pnh.param("v", v, v);
   pnh.param("w", w, w);
@@ -5752,13 +5775,13 @@ int main(int argc, char **argv)
                     << aggregate_uavs_csv);
   }
 
-  double uav_radius = 0.25;
-  pnh.param("uav_radius", uav_radius, 0.25);
+  double uav_radius = 0.15;
+  pnh.param("uav_radius", uav_radius, 0.15);
   if (uav_radius <= 0.0) {
     ROS_WARN("Parameter uav_radius should be positive. Using zero radius for collision checks.");
   }
-  double collision_safety_margin = 0.0;
-  pnh.param("cbf/safety_margin", collision_safety_margin, 0.0);
+  double collision_safety_margin = 0.05;
+  pnh.param("cbf/safety_margin", collision_safety_margin, 0.05);
   if (collision_safety_margin < 0.0) {
     ROS_WARN("Parameter cbf/safety_margin should be non-negative. Using zero for collision checks.");
     collision_safety_margin = 0.0;
@@ -6082,8 +6105,8 @@ for (int i = 0; i < num_uavs; i++) {
  auto control_system_ptr3 = std::make_shared<coni_mpc::NumSimMpc>(nh, pnh,3); */
 
   double car_trajectory_duration = 0.0;
-  double car_radius = 0.3;
-  pnh.param("car_radius", car_radius, car_radius);
+  double car_radius = 0.15;
+  pnh.param("car_radius", car_radius, 0.15);
   if (car_radius < 0.0) {
     ROS_WARN("Parameter car_radius should be non-negative. Using zero.");
     car_radius = 0.0;
@@ -6483,10 +6506,68 @@ simulators.push_back(simulator);
     start_simulator(idx);
   }
 
-  // Perception-driven runs need wall time for the renderer and DSP pipeline
-  // to produce the first risk profiles.  Process callbacks while waiting so
-  // a latched/early RiskRegionArray is available to the first MPC iteration.
-  if (sim_startup_delay_sec > 0.0) {
+  const double scheduler_dt_sec =
+      active_uav_indices.empty() ? 0.01
+                                 : simulators[static_cast<size_t>(active_uav_indices.front())]
+                                       ->getControlDtSec();
+  auto publish_initial_odometry = [&](const ros::Time& stamp) {
+    for (const int idx : active_uav_indices) {
+      control_system_ptr[idx]->setControlCycleStamp(stamp);
+      simulators[idx]->publishInitialSensorOdometry(idx, stamp);
+    }
+  };
+  if (simulation_clock.enabled()) {
+    // Hold the plant at its initial state while sensors initialize. Advancing
+    // the shared clock lets ROS timers and moving obstacles warm up as before.
+    // Wall pacing here is intentional, independent of flight pacing.
+    const ros::Time warmup_epoch = simulation_clock.now();
+    publish_initial_odometry(warmup_epoch);
+    const std::size_t warmup_steps = static_cast<std::size_t>(
+        std::ceil(sim_startup_delay_sec / scheduler_dt_sec));
+    for (std::size_t tick = 1; ros::ok() && tick <= warmup_steps; ++tick) {
+      const ros::Time stamp = warmup_epoch +
+          ros::Duration(static_cast<double>(tick) * scheduler_dt_sec);
+      publish_initial_odometry(stamp);
+      simulation_clock.publish(stamp);
+      ros::spinOnce();
+      ros::WallDuration(scheduler_dt_sec).sleep();
+    }
+    bool wait_for_field = false;
+    double perception_timeout_wall_sec = 10.0;
+    pnh.param("sim_wait_for_field", wait_for_field, wait_for_field);
+    pnh.param("sim_perception_timeout_wall_sec", perception_timeout_wall_sec,
+              perception_timeout_wall_sec);
+    if (!std::isfinite(perception_timeout_wall_sec) ||
+        perception_timeout_wall_sec <= 0.0) {
+      ROS_ERROR("sim_perception_timeout_wall_sec must be finite and positive");
+      return 2;
+    }
+    const ros::WallTime wait_start = ros::WallTime::now();
+    while (ros::ok() && wait_for_field) {
+      ros::spinOnce();
+      bool all_ready = !active_uav_indices.empty();
+      for (const int idx : active_uav_indices) {
+        all_ready = control_system_ptr[idx]->hasFreshFieldSnapshot(
+            simulation_clock.now()) && all_ready;
+      }
+      if (all_ready) break;
+      if ((ros::WallTime::now() - wait_start).toSec() > perception_timeout_wall_sec) {
+        ROS_ERROR("Sensor warmup timed out in wall time: no fresh Field for every active UAV");
+        return 2;
+      }
+      // A renderer/DSP may start after the nominal warmup. Keep warming up:
+      // freezing /clock here would prevent its first sensor timer from firing.
+      // The plant remains held; flight starts only once perception is ready.
+      const ros::Time stamp = simulation_clock.now() + ros::Duration(scheduler_dt_sec);
+      publish_initial_odometry(stamp);
+      simulation_clock.publish(stamp);
+      ros::WallDuration(scheduler_dt_sec).sleep();
+    }
+    ROS_INFO_STREAM("Simulation clock ready: flight_epoch="
+                    << simulation_clock.now().toSec()
+                    << " warmup_steps=" << warmup_steps);
+  } else if (sim_startup_delay_sec > 0.0) {
+    // Preserve legacy standalone wall-clock runs.
     const ros::WallTime startup_begin = ros::WallTime::now();
     while (ros::ok() &&
            (ros::WallTime::now() - startup_begin).toSec() <
@@ -6496,10 +6577,10 @@ simulators.push_back(simulator);
     }
   }
 
-  const double scheduler_dt_sec =
-      active_uav_indices.empty() ? 0.01
-                                 : simulators[static_cast<size_t>(active_uav_indices.front())]
-                                       ->getControlDtSec();
+  const ros::Time flight_epoch = simulation_clock.now();
+  if (simulation_clock.enabled()) {
+    pnh.setParam("sim_clock/flight_epoch", flight_epoch.toSec());
+  }
   const std::size_t total_scheduler_cycles =
       (scheduler_dt_sec > 1e-9)
           ? static_cast<std::size_t>(
@@ -6583,6 +6664,10 @@ simulators.push_back(simulator);
     }
   }
   std::ofstream world_command_provenance_out;
+  for (const auto& controller : control_system_ptr) {
+    controller->setFieldDiagnosticsConsumerEnabled(
+        field_hocbf_out.is_open() && field_hocbf_out.good());
+  }
   std::ofstream provenance_timing_out;
   if (!world_command_provenance_csv.empty()) {
     const bool need_provenance_header =
@@ -6629,6 +6714,18 @@ simulators.push_back(simulator);
        !collision_reported.load();
        ++cycle_idx) {
     const auto cycle_start = std::chrono::high_resolution_clock::now();
+    const double sim_time =
+        static_cast<double>(cycle_idx) * scheduler_dt_sec;
+    const ros::Time cycle_stamp = simulation_clock.enabled()
+        ? flight_epoch + ros::Duration(sim_time) : ros::Time::now();
+    if (simulation_clock.enabled()) {
+      // The epoch is explicit: neither self-/clock transport nor UAV order may
+      // alter the timestamp at which states and Field constraints are evaluated.
+      simulation_clock.publish(cycle_stamp);
+      for (const int idx : active_uav_indices) {
+        control_system_ptr[idx]->setControlCycleStamp(cycle_stamp);
+      }
+    }
     // Deliver risk-region and other ROS callbacks before constructing the
     // stage-wise OnlineData for this MPC iteration.
     ros::spinOnce();
@@ -6669,9 +6766,6 @@ simulators.push_back(simulator);
     if (collision_reported.load()) {
       break;
     }
-    const double sim_time =
-        static_cast<double>(cycle_idx) * scheduler_dt_sec;
-    const ros::Time cycle_stamp = ros::Time::now();
     for (int idx : active_uav_indices) {
       if (idx >= 0 && idx < static_cast<int>(simulators.size()) && simulators[idx]) {
         simulators[idx]->captureCycleQuadOdomSnapshot(idx, cycle_stamp);
@@ -6786,7 +6880,7 @@ simulators.push_back(simulator);
                             .filter_time_ms
                       : 0.0);
             }
-            if (field_hocbf_out.good()) {
+            if (field_hocbf_out.is_open() && field_hocbf_out.good()) {
               writeFieldHocbfRows(
                   field_hocbf_out,
                   run_tag_value,
@@ -6836,6 +6930,9 @@ simulators.push_back(simulator);
         simulators[idx]->advanceOneControlStep(sim_time);
       }
     }
+    if (simulation_clock.enabled()) {
+      simulation_clock.publish(flight_epoch + ros::Duration(sim_time + scheduler_dt_sec));
+    }
 
     // Controller rows above describe the state at the start of this control
     // interval.  If contact occurs during integration, also retain the
@@ -6873,7 +6970,7 @@ simulators.push_back(simulator);
             simulators[static_cast<size_t>(idx)]
                 ->getTruthMinPlanarSurfaceClearance(),
             external_snapshot.valid ? external_snapshot.filter_time_ms : 0.0);
-        if (field_hocbf_out.good()) {
+        if (field_hocbf_out.is_open() && field_hocbf_out.good()) {
           writeFieldHocbfRows(
               field_hocbf_out,
               run_tag_value,
@@ -7928,7 +8025,8 @@ simulators.push_back(simulator);
     while (ros::ok() &&
            (ros::WallTime::now() - hold_start).toSec() < post_collision_hold_sec) {
       ros::spinOnce();
-      ros::Duration(0.05).sleep();
+      // The simulation clock is intentionally frozen at the final state.
+      ros::WallDuration(0.05).sleep();
     }
   }
 

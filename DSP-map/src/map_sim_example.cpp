@@ -20,9 +20,14 @@ Description: This is a ROS example to use the DSP map. The map object is my_map 
 
 #include "ros/ros.h"
 #include "dsp_dynamic.h" // You can change the head file to "dsp_dynamic_multiple_neighbors.h" or "dsp_static.h" to use different map types. For more information, please refer to the readme file.
+#include "dsp_pose_cloud_sync.h"
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <cmath>
+#include <memory>
+#include <mutex>
+#include <thread>
 #include <pcl/common/transforms.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/point_types.h>
@@ -35,7 +40,6 @@ Description: This is a ROS example to use the DSP map. The map object is my_map 
 #include <geometry_msgs/TwistStamped.h>
 #include "gazebo_msgs/ModelStates.h"
 #include "geometry_msgs/PoseStamped.h"
-#include <queue>
 #include "nav_msgs/Odometry.h"
 #include "std_msgs/Float64.h"
 #include "std_msgs/Header.h"
@@ -44,12 +48,15 @@ Description: This is a ROS example to use the DSP map. The map object is my_map 
 /// Define a map object
 DSPMap my_map;
 const float res = 0.1;
-/// Set global variables
-queue<double> pose_att_time_queue;
-queue<Eigen::Vector3d> uav_position_global_queue;
-queue<Eigen::Quaternionf> uav_att_global_queue;
-Eigen::Vector3d uav_position_global;
-Eigen::Quaternionf uav_att_global;
+
+struct SensorPose {
+    Eigen::Vector3d position = Eigen::Vector3d::Zero();
+    Eigen::Quaternionf attitude = Eigen::Quaternionf::Identity();
+};
+
+using PoseCloudPairer = dsp_sync::TimestampPairer<
+        SensorPose, sensor_msgs::PointCloud2ConstPtr>;
+std::unique_ptr<PoseCloudPairer> pose_cloud_pairer;
 
 const unsigned int MAX_POINT_NUM = 5000; // Estimated max point cloud number after down sample. To define the vector below.
 float point_clouds[MAX_POINT_NUM*3]; // Container for point cloud. We use naive vector for efficiency purpose.
@@ -70,7 +77,30 @@ std::string input_cloud_convention = "body_flu";
 gazebo_msgs::ModelStates ground_truth_model_states;
 
 int ground_truth_updated = 0;
-bool state_locked = false;
+
+void warnSyncStateThrottled(const std::string &reason)
+{
+    static std::mutex warning_mutex;
+    static std::chrono::steady_clock::time_point last_warning;
+    const auto now = std::chrono::steady_clock::now();
+    std::lock_guard<std::mutex> lock(warning_mutex);
+    if(last_warning.time_since_epoch().count() != 0 &&
+       now - last_warning < std::chrono::seconds(3)) {
+        return;
+    }
+    last_warning = now;
+    const PoseCloudPairer::Counts counts = pose_cloud_pairer->counts();
+    ROS_WARN_STREAM(reason
+                    << "; sync counts: waiting=" << counts.waiting_clouds
+                    << ", matched=" << counts.matched_clouds
+                    << ", cloud_replaced=" << counts.replaced_clouds
+                    << ", cloud_timeout=" << counts.timed_out_clouds
+                    << ", cloud_nonmonotonic=" << counts.nonmonotonic_clouds
+                    << ", cloud_invalid_stamp=" << counts.invalid_stamp_clouds
+                    << ", cloud_after_shutdown=" << counts.shutdown_clouds
+                    << ", pose_bound_drop=" << counts.dropped_poses
+                    << ", pose_duplicate=" << counts.duplicate_poses);
+}
 
 /***
  * Summary: This function is for actor true position visualization
@@ -446,53 +476,11 @@ void publishPredictedEllipses(const std_msgs::Header &source_header,
  * Summary: This is the main callback to update map.
  */
 pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>());
-void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& cloud)
+void processCloud(const sensor_msgs::PointCloud2ConstPtr& cloud,
+                  const SensorPose &pose)
 {
-    /// Simple synchronizer for point cloud data and pose
-    Eigen::Vector3d uav_position = uav_position_global;
-    Eigen::Quaternionf uav_att = uav_att_global;
-
-    static Eigen::Quaternionf quad_last_popped(-10.f, -10.f, -10.f, -10.f);
-    static Eigen::Vector3d position_last_popped(-10000.f, -10000.f, -10000.f);
-    static double last_popped_time = 0.0;
-
-    ros::Rate loop_rate(500);
-    while(state_locked){
-        loop_rate.sleep();
-        ros::spinOnce();
-    }
-    state_locked = true;
-
-    while(!pose_att_time_queue.empty()){   //Synchronize pose by queue
-        double time_stamp_pose = pose_att_time_queue.front();
-        if(time_stamp_pose >= cloud->header.stamp.toSec()){
-            uav_att = uav_att_global_queue.front();
-            uav_position = uav_position_global_queue.front();
-
-            // linear interpolation
-            if(quad_last_popped.x() >= -1.f){
-                double time_interval_from_last_time = time_stamp_pose - last_popped_time;
-                double time_interval_cloud = cloud->header.stamp.toSec() - last_popped_time;
-                double factor = time_interval_cloud / time_interval_from_last_time;
-                uav_att = quad_last_popped.slerp(factor, uav_att);
-                uav_position = position_last_popped * (1.0 - factor) + uav_position*factor;
-            }
-
-            ROS_INFO_THROTTLE(3.0, "cloud mismatch time = %lf", cloud->header.stamp.toSec() - time_stamp_pose);
-
-            break;
-        }
-
-        quad_last_popped = uav_att_global_queue.front();
-        position_last_popped = uav_position_global_queue.front();
-        last_popped_time = time_stamp_pose;
-
-        pose_att_time_queue.pop();
-        uav_att_global_queue.pop();
-        uav_position_global_queue.pop();
-    }
-    state_locked = false;
-
+    const Eigen::Vector3d &uav_position = pose.position;
+    const Eigen::Quaternionf &uav_att = pose.attitude;
 
     /// Point cloud preprocess
     double data_time_stamp = cloud->header.stamp.toSec();
@@ -668,6 +656,56 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& cloud)
     update_time_pub.publish(update_time);
 }
 
+void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& cloud)
+{
+    const PoseCloudPairer::CloudSubmission submission =
+            pose_cloud_pairer->addCloud(cloud->header.stamp.toSec(), cloud);
+    if(submission.dropped_nonmonotonic) {
+        warnSyncStateThrottled(
+                "DSP dropped a duplicate or out-of-order cloud stamp");
+    } else if(submission.dropped_invalid_stamp) {
+        warnSyncStateThrottled(
+                "DSP dropped a cloud with a non-finite or non-positive stamp");
+    } else if(submission.dropped_shutdown) {
+        warnSyncStateThrottled(
+                "DSP ignored a cloud submitted during shutdown");
+    } else if(submission.replaced_pending_cloud) {
+        warnSyncStateThrottled(
+                "DSP pose/cloud sync replaced an older pending cloud");
+    } else if(submission.waiting_for_pose) {
+        warnSyncStateThrottled(
+                "DSP cloud is waiting for an exact or bracketed pose");
+    }
+}
+
+void mapWorker()
+{
+    PoseCloudPairer::Match match;
+    for(;;) {
+        const PoseCloudPairer::WaitEvent event = pose_cloud_pairer->waitNext(match);
+        if(event == PoseCloudPairer::WaitEvent::kShutdown) {
+            return;
+        }
+        if(event == PoseCloudPairer::WaitEvent::kTimedOut) {
+            warnSyncStateThrottled(
+                    "DSP dropped a cloud after the wall-time pose wait expired");
+            continue;
+        }
+
+        SensorPose synchronized_pose = match.pose_before;
+        if(!match.exact) {
+            const double factor = match.interpolation_factor;
+            synchronized_pose.position =
+                    match.pose_before.position * (1.0 - factor) +
+                    match.pose_after.position * factor;
+            synchronized_pose.attitude = match.pose_before.attitude.slerp(
+                    static_cast<float>(factor), match.pose_after.attitude);
+            synchronized_pose.attitude.normalize();
+        }
+        processCloud(match.cloud, synchronized_pose);
+    }
+}
+
 /***
  * Summary: This function is used to tell pedestrians' names in simObjectStateCallback
  */
@@ -691,6 +729,8 @@ void simObjectStateCallback(const gazebo_msgs::ModelStates &msg)
     ground_truth_updated = 1;
 
     vector<Eigen::Vector3d> actor_visualization_points;
+    SensorPose current_pose;
+    pose_cloud_pairer->latestPose(current_pose);
 
     for(int i=0; i<msg.name.size(); ++i)
     {
@@ -698,9 +738,9 @@ void simObjectStateCallback(const gazebo_msgs::ModelStates &msg)
         split(msg.name[i], name_splited, "_");
         if(name_splited[0] == "actor"){
             Eigen::Vector3d p;
-            p.x() = msg.pose[i].position.x - uav_position_global.x();
-            p.y() = msg.pose[i].position.y - uav_position_global.y();
-            p.z() = msg.pose[i].position.z - uav_position_global.z();
+            p.x() = msg.pose[i].position.x - current_pose.position.x();
+            p.y() = msg.pose[i].position.y - current_pose.position.y();
+            p.z() = msg.pose[i].position.z - current_pose.position.z();
             actor_visualization_points.push_back(p);
         }
     }
@@ -713,34 +753,30 @@ void simObjectStateCallback(const gazebo_msgs::ModelStates &msg)
  */
 void simPoseCallback(const geometry_msgs::PoseStamped &msg)
 {
-    if(!state_locked)
-    {
-        state_locked = true;
-        uav_position_global.x() = msg.pose.position.x;
-        uav_position_global.y() = msg.pose.position.y;
-        uav_position_global.z() = msg.pose.position.z;
-
-        uav_att_global.x() = msg.pose.orientation.x;
-        uav_att_global.y() = msg.pose.orientation.y;
-        uav_att_global.z() = msg.pose.orientation.z;
-        uav_att_global.w() = msg.pose.orientation.w;
-
-        uav_position_global_queue.push(uav_position_global);
-        uav_att_global_queue.push(uav_att_global);
-        pose_att_time_queue.push(msg.header.stamp.toSec());
-        ROS_INFO("Pose updated");
+    SensorPose pose;
+    pose.position.x() = msg.pose.position.x;
+    pose.position.y() = msg.pose.position.y;
+    pose.position.z() = msg.pose.position.z;
+    pose.attitude.x() = msg.pose.orientation.x;
+    pose.attitude.y() = msg.pose.orientation.y;
+    pose.attitude.z() = msg.pose.orientation.z;
+    pose.attitude.w() = msg.pose.orientation.w;
+    pose.attitude.normalize();
+    const std::size_t dropped_before = pose_cloud_pairer->counts().dropped_poses;
+    pose_cloud_pairer->addPose(msg.header.stamp.toSec(), pose);
+    if(pose_cloud_pairer->counts().dropped_poses != dropped_before) {
+        warnSyncStateThrottled(
+                "DSP pose history reached its configured bound");
     }
-
-    state_locked = false;
 
     Eigen::Quaternionf axis; //= quad * q1 * quad.inverse();
     axis.w() = cos(-M_PI/4.0);
     axis.x() = 0.0;
     axis.y() = 0.0;
     axis.z() = sin(-M_PI/4.0);
-    Eigen::Quaternionf rotated_att = uav_att_global * axis;
+    Eigen::Quaternionf rotated_att = pose.attitude * axis;
 
-    showFOV(uav_position_global, rotated_att, 90.0 / 180.0 * M_PI, 54.0 / 180.0 * M_PI , 5);
+    showFOV(pose.position, rotated_att, 90.0 / 180.0 * M_PI, 54.0 / 180.0 * M_PI , 5);
 }
 
 
@@ -758,6 +794,8 @@ int main(int argc, char **argv)
     std::string predicted_ellipse_markers_topic = "/my_map/predicted_ellipse_markers";
     bool full_360_lidar_fov = false;
     bool cluster_diagnostics = false;
+    int pose_buffer_size = 200;
+    double cloud_pose_wait_timeout_wall = 0.5;
     private_nh.param("probability_mass", probability_mass, probability_mass);
     private_nh.param("covariance_regularization", covariance_regularization,
                      covariance_regularization);
@@ -775,12 +813,20 @@ int main(int argc, char **argv)
                      full_360_lidar_fov);
     private_nh.param("cluster_diagnostics", cluster_diagnostics,
                      cluster_diagnostics);
+    private_nh.param("pose_buffer_size", pose_buffer_size, pose_buffer_size);
+    private_nh.param("cloud_pose_wait_timeout_wall", cloud_pose_wait_timeout_wall,
+                     cloud_pose_wait_timeout_wall);
     if(input_cloud_convention != "optical" && input_cloud_convention != "body_flu"){
         ROS_FATAL_STREAM("Unsupported input_cloud_convention='"
                          << input_cloud_convention
                          << "' (expected 'optical' or 'body_flu')");
         return 1;
     }
+    pose_cloud_pairer.reset(new PoseCloudPairer(
+            static_cast<std::size_t>(std::max(2, pose_buffer_size)),
+            std::chrono::duration_cast<PoseCloudPairer::WallDuration>(
+                    std::chrono::duration<double>(
+                            std::max(0.001, cloud_pose_wait_timeout_wall)))));
     my_map.setProbabilityEllipseConfig(probability_mass, covariance_regularization,
                                        minimum_weight,
                                        static_cast<std::size_t>(std::max(1, minimum_samples)));
@@ -825,9 +871,12 @@ int main(int argc, char **argv)
     update_time_pub = n.advertise<std_msgs::Float64>("/map_update_time", 1);
 
     /// Ros spin
+    std::thread map_worker(mapWorker);
     ros::AsyncSpinner spinner(3); // Use 3 threads
     spinner.start();
     ros::waitForShutdown();
+    pose_cloud_pairer->shutdown();
+    map_worker.join();
 
     return 0;
 }

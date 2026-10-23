@@ -18,7 +18,9 @@ namespace field_replay {
 // The file is an append-only stream. All scalars are written individually;
 // no Eigen object, compiler padding, or platform-dependent size_t is stored.
 static constexpr std::uint64_t kFileMagic = 0x3147504c52464843ULL;  // CHFRLPG1
-static constexpr std::uint32_t kVersion = 2;
+// v3 changes the field algorithm and serialized confidence/cutoff parameters.
+// Reject v1/v2 rather than silently replay them with different mathematics.
+static constexpr std::uint32_t kVersion = 3;
 enum class RecordType : std::uint32_t { kSnapshot = 1, kCycle = 2 };
 
 struct SnapshotRecord {
@@ -118,12 +120,16 @@ inline bool quat(std::istream& in, Eigen::Quaterniond& q) {
 inline bool config(std::ostream& out, const field_hocbf::Config& c) {
   return scalar(out,c.sigma)&&scalar(out,c.distance_margin)&&scalar(out,c.uav_radius)&&
       scalar(out,c.voxel_size)&&scalar(out,c.distance_epsilon)&&scalar(out,c.occupancy_alpha)&&
-      scalar(out,c.gamma1)&&scalar(out,c.gamma2)&&scalar(out,c.prune_radius);
+      scalar(out,c.gamma1)&&scalar(out,c.gamma2)&&scalar(out,c.prune_radius)&&
+      scalar(out,c.cutoff_width)&&scalar(out,c.occupancy_full_confidence)&&
+      scalar(out,c.clear_field_value);
 }
 inline bool config(std::istream& in, field_hocbf::Config& c) {
   return scalar(in,c.sigma)&&scalar(in,c.distance_margin)&&scalar(in,c.uav_radius)&&
       scalar(in,c.voxel_size)&&scalar(in,c.distance_epsilon)&&scalar(in,c.occupancy_alpha)&&
-      scalar(in,c.gamma1)&&scalar(in,c.gamma2)&&scalar(in,c.prune_radius);
+      scalar(in,c.gamma1)&&scalar(in,c.gamma2)&&scalar(in,c.prune_radius)&&
+      scalar(in,c.cutoff_width)&&scalar(in,c.occupancy_full_confidence)&&
+      scalar(in,c.clear_field_value);
 }
 inline bool mat3(std::ostream& out, const Eigen::Matrix3d& m) {
   for (int r=0;r<3;++r) for (int c=0;c<3;++c) if(!scalar(out,m(r,c))) return false;

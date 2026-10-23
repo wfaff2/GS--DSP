@@ -1,7 +1,7 @@
 # Cost on states
 # Q is a semi-definite matrix, so it's ok to have zero entries
 Q_p_xy:                     100.0 # 200.0       # 适当降低位置权重，缓解速度指令频繁打满的问题
-Q_p_z:                      100.0       # Cost for vertical position error
+Q_p_z:                      200.0       # Cost for vertical position error
 Q_v:                        20        # Cost for velocity error
 Q_yaw:                      1.0      # Cost for yaw error
 
@@ -23,7 +23,7 @@ car_trajectory_mode:        figure_eight   # obstacle_aware | circle | figure_ei
 max_v_xy:                  5 #1.5
 max_v_z:                   3 #1.0
 max_yaw_rate:              3.14 #3.14
-a_max_xy:                  10 #6.0
+a_max_xy:                  6 #6.0
 a_max_z:                   4 #4.0
 
 # Common simulation/control timing for every Comment 3.4 controller.
@@ -35,7 +35,7 @@ sim_control_dt_sec:         0.02       # 50 Hz control loop, shared by the activ
 tau_v_xy:                   0.2
 tau_v_z:                    0.2
 
-num_uavs:                   3
+num_uavs:                   1
 world_frame_id:             map
 relative_frame_id:          base_link
 topic_prefix:               ""
@@ -86,17 +86,23 @@ cbf:
   use_field_hocbf: true
   field_topic: /uav%d/my_map/future_occupancy_3d
   field_timeout: 0.3
-  alpha1: 5
-  alpha2: 5
-  safety_margin: 0.35
-  field_sigma: 0.12
-  # 3-D certified voxel clearance: d_cert subtracts uav_radius and the voxel
-  # circumsphere separately, so this value is the remaining surface margin.
-  field_distance_margin: 0.20
-  field_voxel_size: 0.15
+  alpha1: 5.0
+  alpha2: 5.0
+  field_gamma1: 5.0       # Field-HOCBF 极点 gamma1
+  field_gamma2: 5.0       # Field-HOCBF 极点 gamma2
+  safety_margin: 0.10     # 统一安全余量 [m] (对齐 field_distance_margin)
+  field_sigma: 0.05       # LogSumExp 平滑因子 [m]
+  # For the confidence core P>=field_occupancy_full_confidence, h>=0 excludes
+  # the UAV/voxel circumspheres plus this margin. Low-P support is weighted.
+  field_distance_margin: 0.10 # 高置信体素的几何表面余量 [m]
+  field_voxel_size: 0.15      # DSP体素网格大小 [m]
   field_distance_epsilon: 1.0e-6
   field_occupancy_weight_alpha: 0.0
-  field_prune_radius: 2.0
+  # Full 3-D Euclidean geometry; no XY projection or height cutoff.
+  field_prune_radius: 2.0     # C2 kernel outer support radius [m]
+  field_cutoff_width: 0.5     # Smooth taper over 1.5--2.0 m; includes derivatives
+  field_occupancy_full_confidence: 0.15 # Engineering confidence core, not calibrated risk
+  field_clear_value: 1.0      # Finite empty-field h [m]
   # Preparation/model-generation API only; not a live controller mode selector.
   voxel_field:
     n_obs: 60                  # Generation-time dimension, requires new NOD
@@ -111,8 +117,8 @@ cbf:
   preview_margin: 0.0
   preview_steps: 5        # 降低预测步数，减少非惯性系下障碍物"相对高速运动"产生的极长拖尾遮挡
   obstacle_hysteresis_hold_cycles: 0
-  slack_max: 0   # direct upper bound: 0 = hard, >0 = bounded soft slack
-  R_slack: 500   # quadratic penalty on slack when slack_max > 0
+  slack_max: 0.0   # direct upper bound: 0 = hard, >0 = bounded soft slack
+  R_slack: 500.0   # quadratic penalty on slack when slack_max > 0
 
 # Comment 3.4 baseline: independent Moving-Goal Polytopic HRVO (MG-PolyHRVO).
 # The node bypasses ACADO MPC/CBF, updates the current formation slot goal at

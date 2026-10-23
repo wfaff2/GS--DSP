@@ -18,6 +18,8 @@
   <arg name="sim_system_dt_sec" default=""></arg>
   <arg name="sim_control_dt_sec" default=""></arg>
   <arg name="sim_realtime_pacing" default="false"></arg>
+  <arg name="sim_publish_clock" default="false" />
+  <arg name="sim_wait_for_field" default="false" />
   <arg name="sim_startup_delay_sec" default="0.0"></arg>
   <arg name="trajectory_laps" default="2.0"></arg>
   <!-- Optional safe radius for the circular UGV trajectory.  Zero keeps
@@ -118,6 +120,8 @@
              name="sim_control_dt_sec"
              value="$(arg sim_control_dt_sec)" />
       <param name="sim_realtime_pacing" value="$(arg sim_realtime_pacing)" />
+      <param name="sim_publish_clock" value="$(arg sim_publish_clock)" />
+      <param name="sim_wait_for_field" value="$(arg sim_wait_for_field)" />
       <param name="sim_startup_delay_sec" value="$(arg sim_startup_delay_sec)" />
       <param name="trajectory_laps" value="$(arg trajectory_laps)" />
       <param if="$(eval arg('safety_variant') != '')"
@@ -276,6 +280,8 @@
              value="$(arg sim_control_dt_sec)" />
       <param name="sim_realtime_pacing" value="$(arg sim_realtime_pacing)" />
       <param name="sim_startup_delay_sec" value="$(arg sim_startup_delay_sec)" />
+      <param name="sim_publish_clock" value="$(arg sim_publish_clock)" />
+      <param name="sim_wait_for_field" value="$(arg sim_wait_for_field)" />
       <param name="trajectory_laps" value="$(arg trajectory_laps)" />
       <param if="$(eval arg('safety_variant') != '')"
              name="safety_variant"

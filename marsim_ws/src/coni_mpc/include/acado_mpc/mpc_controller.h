@@ -133,7 +133,8 @@ public:
       const NonInertialProfile* beta_non_profile = nullptr,
       const NonInertialProfile* a_car_non_profile = nullptr,
       const Eigen::Vector3d* W_v_non = nullptr,
-      const WorldVelocityFrameProfile* world_velocity_frame_profile = nullptr);
+      const WorldVelocityFrameProfile* world_velocity_frame_profile = nullptr,
+      const ros::Time* evaluation_time = nullptr);
 
   void setFeedbackDiagnosticsEnabled(bool enabled) { mpc_wrapper_.setFeedbackDiagnosticsEnabled(enabled); }
   const auto& getFeedbackDiagnostics() const { return mpc_wrapper_.getFeedbackDiagnostics(); }
@@ -192,8 +193,12 @@ private:
       Eigen::Matrix<T, kInputSize, 1>* applied_input = nullptr) const;
   bool cacheSuccessfulPlan(
       const Eigen::Ref<const Eigen::Matrix<T, kInputSize, kSamples>>& inputs,
+      const ros::Time& evaluation_time,
       bool increment_generation);
-  acado_mpc_common::ControlCommand makeFailureFallback(const char* reason);
+  bool isValidPlan(
+      const Eigen::Ref<const Eigen::Matrix<T, kInputSize, kSamples>>& inputs) const;
+  acado_mpc_common::ControlCommand makeFailureFallback(
+      const char* reason, const ros::Time& evaluation_time);
 
   bool publishPrediction(
       const Eigen::Ref<const Eigen::Matrix<T, kStateSize, kSamples + 1>> states,
@@ -243,7 +248,7 @@ private:
   Eigen::Matrix<T, kInputSize, kSamples> last_successful_inputs_ =
       Eigen::Matrix<T, kInputSize, kSamples>::Zero();
   bool has_successful_plan_ = false;
-  int fallback_plan_cursor_ = 0;
+  ros::Time successful_plan_origin_;
   int last_applied_plan_stage_ = -1;
   bool last_fallback_plan_exhausted_ = false;
   std::uint64_t plan_generation_ = 0;

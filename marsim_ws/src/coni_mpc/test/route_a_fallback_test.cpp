@@ -78,12 +78,22 @@ Params loadParams() {
 
 acado_mpc_common::ControlCommand runWithWorldProfile(
     Controller& controller, Params& params, const RunContext& context,
-    const WorldProfile& world_profile) {
+    const WorldProfile& world_profile, const ros::Time& evaluation_time) {
   return controller.run(
       context.estimate, context.reference, params,
       Eigen::Quaterniond::Identity(), Eigen::Vector3d::Zero(),
       &context.omega, &context.beta, &context.car_acceleration,
-      &context.frame_velocity, &world_profile);
+      &context.frame_velocity, &world_profile, &evaluation_time);
+}
+
+ros::Time atSeconds(double seconds) {
+  ros::Time result;
+  result.fromSec(seconds);
+  return result;
+}
+
+ros::Time afterMilliseconds(const ros::Time& origin, int milliseconds) {
+  return origin + ros::Duration(static_cast<double>(milliseconds) / 1000.0);
 }
 
 Inputs distinguishablePlan(double offset) {
@@ -129,9 +139,10 @@ TEST(RouteAFallback, FailureBeforeAnySuccessfulPlanReturnsZero) {
   RunContext context;
   Params params = loadParams();
   auto controller = makeController(100);
+  const ros::Time evaluation_time = atSeconds(10.0);
 
   const auto command = runWithWorldProfile(
-      *controller, params, context, context.invalid_world);
+      *controller, params, context, context.invalid_world, evaluation_time);
 
   EXPECT_FALSE(controller->getLastSolveOk());
   EXPECT_TRUE(controller->getLastCommandUsedFallback());
@@ -145,22 +156,25 @@ TEST(RouteAFallback, FailureBeforeAnySuccessfulPlanReturnsZero) {
   EXPECT_TRUE(controller->getSlewRateAnchor().isZero(0.0));
 }
 
-TEST(RouteAFallback, ShiftsOncePerFailureHoldsTerminalAndReplacesOnSuccess) {
+TEST(RouteAFallback, UsesElapsedPredictionStagesAndKeepsInstancesIndependent) {
   RunContext context;
   Params params_a = loadParams();
   Params params_b = loadParams();
   auto controller_a = makeController(101);
   auto controller_b = makeController(102);
+  const ros::Time origin_a = atSeconds(100.0);
+  const ros::Time origin_b = atSeconds(200.0);
 
   const auto first_a = runWithWorldProfile(
-      *controller_a, params_a, context, context.valid_world);
+      *controller_a, params_a, context, context.valid_world, origin_a);
   ASSERT_TRUE(controller_a->getLastSolveOk());
   ASSERT_FALSE(controller_a->getLastCommandUsedFallback());
   ASSERT_TRUE(first_a.velocity_cmd.allFinite());
   ASSERT_EQ(controller_a->getPlanGeneration(), 1u);
+  ASSERT_NEAR(controller_a->getPredictionDt(), 0.1, 1.0e-12);
 
   const auto first_b = runWithWorldProfile(
-      *controller_b, params_b, context, context.valid_world);
+      *controller_b, params_b, context, context.valid_world, origin_b);
   ASSERT_TRUE(controller_b->getLastSolveOk());
   ASSERT_TRUE(first_b.velocity_cmd.allFinite());
   ASSERT_EQ(controller_b->getPlanGeneration(), 1u);
@@ -177,23 +191,34 @@ TEST(RouteAFallback, ShiftsOncePerFailureHoldsTerminalAndReplacesOnSuccess) {
   ASSERT_EQ(controller_b->getPlanGeneration(), 1u);
 
   auto command_a = runWithWorldProfile(
-      *controller_a, params_a, context, context.invalid_world);
-  EXPECT_EQ(controller_a->getLastAppliedPlanStage(), 1);
+      *controller_a, params_a, context, context.invalid_world,
+      afterMilliseconds(origin_a, 20));
+  EXPECT_EQ(controller_a->getLastAppliedPlanStage(), 0);
   EXPECT_EQ(controller_b->getLastAppliedPlanStage(), 0);
-  expectCommandMatches(command_a, plan_a.col(1));
-  expectAnchorMatches(*controller_a, plan_a.col(1));
+  expectCommandMatches(command_a, plan_a.col(0));
+  expectAnchorMatches(*controller_a, plan_a.col(0));
+
+  // Repeated calls at one logical epoch must not consume the cached plan.
+  command_a = runWithWorldProfile(
+      *controller_a, params_a, context, context.invalid_world,
+      afterMilliseconds(origin_a, 20));
+  EXPECT_EQ(controller_a->getLastAppliedPlanStage(), 0);
+  expectCommandMatches(command_a, plan_a.col(0));
 
   const auto command_b = runWithWorldProfile(
-      *controller_b, params_b, context, context.invalid_world);
+      *controller_b, params_b, context, context.invalid_world,
+      afterMilliseconds(origin_b, 100));
   EXPECT_EQ(controller_b->getLastAppliedPlanStage(), 1);
-  EXPECT_EQ(controller_a->getLastAppliedPlanStage(), 1);
+  EXPECT_EQ(controller_a->getLastAppliedPlanStage(), 0);
   expectCommandMatches(command_b, plan_b.col(1));
   expectAnchorMatches(*controller_b, plan_b.col(1));
 
-  for (int expected_stage = 2; expected_stage < acado_mpc::kSamples;
-       ++expected_stage) {
+  // Eighteen 20 ms failure cycles cover only 360 ms of a 100 ms-stage plan.
+  for (int cycle = 1; cycle <= 18; ++cycle) {
+    const int expected_stage = (20 * cycle) / 100;
     command_a = runWithWorldProfile(
-        *controller_a, params_a, context, context.invalid_world);
+        *controller_a, params_a, context, context.invalid_world,
+        afterMilliseconds(origin_a, 20 * cycle));
     ASSERT_FALSE(controller_a->getLastSolveOk());
     ASSERT_TRUE(controller_a->getLastCommandUsedFallback());
     ASSERT_TRUE(controller_a->getLastFallbackHadPreviousValid());
@@ -201,19 +226,28 @@ TEST(RouteAFallback, ShiftsOncePerFailureHoldsTerminalAndReplacesOnSuccess) {
     EXPECT_EQ(controller_a->getPlanGeneration(), 1u);
     expectCommandMatches(command_a, plan_a.col(expected_stage));
     expectAnchorMatches(*controller_a, plan_a.col(expected_stage));
-    EXPECT_EQ(controller_a->getLastFallbackPlanExhausted(),
-              expected_stage == acado_mpc::kSamples - 1);
+    EXPECT_FALSE(controller_a->getLastFallbackPlanExhausted());
   }
 
   command_a = runWithWorldProfile(
-      *controller_a, params_a, context, context.invalid_world);
+      *controller_a, params_a, context, context.invalid_world,
+      afterMilliseconds(origin_a, 100 * (acado_mpc::kSamples - 1)));
   EXPECT_EQ(controller_a->getLastAppliedPlanStage(), acado_mpc::kSamples - 1);
   EXPECT_TRUE(controller_a->getLastFallbackPlanExhausted());
   expectCommandMatches(command_a, plan_a.col(acado_mpc::kSamples - 1));
   expectAnchorMatches(*controller_a, plan_a.col(acado_mpc::kSamples - 1));
 
+  command_a = runWithWorldProfile(
+      *controller_a, params_a, context, context.invalid_world,
+      afterMilliseconds(origin_a, 100 * (acado_mpc::kSamples + 5)));
+  EXPECT_EQ(controller_a->getLastAppliedPlanStage(), acado_mpc::kSamples - 1);
+  EXPECT_TRUE(controller_a->getLastFallbackPlanExhausted());
+  expectCommandMatches(command_a, plan_a.col(acado_mpc::kSamples - 1));
+
+  const ros::Time recovery_time =
+      afterMilliseconds(origin_a, 100 * (acado_mpc::kSamples + 6));
   const auto recovered = runWithWorldProfile(
-      *controller_a, params_a, context, context.valid_world);
+      *controller_a, params_a, context, context.valid_world, recovery_time);
   ASSERT_TRUE(controller_a->getLastSolveOk());
   ASSERT_FALSE(controller_a->getLastCommandUsedFallback());
   ASSERT_EQ(controller_a->getLastAppliedPlanStage(), 0);
@@ -223,23 +257,87 @@ TEST(RouteAFallback, ShiftsOncePerFailureHoldsTerminalAndReplacesOnSuccess) {
   const Inputs replacement = controller_a->getPredictedInputs();
 
   command_a = runWithWorldProfile(
-      *controller_a, params_a, context, context.invalid_world);
-  EXPECT_EQ(controller_a->getLastAppliedPlanStage(), 1);
+      *controller_a, params_a, context, context.invalid_world,
+      afterMilliseconds(recovery_time, 20));
+  EXPECT_EQ(controller_a->getLastAppliedPlanStage(), 0);
   EXPECT_EQ(controller_a->getPlanGeneration(), 2u);
-  expectCommandMatches(command_a, replacement.col(1));
-  expectAnchorMatches(*controller_a, replacement.col(1));
+  expectCommandMatches(command_a, replacement.col(0));
+  expectAnchorMatches(*controller_a, replacement.col(0));
 
   EXPECT_EQ(controller_b->getLastAppliedPlanStage(), 1);
   EXPECT_EQ(controller_b->getPlanGeneration(), 1u);
+}
+
+TEST(RouteAFallback, ChangesStageAtPredictionBoundaryAndJumpsSkippedCycles) {
+  RunContext context;
+  Params params = loadParams();
+  auto controller = makeController(104);
+  const ros::Time origin = atSeconds(300.0);
+
+  ASSERT_TRUE(runWithWorldProfile(
+      *controller, params, context, context.valid_world, origin)
+                  .velocity_cmd.allFinite());
+  const Inputs plan = distinguishablePlan(2.0);
+  controller->restoreSuccessfulPrediction(
+      controller->getPredictedStates(), plan, 0.0);
+
+  auto command = runWithWorldProfile(
+      *controller, params, context, context.invalid_world,
+      afterMilliseconds(origin, 99));
+  EXPECT_EQ(controller->getLastAppliedPlanStage(), 0);
+  expectCommandMatches(command, plan.col(0));
+
+  command = runWithWorldProfile(
+      *controller, params, context, context.invalid_world,
+      afterMilliseconds(origin, 100));
+  EXPECT_EQ(controller->getLastAppliedPlanStage(), 1);
+  expectCommandMatches(command, plan.col(1));
+
+  command = runWithWorldProfile(
+      *controller, params, context, context.invalid_world,
+      afterMilliseconds(origin, 350));
+  EXPECT_EQ(controller->getLastAppliedPlanStage(), 3);
+  expectCommandMatches(command, plan.col(3));
+}
+
+TEST(RouteAFallback, ValidRestorePreservesPlanOriginAndGeneration) {
+  RunContext context;
+  Params params = loadParams();
+  auto controller = makeController(106);
+  const ros::Time origin = atSeconds(350.0);
+
+  ASSERT_TRUE(runWithWorldProfile(
+      *controller, params, context, context.valid_world, origin)
+                  .velocity_cmd.allFinite());
+  const States states = controller->getPredictedStates();
+  const Inputs restored_plan = distinguishablePlan(2.5);
+
+  auto command = runWithWorldProfile(
+      *controller, params, context, context.invalid_world,
+      afterMilliseconds(origin, 150));
+  ASSERT_EQ(controller->getLastAppliedPlanStage(), 1);
+  ASSERT_EQ(controller->getPlanGeneration(), 1u);
+
+  controller->restoreSuccessfulPrediction(states, restored_plan, 0.0);
+  EXPECT_EQ(controller->getLastAppliedPlanStage(), 1);
+  EXPECT_EQ(controller->getPlanGeneration(), 1u);
+
+  command = runWithWorldProfile(
+      *controller, params, context, context.invalid_world,
+      afterMilliseconds(origin, 250));
+  EXPECT_EQ(controller->getLastAppliedPlanStage(), 2);
+  EXPECT_EQ(controller->getPlanGeneration(), 1u);
+  expectCommandMatches(command, restored_plan.col(2));
 }
 
 TEST(RouteAFallback, SolverRejectionUsesCacheAndInvalidRestoreCannotPolluteIt) {
   RunContext context;
   Params params = loadParams();
   auto controller = makeController(103);
+  const ros::Time origin = atSeconds(400.0);
 
   const auto first = runWithWorldProfile(
-      *controller, params, context, context.valid_world);
+      *controller, params, context, context.valid_world, origin);
   ASSERT_TRUE(controller->getLastSolveOk());
   ASSERT_TRUE(first.velocity_cmd.allFinite());
   ASSERT_EQ(controller->getPlanGeneration(), 1u);
@@ -253,30 +351,33 @@ TEST(RouteAFallback, SolverRejectionUsesCacheAndInvalidRestoreCannotPolluteIt) {
   WorldProfile infeasible_world = context.valid_world;
   infeasible_world.row(9).setConstant(20.0);
   const auto rejected = runWithWorldProfile(
-      *controller, params, context, infeasible_world);
+      *controller, params, context, infeasible_world,
+      afterMilliseconds(origin, 20));
   ASSERT_FALSE(controller->getLastSolveOk());
   ASSERT_TRUE(controller->getLastCommandUsedFallback());
-  ASSERT_EQ(controller->getLastAppliedPlanStage(), 1);
+  ASSERT_EQ(controller->getLastAppliedPlanStage(), 0);
   ASSERT_EQ(controller->getPlanGeneration(), 1u);
-  expectCommandMatches(rejected, plan_p.col(1));
-  expectAnchorMatches(*controller, plan_p.col(1));
+  expectCommandMatches(rejected, plan_p.col(0));
+  expectAnchorMatches(*controller, plan_p.col(0));
 
   Inputs invalid_restore = plan_p;
   invalid_restore(0, 0) = std::numeric_limits<double>::quiet_NaN();
   controller->restoreSuccessfulPrediction(states_p, invalid_restore, 0.0);
-  EXPECT_EQ(controller->getLastAppliedPlanStage(), 1);
+  EXPECT_EQ(controller->getLastAppliedPlanStage(), 0);
   EXPECT_EQ(controller->getPlanGeneration(), 1u);
 
   const auto second_failure = runWithWorldProfile(
-      *controller, params, context, context.invalid_world);
+      *controller, params, context, context.invalid_world,
+      afterMilliseconds(origin, 100));
   ASSERT_FALSE(controller->getLastSolveOk());
-  ASSERT_EQ(controller->getLastAppliedPlanStage(), 2);
+  ASSERT_EQ(controller->getLastAppliedPlanStage(), 1);
   ASSERT_EQ(controller->getPlanGeneration(), 1u);
-  expectCommandMatches(second_failure, plan_p.col(2));
-  expectAnchorMatches(*controller, plan_p.col(2));
+  expectCommandMatches(second_failure, plan_p.col(1));
+  expectAnchorMatches(*controller, plan_p.col(1));
 
+  const ros::Time recovery_time = afterMilliseconds(origin, 200);
   const auto recovered = runWithWorldProfile(
-      *controller, params, context, context.valid_world);
+      *controller, params, context, context.valid_world, recovery_time);
   ASSERT_TRUE(controller->getLastSolveOk());
   ASSERT_FALSE(controller->getLastCommandUsedFallback());
   ASSERT_EQ(controller->getLastAppliedPlanStage(), 0);
@@ -285,12 +386,47 @@ TEST(RouteAFallback, SolverRejectionUsesCacheAndInvalidRestoreCannotPolluteIt) {
   const Inputs plan_q = controller->getPredictedInputs();
 
   const auto after_recovery_failure = runWithWorldProfile(
-      *controller, params, context, context.invalid_world);
+      *controller, params, context, context.invalid_world,
+      afterMilliseconds(recovery_time, 100));
   ASSERT_FALSE(controller->getLastSolveOk());
   ASSERT_EQ(controller->getLastAppliedPlanStage(), 1);
   ASSERT_EQ(controller->getPlanGeneration(), 2u);
   expectCommandMatches(after_recovery_failure, plan_q.col(1));
   expectAnchorMatches(*controller, plan_q.col(1));
+}
+
+TEST(RouteAFallback, ClockRollbackInvalidatesFutureDatedCache) {
+  RunContext context;
+  Params params = loadParams();
+  auto controller = makeController(105);
+  const ros::Time origin = atSeconds(500.0);
+
+  ASSERT_TRUE(runWithWorldProfile(
+      *controller, params, context, context.valid_world, origin)
+                  .velocity_cmd.allFinite());
+  ASSERT_EQ(controller->getPlanGeneration(), 1u);
+
+  const auto command = runWithWorldProfile(
+      *controller, params, context, context.invalid_world,
+      afterMilliseconds(origin, -1));
+  EXPECT_TRUE(controller->getLastCommandUsedFallback());
+  EXPECT_FALSE(controller->getLastFallbackHadPreviousValid());
+  EXPECT_EQ(controller->getLastAppliedPlanStage(), -1);
+  EXPECT_EQ(controller->getPlanGeneration(), 1u);
+  EXPECT_TRUE(command.velocity_cmd.isZero(0.0));
+
+  // A new finite solve at the reset epoch establishes a fresh cache.
+  const ros::Time reset_epoch = afterMilliseconds(origin, -1);
+  ASSERT_TRUE(runWithWorldProfile(
+      *controller, params, context, context.valid_world, reset_epoch)
+                  .velocity_cmd.allFinite());
+  EXPECT_EQ(controller->getPlanGeneration(), 2u);
+  const Inputs replacement = controller->getPredictedInputs();
+  const auto recovered_fallback = runWithWorldProfile(
+      *controller, params, context, context.invalid_world,
+      afterMilliseconds(reset_epoch, 100));
+  EXPECT_EQ(controller->getLastAppliedPlanStage(), 1);
+  expectCommandMatches(recovered_fallback, replacement.col(1));
 }
 
 }  // namespace

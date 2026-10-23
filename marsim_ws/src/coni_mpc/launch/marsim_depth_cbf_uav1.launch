@@ -67,7 +67,9 @@
       <param name="estimation_rate" value="10.0" />
       <param name="polar_resolution" value="0.2" />
       <param name="yaw_fov" value="360.0" />
-      <param name="vertical_fov" value="90.0" />
+      <!-- Livox MID-360: elevation -7..+52 deg, not symmetric +/-29.5. -->
+      <param name="vertical_fov" value="59.0" />
+      <param name="vertical_fov_center" value="22.5" />
       <param name="min_raylength" value="0.1" />
       <param name="livox_linestep" value="1.4" />
       <param name="curvature_limit" value="100.0" />
@@ -112,7 +114,9 @@
       <param name="estimation_rate" value="10.0" />
       <param name="polar_resolution" value="0.2" />
       <param name="yaw_fov" value="360.0" />
-      <param name="vertical_fov" value="90.0" />
+      <!-- Livox MID-360: elevation -7..+52 deg, not symmetric +/-29.5. -->
+      <param name="vertical_fov" value="59.0" />
+      <param name="vertical_fov_center" value="22.5" />
       <param name="min_raylength" value="0.1" />
       <param name="livox_linestep" value="1.4" />
       <param name="curvature_limit" value="100.0" />
@@ -157,7 +161,9 @@
       <param name="estimation_rate" value="10.0" />
       <param name="polar_resolution" value="0.2" />
       <param name="yaw_fov" value="360.0" />
-      <param name="vertical_fov" value="90.0" />
+      <!-- Livox MID-360: elevation -7..+52 deg, not symmetric +/-29.5. -->
+      <param name="vertical_fov" value="59.0" />
+      <param name="vertical_fov_center" value="22.5" />
       <param name="min_raylength" value="0.1" />
       <param name="livox_linestep" value="1.4" />
       <param name="curvature_limit" value="100.0" />

@@ -1,5 +1,5 @@
 # 修改后重启：roslaunch coni_mpc dsp_mpc_sim.launch
-scene: figure_eight       # figure_eight：8字+六根圆柱；circle：圆轨迹+方柱/L墙/移动障碍物
+scene: circle       # figure_eight：8字+六根圆柱；circle：圆轨迹+方柱/L墙/移动障碍物
 trajectory_laps: 2.0     # 圈数；不要用 sim_duration_sec 调速，它会压缩整条轨迹
 
 # v：UGV速度限值 [m/s]；w：UGV转弯角速度限值 [rad/s]。
@@ -9,5 +9,5 @@ scenes:
     v: 1.5
     w: 1.5
   circle:
-    v: 1.0
-    w: 1.0
+    v: 1
+    w: 1

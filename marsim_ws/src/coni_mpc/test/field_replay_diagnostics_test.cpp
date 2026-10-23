@@ -31,6 +31,9 @@ TEST(FieldReplay, LosslessRoundTripPreservesNonInertialSelectionAndConstraint) {
   cycle.prediction_dt = .1;
   cycle.field_stamp = snapshot.stamp_sec;
   fr::StageRecord stage;
+  stage.config.cutoff_width = .7;
+  stage.config.occupancy_full_confidence = .23;
+  stage.config.clear_field_value = 1.3;
   stage.stage = 0;
   stage.source_stage = 1;
   stage.extrapolation_time = .02;
@@ -61,6 +64,9 @@ TEST(FieldReplay, LosslessRoundTripPreservesNonInertialSelectionAndConstraint) {
   ASSERT_EQ(type, fr::RecordType::kCycle);
   ASSERT_EQ(restored_cycle.quad_id, 2);
   ASSERT_EQ(restored_cycle.stages.size(), 1u);
+  EXPECT_DOUBLE_EQ(restored_cycle.stages.front().config.cutoff_width, .7);
+  EXPECT_DOUBLE_EQ(restored_cycle.stages.front().config.occupancy_full_confidence, .23);
+  EXPECT_DOUBLE_EQ(restored_cycle.stages.front().config.clear_field_value, 1.3);
   fh::PruneStats restored_stats;
   const auto result = fr::replayStage(restored_snapshot, restored_cycle,
                                     restored_cycle.stages.front(), &restored_stats);
@@ -114,20 +120,21 @@ TEST(FieldReplay, PublishedVelocityAndExtrapolationDoNotMoveWorldGridCenter) {
   EXPECT_EQ((original.A - changed_diagnostic.A).norm(), 0.0);
 }
 
-TEST(FieldReplay, VersionOneHeaderIsRejected) {
-  std::stringstream bytes(std::ios::in | std::ios::out | std::ios::binary);
-  const std::uint64_t magic = fr::kFileMagic;
-  const std::uint32_t version = 1;
-  const std::uint32_t type = static_cast<std::uint32_t>(fr::RecordType::kCycle);
-  bytes.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
-  bytes.write(reinterpret_cast<const char*>(&version), sizeof(version));
-  bytes.write(reinterpret_cast<const char*>(&type), sizeof(type));
-  bytes.seekg(0);
-  fr::RecordType restored_type;
-  fr::SnapshotRecord snapshot;
-  fr::CycleRecord cycle;
-  EXPECT_FALSE(fr::readNext(bytes, restored_type, snapshot, cycle));
-  EXPECT_TRUE(bytes.fail());
+TEST(FieldReplay, LegacyVersionHeadersAreRejected) {
+  for (const std::uint32_t version : {1u, 2u}) {
+    std::stringstream bytes(std::ios::in | std::ios::out | std::ios::binary);
+    const std::uint64_t magic = fr::kFileMagic;
+    const std::uint32_t type = static_cast<std::uint32_t>(fr::RecordType::kCycle);
+    bytes.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
+    bytes.write(reinterpret_cast<const char*>(&version), sizeof(version));
+    bytes.write(reinterpret_cast<const char*>(&type), sizeof(type));
+    bytes.seekg(0);
+    fr::RecordType restored_type;
+    fr::SnapshotRecord snapshot;
+    fr::CycleRecord cycle;
+    EXPECT_FALSE(fr::readNext(bytes, restored_type, snapshot, cycle));
+    EXPECT_TRUE(bytes.fail());
+  }
 }
 
 TEST(FieldReplay, FixedWorldCenterNonInertialDerivativesMatchFiniteDifference) {

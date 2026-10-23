@@ -3,6 +3,7 @@ project(coni_mpc)
 
 find_package(catkin REQUIRED COMPONENTS
         roscpp
+        rosgraph_msgs
         std_msgs
         nav_msgs
         tf2_ros
@@ -45,7 +46,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 catkin_package(
         INCLUDE_DIRS include
-        CATKIN_DEPENDS message_runtime std_msgs geometry_msgs sensor_msgs
+        CATKIN_DEPENDS message_runtime std_msgs geometry_msgs sensor_msgs rosgraph_msgs
         #  LIBRARIES coni_mpc
         #  CATKIN_DEPENDS roscpp
         #  DEPENDS system_lib
@@ -276,6 +277,10 @@ target_link_libraries(qp_counterfactual_tool acado_mpc)
 
 if(CATKIN_ENABLE_TESTING)
         find_package(rostest REQUIRED)
+        catkin_add_gtest(path_visualization_test test/path_visualization_test.cpp)
+        if(TARGET path_visualization_test)
+                target_link_libraries(path_visualization_test ${catkin_LIBRARIES} gtest_main)
+        endif()
         add_rostest_gtest(field_snapshot_integration_test
                 test/field_snapshot_integration.test
                 test/field_snapshot_integration_test.cpp)

@@ -86,9 +86,9 @@ class MpcParams {
     tau_v_xy_(0.0),
     tau_v_z_(0.0),
     cbf_enabled_(false),
-    cbf_alpha1_(1.0),
-    cbf_alpha2_(1.0),
-    cbf_safety_margin_(0.0),
+    cbf_alpha1_(5.0),
+    cbf_alpha2_(5.0),
+    cbf_safety_margin_(0.05),
     cbf_slack_max_(std::numeric_limits<T>::infinity()),
     // p_B_C_(Eigen::Matrix<T, 3, 1>::Zero()),
     // q_B_C_(Eigen::Quaternion<T>(1.0, 0.0, 0.0, 0.0)),
@@ -122,7 +122,7 @@ class MpcParams {
     GET_PARAM(Q_p_xy);
     GET_PARAM(Q_p_z);
     GET_PARAM(Q_v);
-    acado_mpc_common::getParam("Q_yaw", Q_yaw, (T)20.0, pnh);
+    acado_mpc_common::getParam("Q_yaw", Q_yaw, (T)1.0, pnh);
     // quadrotor_common::getParam("Q_perception", Q_perception, (T)0.0, pnh);
 
     // Check whether all state costs are positive.
@@ -141,7 +141,7 @@ class MpcParams {
     T R_v_xy, R_v_z, R_yaw_rate;
     GET_PARAM(R_v_xy);
     GET_PARAM(R_v_z);
-    acado_mpc_common::getParam("R_yaw_rate", R_yaw_rate, (T)10.0, pnh);
+    acado_mpc_common::getParam("R_yaw_rate", R_yaw_rate, (T)3.0, pnh);
     T R_slack = (T)1.0;
     if (pnh.hasParam("cbf/R_slack")) {
       acado_mpc_common::getParam("cbf/R_slack", R_slack, (T)1.0, pnh);
@@ -184,7 +184,7 @@ class MpcParams {
     // Read command limits.
     GET_PARAM_(max_v_xy);
     GET_PARAM_(max_v_z);
-    acado_mpc_common::getParam("max_yaw_rate", max_yaw_rate_, (T)1.5, pnh);
+    acado_mpc_common::getParam("max_yaw_rate", max_yaw_rate_, (T)3.14, pnh);
     GET_PARAM_(a_max_xy);
     GET_PARAM_(a_max_z);
     GET_PARAM_(tau_v_xy);
@@ -226,9 +226,9 @@ class MpcParams {
     acado_mpc_common::getParam("cbf/use_field_hocbf", cbf_use_field_hocbf_,
                                false, pnh);
     // Read the two CBF poles independently from the node's YAML parameters.
-    acado_mpc_common::getParam("cbf/alpha1", cbf_alpha1_, (T)1.0, pnh);
-    acado_mpc_common::getParam("cbf/alpha2", cbf_alpha2_, (T)1.0, pnh);
-    acado_mpc_common::getParam("cbf/safety_margin", cbf_safety_margin_, (T)0.0, pnh);
+    acado_mpc_common::getParam("cbf/alpha1", cbf_alpha1_, (T)5.0, pnh);
+    acado_mpc_common::getParam("cbf/alpha2", cbf_alpha2_, (T)5.0, pnh);
+    acado_mpc_common::getParam("cbf/safety_margin", cbf_safety_margin_, (T)0.05, pnh);
     acado_mpc_common::getParam("cbf/slack_max", cbf_slack_max_, std::numeric_limits<T>::infinity(), pnh);
     // Keep cbf_slack_max == 0 as hard-CBF (slack fixed to zero).
     // Only negative or non-finite values are treated as unbounded.

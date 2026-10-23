@@ -100,6 +100,8 @@ int use_avia_pattern, use_vlp32_pattern, use_minicf_pattern,use_os128_pattern;
 int livox_linestep;
 double sensing_horizon, sensing_rate, estimation_rate, polar_resolution, yaw_fov, vertical_fov,\
          min_raylength, downsample_res, curvature_limit, hash_cubesize, collision_range;
+// Elevation center in the LiDAR frame (MID-360: (-7 + 52)/2 = 22.5 deg).
+double vertical_fov_center = 0.0;
 double x_size, y_size, z_size;
 double gl_xl, gl_yl, gl_zl;
 double resolution, inv_resolution;
@@ -418,6 +420,9 @@ void generate_ptclouds_by_pos(Eigen::Vector3d obs_pos, int obs_type, pcl::PointC
 
 void dynobjGenerate(const ros::TimerEvent &event)
 {
+  // /clock may advance while this callback builds clouds. Evaluate every
+  // obstacle and its output stamp at one epoch, including the next dt anchor.
+  const ros::Time obstacle_stamp = ros::Time::now();
   if (has_global_map == true && dynobj_enable == 1)
   {
     dynobj_points.clear();
@@ -426,7 +431,7 @@ void dynobjGenerate(const ros::TimerEvent &event)
     PointType temp_point;
     int dynpt_count = 0;
     local_sensing_node::DynamicObstacleStateArray dynamic_states;
-    dynamic_states.header.stamp = ros::Time::now();
+    dynamic_states.header.stamp = obstacle_stamp;
     dynamic_states.header.frame_id = "world";
     double fly_time;
     Eigen::Vector3d gravity_vec;
@@ -474,7 +479,7 @@ void dynobjGenerate(const ros::TimerEvent &event)
       dynobj_points_pcd.header = source.header;
       dynobj_points_pcd.header.frame_id = "map";
       pub_dyncloud.publish(dynobj_points_pcd);
-      source.header.stamp = ros::Time::now();
+      source.header.stamp = obstacle_stamp;
       source.header.frame_id = "map";
       pub_dynstate.publish(source);
       kdtree_dyn.setInputCloud(dynobj_points_vis.makeShared());
@@ -491,7 +496,7 @@ void dynobjGenerate(const ros::TimerEvent &event)
         case 0:
           {
           // constant speed mode
-          fly_time = (ros::Time::now() - dyn_start_time_vec[n]).toSec();
+          fly_time = (obstacle_stamp - dyn_start_time_vec[n]).toSec();
           dynobj_poss[n] = dynobj_poss[n] + fly_time * dynobj_dir[n];
           break;
           }
@@ -499,7 +504,7 @@ void dynobjGenerate(const ros::TimerEvent &event)
         case 1:
           {
           // constant gravity acceleration mode
-          fly_time = (ros::Time::now() - dyn_start_time_vec[n]).toSec();
+          fly_time = (obstacle_stamp - dyn_start_time_vec[n]).toSec();
           dynobj_dir[n] = dynobj_dir[n] + gravity_vec * fly_time;
           dynobj_poss[n] = dynobj_poss[n] + fly_time * dynobj_dir[n];
           break;
@@ -508,7 +513,7 @@ void dynobjGenerate(const ros::TimerEvent &event)
         case 2:
           {
           // random walk mode
-          fly_time = (ros::Time::now() - dyn_start_time_vec[n]).toSec();
+          fly_time = (obstacle_stamp - dyn_start_time_vec[n]).toSec();
           dyntemp_dir_polar(0) = rand() / double(RAND_MAX) * 3.1415926;
           dyntemp_dir_polar(1) = (rand() / double(RAND_MAX) - 0.5) * 3.1415926;
           dynobj_dir[n](0) = dyn_velocity * sin(dyntemp_dir_polar(1));
@@ -536,7 +541,7 @@ void dynobjGenerate(const ros::TimerEvent &event)
             dynobj_dir[n](2) = dyn_velocity * cos(dyntemp_dir_polar(1)) * cos(dyntemp_dir_polar(0));
             
           }
-      dyn_start_time_vec[n] = ros::Time::now();
+      dyn_start_time_vec[n] = obstacle_stamp;
       // generate point cloud of dynamic obstacle
       pcl::PointCloud<PointType> dynobj_cloud;
       vector<PointType> temp_dynobj_points;
@@ -999,7 +1004,8 @@ void rcvGlobalPointCloudCallBack(const sensor_msgs::PointCloud2 &pointcloud_map)
 inline void euc2polar(Eigen::Vector3d &euc_pt, float length, polar3D *polar_pt)
 {
   polar_pt->theta = round((atan2(euc_pt[1], euc_pt[0])) / M_PI * 180.0 / polar_resolution);
-  polar_pt->fi = round((atan2(euc_pt[2], euc_pt.head<2>().norm()) / M_PI * 180.0 / polar_resolution));
+  polar_pt->fi = round((atan2(euc_pt[2], euc_pt.head<2>().norm()) / M_PI * 180.0 -
+                       vertical_fov_center) / polar_resolution);
   polar_pt->r = length;
 }
 
@@ -1007,9 +1013,10 @@ inline void polar2euc(polar3D *polar_pt, Eigen::Vector3d &euc_pt)
 {
   // trans from polar coordinate to euclidean coordinate
   // theta_angle
-  euc_pt[2] = polar_pt->r * sin(polar_pt->fi * polar_resolution / 180.0 * M_PI);
-  euc_pt[1] = polar_pt->r * cos(polar_pt->fi * polar_resolution / 180.0 * M_PI) * sin(polar_pt->theta * polar_resolution / 180.0 * M_PI);
-  euc_pt[0] = polar_pt->r * cos(polar_pt->fi * polar_resolution / 180.0 * M_PI) * cos(polar_pt->theta * polar_resolution / 180.0 * M_PI);
+  const double elevation = (polar_pt->fi * polar_resolution + vertical_fov_center) / 180.0 * M_PI;
+  euc_pt[2] = polar_pt->r * sin(elevation);
+  euc_pt[1] = polar_pt->r * cos(elevation) * sin(polar_pt->theta * polar_resolution / 180.0 * M_PI);
+  euc_pt[0] = polar_pt->r * cos(elevation) * cos(polar_pt->theta * polar_resolution / 180.0 * M_PI);
 }
 
 int sense_count = 0;
@@ -1263,7 +1270,10 @@ void renderSensedPoints(const ros::TimerEvent &event)
     for (double t_i = t_start; t_i < t_start + t_duration; t_i = t_i + point_duration)
     {
       int x = (int(-round(-62050.63 * t_i + 3.11 * cos(314159.2 * t_i) * sin(628.318 * 2 * t_i))) % 360) / polar_resolution;
-      int y = round(25.5 * cos(20 * PI * t_i) + 4 * cos(2 * PI / 0.006 * t_i) * cos(10000 * PI * t_i) + 22.5) / polar_resolution + round(0.5 * polar_height);
+      const double elevation = 25.5 * cos(20 * PI * t_i) +
+          4 * cos(2 * PI / 0.006 * t_i) * cos(10000 * PI * t_i) + 22.5;
+      const int y = static_cast<int>(round((elevation - vertical_fov_center) /
+                                         polar_resolution) + round(0.5 * polar_height));
 
       // ROS_INFO("X = %d, Y = %d",x,y);
       if (x > (polar_width - 1))
@@ -1275,15 +1285,8 @@ void renderSensedPoints(const ros::TimerEvent &event)
         x = 0;
       }
 
-      if (y > (polar_height - 1))
-      {
-        y = (polar_height - 1);
-      }
-      else if (y < 0)
-      {
-        y = 0;
-      }
-
+      // Do not fold rays outside the configured grid onto its edge.
+      if (y < 0 || y >= polar_height) continue;
       pattern_matrix(x, y) = 2; // real pattern
     }
   }
@@ -1789,6 +1792,12 @@ void renderSensedPoints(const ros::TimerEvent &event)
     {
       for (int j = 0; j < polar_height; j++)
       {
+        // Remove the internal grid margin for every output branch. Angles
+        // are in the LiDAR frame, so body roll/pitch rotates the whole FOV.
+        const double elevation = (j - round(0.5 * polar_height)) *
+            polar_resolution + vertical_fov_center;
+        if (elevation < vertical_fov_center - vertical_fov * 0.5 ||
+            elevation > vertical_fov_center + vertical_fov * 0.5) continue;
         if (use_avia_pattern == 1 || use_vlp32_pattern || use_minicf_pattern)
         {
           if (pattern_matrix(i, j) == 0 || pattern_matrix(i, j) == 1)
@@ -2126,6 +2135,18 @@ int main(int argc, char **argv)
   nh.getParam("polar_resolution", polar_resolution);
   nh.getParam("yaw_fov", yaw_fov);
   nh.getParam("vertical_fov", vertical_fov);
+  nh.param("vertical_fov_center", vertical_fov_center, 0.0);
+  if (!std::isfinite(vertical_fov) || !std::isfinite(vertical_fov_center) ||
+      vertical_fov <= 0.0 || vertical_fov > 180.0 ||
+      vertical_fov_center - vertical_fov * 0.5 < -90.0 ||
+      vertical_fov_center + vertical_fov * 0.5 > 90.0)
+  {
+    ROS_FATAL("Invalid vertical FOV: width=%g center=%g degrees", vertical_fov, vertical_fov_center);
+    return 1;
+  }
+  ROS_INFO("LiDAR FOV: horizontal=%g deg, elevation=[%g, %g] deg", yaw_fov,
+           vertical_fov_center - vertical_fov * 0.5,
+           vertical_fov_center + vertical_fov * 0.5);
   nh.getParam("min_raylength", min_raylength);
   nh.getParam("downsample_res", downsample_res);
   nh.getParam("livox_linestep", livox_linestep);

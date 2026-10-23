@@ -32,6 +32,7 @@
 #include "coni_mpc/field_hocbf.h"
 #include "coni_mpc/voxel_online_data_pool.h"
 #include "coni_mpc/field_replay_diagnostics.h"
+#include "coni_mpc/path_visualization.h"
 
 #include <algorithm>
 #include <array>
@@ -91,6 +92,7 @@ class NumSimMpc final : public MpcBase
     std::size_t eligible_count = 0;
     std::size_t selected_count = 0;
     std::string selected_source_ids;
+    bool detailed_diagnostics_enabled = false;
     Eigen::Vector3d selected_relative_velocity_mean =
         Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN());
     double selected_relative_speed_max =
@@ -301,6 +303,10 @@ class NumSimMpc final : public MpcBase
   }
   void setCarOdom(const nav_msgs::Odometry &car_odom);
   void setQuadOdom(const nav_msgs::Odometry &quad_odom, int i);
+  // Set once at the boundary, before callbacks and all sequential MPC solves.
+  void setControlCycleStamp(const ros::Time& stamp) { control_cycle_stamp_ = stamp; }
+  void publishSensorOdometry(const nav_msgs::Odometry& odom);
+  bool hasFreshFieldSnapshot(const ros::Time& stamp);
   void fieldOccupancyCallback(const sensor_msgs::PointCloud2::ConstPtr& message);
   // Input positions and pos must be expressed in the same solver frame.
   // Pass a single prediction slice; do not mix DSP stage_index values.
@@ -391,6 +397,11 @@ class NumSimMpc final : public MpcBase
   const FieldHocbfDebugProfile& getLastFieldHocbfDebugProfile() const {
     return last_field_hocbf_debug_profile_;
   }
+  // The CSV owner opts in only after opening its actual output stream.
+  // Replay and explicit cbf/field_detailed_diagnostics opt in independently.
+  void setFieldDiagnosticsConsumerEnabled(bool enabled) {
+    field_diagnostics_consumer_enabled_ = enabled;
+  }
   // Appends the raw snapshot once and one final-applied cycle record. The
   // caller owns and serializes access to the shared stream.
   bool writeFieldReplayDiagnostics(std::ostream& out, std::size_t step_idx,
@@ -403,6 +414,7 @@ class NumSimMpc final : public MpcBase
   MetricsSummary getMetrics() const;
  
  private: 
+  void updatePathVisualizations(bool publish_markers);
   static std::mutex shared_state_mutex_;
   static std::vector<Eigen::Vector3d> shared_positions_;
   static std::vector<Eigen::Vector3d> shared_velocities_;
@@ -445,22 +457,29 @@ class NumSimMpc final : public MpcBase
    std::vector <ros::Publisher> relative_est_pub_;
   nav_msgs::Path car_path_;
   nav_msgs::Path quad_path_;
+  BoundedPathHistory car_path_history_;
+  BoundedPathHistory quad_path_history_;
+  PathVisualizationRate path_visualization_rate_;
   ros::Publisher quad_radius_marker_pub_;
   struct FieldSnapshot {
     std::uint64_t snapshot_id = 0;
     ros::Time stamp;
     std::string frame_id;
     field_hocbf::Points points;
+    std::array<std::vector<std::size_t>, acado_mpc::kSamples + 1> stage_point_indices;
     std::uint32_t last_occupied_stage = 0;
   };
   ros::Subscriber field_occupancy_subscriber_;
   std::mutex field_snapshot_mutex_;
+  ros::Time control_cycle_stamp_;
   std::shared_ptr<const FieldSnapshot> field_snapshot_;
   std::string field_input_status_ = "missing";
   std::uint64_t field_snapshot_counter_ = 0;
   std::uint64_t last_written_field_snapshot_id_ =
       std::numeric_limits<std::uint64_t>::max();
   bool field_replay_diagnostics_enabled_ = false;
+  bool field_detailed_diagnostics_requested_ = false;
+  bool field_diagnostics_consumer_enabled_ = false;
   std::shared_ptr<const FieldSnapshot> last_field_replay_snapshot_;
   field_replay::CycleRecord last_field_replay_cycle_;
   bool last_field_replay_cycle_valid_ = false;

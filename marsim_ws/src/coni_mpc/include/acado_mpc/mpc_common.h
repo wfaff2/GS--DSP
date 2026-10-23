@@ -163,16 +163,27 @@ struct ControlCommand
   double slack;
 };
 
+// Subscribe on the first read; subsequent control cycles use ROS's local
+// cache, including missing keys. Parameter-server updates refresh that cache.
+// Keep the caller's fallback on missing/deleted keys or incompatible types.
+template<typename T>
+bool getCachedParam(const std::string& name, T& parameter, const T& default_value,
+                    const ros::NodeHandle& pnh)
+{
+  if (pnh.getParamCached(name, parameter)) return true;
+  parameter = default_value;
+  return false;
+}
 
 /**
  * @brief Get the Param object
- * 
+ *
  * @tparam T parameter type
  * @param name parameter name
  * @param parameter parameter value
  * @param pnh private node handler
- * @return true 
- * @return false 
+ * @return true
+ * @return false
  */
 template<typename T>
 bool getParam(const std::string& name, T& parameter,

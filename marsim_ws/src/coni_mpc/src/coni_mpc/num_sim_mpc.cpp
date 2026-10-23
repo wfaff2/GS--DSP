@@ -249,7 +249,7 @@ NumSimMpc::NumSimMpc(const ros::NodeHandle &nh, const ros::NodeHandle &pnh,int i
     has_explicit_noninertial_stage_profiles_(false),
     has_car_beta_non_stage_profile_(false),
     car_trajectory_window_(),
-    uav_radius_(0.25),
+    uav_radius_(0.15),
     last_obstacles_(),
     cbf_use_in_sim_(true),
     frame_mode_(FrameMode::kNonInertial),
@@ -394,14 +394,25 @@ relative_est_pub_[quad_id] =
   quad_path_.header.frame_id = acado_mpc_common::worldFrameId();
   car_path_.header.frame_id = acado_mpc_common::worldFrameId();
   quad_path_.poses.reserve(kMaxPathLength);
+  int path_max_points = static_cast<int>(kMaxPathLength);
+  double path_publish_rate_hz = 10.0;
+  pnh_.param("visualization/path_max_points", path_max_points, path_max_points);
+  pnh_.param("visualization/path_publish_rate_hz", path_publish_rate_hz, 10.0);
+  if (path_max_points < 1) path_max_points = static_cast<int>(kMaxPathLength);
+  if (!std::isfinite(path_publish_rate_hz) || path_publish_rate_hz <= 0.0) {
+    path_publish_rate_hz = 10.0;
+  }
+  car_path_history_.setCapacity(static_cast<std::size_t>(path_max_points));
+  quad_path_history_.setCapacity(static_cast<std::size_t>(path_max_points));
+  path_visualization_rate_.setPeriod(1.0 / path_publish_rate_hz);
 
-  pnh_.param("uav_radius", uav_radius_, 0.25);
+  pnh_.param("uav_radius", uav_radius_, 0.15);
   if (uav_radius_ < 0.0) {
     ROS_WARN("[%s] Parameter uav_radius should be non-negative. Using zero.",
              pnh_.getNamespace().c_str());
     uav_radius_ = 0.0;
   }
-  pnh_.param("car_radius", car_radius_, 0.3);
+  pnh_.param("car_radius", car_radius_, 0.15);
   if (car_radius_ < 0.0) {
     ROS_WARN("[%s] Parameter car_radius should be non-negative. Using zero.",
              pnh_.getNamespace().c_str());
@@ -448,9 +459,13 @@ relative_est_pub_[quad_id] =
   }
   pnh_.param("cbf/field_replay_diagnostics",
              field_replay_diagnostics_enabled_, false);
+  pnh_.param("cbf/field_detailed_diagnostics",
+             field_detailed_diagnostics_requested_, false);
   pnh_.param("cbf/field_timeout", field_timeout_, field_timeout_);
-  field_hocbf_config_.gamma1 = mpc_params_.cbf_alpha1_;
-  field_hocbf_config_.gamma2 = mpc_params_.cbf_alpha2_;
+  acado_mpc_common::getCachedParam("cbf/field_gamma1", field_hocbf_config_.gamma1,
+                                  mpc_params_.cbf_alpha1_, pnh_);
+  acado_mpc_common::getCachedParam("cbf/field_gamma2", field_hocbf_config_.gamma2,
+                                  mpc_params_.cbf_alpha2_, pnh_);
   pnh_.param("cbf/field_sigma", field_hocbf_config_.sigma,
              field_hocbf_config_.sigma);
   pnh_.param("cbf/field_distance_margin", field_hocbf_config_.distance_margin,
@@ -463,6 +478,13 @@ relative_est_pub_[quad_id] =
              field_hocbf_config_.occupancy_alpha);
   pnh_.param("cbf/field_prune_radius", field_hocbf_config_.prune_radius,
              field_hocbf_config_.prune_radius);
+  pnh_.param("cbf/field_cutoff_width", field_hocbf_config_.cutoff_width,
+             field_hocbf_config_.cutoff_width);
+  pnh_.param("cbf/field_occupancy_full_confidence",
+             field_hocbf_config_.occupancy_full_confidence,
+             field_hocbf_config_.occupancy_full_confidence);
+  pnh_.param("cbf/field_clear_value", field_hocbf_config_.clear_field_value,
+             field_hocbf_config_.clear_field_value);
   field_hocbf_config_.uav_radius = uav_radius_;
   if (!std::isfinite(field_timeout_) || field_timeout_ <= 0.0 ||
       !field_hocbf::validConfig(field_hocbf_config_)) {
@@ -496,6 +518,9 @@ relative_est_pub_[quad_id] =
                     << " alpha1=" << field_hocbf_config_.gamma1
                     << " alpha2=" << field_hocbf_config_.gamma2
                     << " prune_radius=" << field_hocbf_config_.prune_radius
+                    << " geometry=3d cutoff_width=" << field_hocbf_config_.cutoff_width
+                    << " full_confidence=" << field_hocbf_config_.occupancy_full_confidence
+                    << " clear_value=" << field_hocbf_config_.clear_field_value
                     << " timeout=" << field_timeout_);
   }
   pnh_.param("estimation_noise/position_std",
@@ -528,6 +553,13 @@ relative_est_pub_[quad_id] =
   obstacle_hysteresis_hold_cycles_ = std::max(0, obstacle_hysteresis_hold_cycles_);
   obstacle_hysteresis_min_risk_improvement_ =
       std::max(0.0, obstacle_hysteresis_min_risk_improvement_);
+  // Pay the initial parameter subscription cost before the control loop.
+  // Even absent optional keys are cached and can be added at runtime.
+  XmlRpc::XmlRpcValue cached_parameter;
+  for (const char* key : {"cbf/preview_margin", "cbf/preview_steps", "cbf/enabled",
+                          "debug/force_legacy_noninertial_constant_profile"}) {
+    pnh_.getParamCached(key, cached_parameter);
+  }
   mpc_controller_.setWarmStart(warm_start_);
   ROS_INFO_STREAM("[" << pnh_.getNamespace() << "] frame_mode_effective="
                   << frame_mode_effective_
@@ -588,6 +620,19 @@ void NumSimMpc::setCarOdom(const nav_msgs::Odometry &car_odom)
                       car_odom.twist.twist.angular.z);
 }
 
+void NumSimMpc::publishSensorOdometry(const nav_msgs::Odometry& odom) {
+  if (quad_id >= 0 && static_cast<std::size_t>(quad_id) < quad_odom_pub_.size()) {
+    quad_odom_pub_[quad_id].publish(odom);
+  }
+}
+
+bool NumSimMpc::hasFreshFieldSnapshot(const ros::Time& stamp) {
+  std::lock_guard<std::mutex> lock(field_snapshot_mutex_);
+  if (!field_snapshot_ || field_input_status_ == "invalid") return false;
+  const double age = (stamp - field_snapshot_->stamp).toSec();
+  return age >= -1e-6 && age <= field_timeout_;
+}
+
 void NumSimMpc::fieldOccupancyCallback(
     const sensor_msgs::PointCloud2::ConstPtr& message) {
   if (!message) return;
@@ -599,6 +644,12 @@ void NumSimMpc::fieldOccupancyCallback(
     ROS_WARN_STREAM_THROTTLE(1.0, "[MPC UAV " << quad_id
         << "] rejecting field cloud with zero timestamp");
     mark_invalid(); return;
+  }
+  if (!control_cycle_stamp_.isZero() &&
+      message->header.stamp > control_cycle_stamp_ + ros::Duration(1e-6)) {
+    ROS_WARN_STREAM_THROTTLE(1.0, "[MPC UAV " << quad_id
+        << "] ignoring future-stamped Field cloud; retaining previous snapshot");
+    return;
   }
   std::string frame = message->header.frame_id;
   if (!frame.empty() && frame.front() == '/') frame.erase(frame.begin());
@@ -742,6 +793,7 @@ void NumSimMpc::fieldOccupancyCallback(
     point.stage_index = static_cast<std::uint32_t>(rounded_stage);
     point.source_id = static_cast<std::uint64_t>(i);
     snapshot->points.push_back(point);
+    snapshot->stage_point_indices[point.stage_index].push_back(snapshot->points.size() - 1);
     snapshot->last_occupied_stage =
         std::max(snapshot->last_occupied_stage, point.stage_index);
   }
@@ -805,6 +857,67 @@ void NumSimMpc::setStaticObstacles(const ObstacleVector& obstacles)
   shared_static_obstacles_ = obstacles;
 }
 
+void NumSimMpc::updatePathVisualizations(bool publish_markers)
+{
+  geometry_msgs::PoseStamped car_pose, quad_pose;
+  car_pose.header = car_odom_.header;
+  car_pose.pose = car_odom_.pose.pose;
+  quad_pose.header = quad_odom_.header;
+  quad_pose.pose = quad_odom_.pose.pose;
+  car_path_history_.append(car_pose);
+  quad_path_history_.append(quad_pose);
+
+  const std::size_t qidx = static_cast<std::size_t>(std::max(0, quad_id));
+  const bool car_path_needed = car_path_pub_.getNumSubscribers() > 0;
+  const bool quad_path_needed = qidx < quad_path_pub_.size() &&
+      quad_path_pub_[qidx].getNumSubscribers() > 0;
+  const bool car_marker_needed = publish_markers &&
+      car_path_marker_pub_.getNumSubscribers() > 0;
+  const bool quad_marker_needed = publish_markers &&
+      qidx < quad_path_marker_pub_.size() &&
+      quad_path_marker_pub_[qidx].getNumSubscribers() > 0;
+  if (!(car_path_needed || quad_path_needed || car_marker_needed || quad_marker_needed) ||
+      !path_visualization_rate_.due(ros::SteadyTime::now().toSec())) return;
+
+  if (car_path_needed) {
+    car_path_.header.stamp = car_pose.header.stamp;
+    car_path_history_.fill(car_path_);
+    car_path_pub_.publish(car_path_);
+  }
+  if (quad_path_needed) {
+    quad_path_.header.stamp = quad_pose.header.stamp;
+    quad_path_history_.fill(quad_path_);
+    quad_path_pub_[qidx].publish(quad_path_);
+  }
+  const auto publish_strip = [&](const BoundedPathHistory& history,
+                                  const std_msgs::Header& header,
+                                  const char* ns, int id, double width,
+                                  const std_msgs::ColorRGBA& color,
+                                  const ros::Publisher& publisher) {
+    visualization_msgs::Marker marker;
+    marker.header = header;
+    marker.header.frame_id = acado_mpc_common::worldFrameId();
+    marker.ns = ns;
+    marker.id = id;
+    marker.type = visualization_msgs::Marker::LINE_STRIP;
+    marker.action = visualization_msgs::Marker::ADD;
+    marker.pose.orientation.w = 1.0;
+    marker.scale.x = width;
+    marker.color = color;
+    marker.points.reserve(history.poses().size());
+    for (const auto& pose : history.poses()) marker.points.push_back(pose.pose.position);
+    publisher.publish(marker);
+  };
+  if (car_marker_needed) {
+    publish_strip(car_path_history_, car_pose.header, "car_path_marker", 0, 0.04,
+                  makeColor(0.0, 0.0, 0.0, 1.0), car_path_marker_pub_);
+  }
+  if (quad_marker_needed) {
+    publish_strip(quad_path_history_, quad_pose.header, "quad_path_marker", quad_id,
+                  0.03, quadPathColor(quad_id, 1.0), quad_path_marker_pub_[qidx]);
+  }
+}
+
 void NumSimMpc::runReactiveBaselineStep()
 {
   last_solver_obstacle_profile_snapshot_ = SolverObstacleProfileSnapshot();
@@ -823,12 +936,6 @@ void NumSimMpc::runReactiveBaselineStep()
                      estimation_imu_non_noise_std_);
 
   car_odom_pub_.publish(car_odom_);
-  geometry_msgs::PoseStamped car_pose_stamped;
-  car_pose_stamped.header = car_odom_.header;
-  car_pose_stamped.pose = car_odom_.pose.pose;
-  car_path_.header.stamp = car_pose_stamped.header.stamp;
-  car_path_.poses.push_back(car_pose_stamped);
-  car_path_pub_.publish(car_path_);
 
   const std::size_t qidx = static_cast<std::size_t>(std::max(0, quad_id));
   if (qidx < relative_est_pub_.size()) {
@@ -837,14 +944,7 @@ void NumSimMpc::runReactiveBaselineStep()
   if (qidx < quad_odom_pub_.size()) {
     quad_odom_pub_[qidx].publish(quad_odom_);
   }
-  geometry_msgs::PoseStamped quad_pose_stamped;
-  quad_pose_stamped.header = quad_odom_.header;
-  quad_pose_stamped.pose = quad_odom_.pose.pose;
-  quad_path_.header.stamp = quad_pose_stamped.header.stamp;
-  quad_path_.poses.push_back(quad_pose_stamped);
-  if (qidx < quad_path_pub_.size()) {
-    quad_path_pub_[qidx].publish(quad_path_);
-  }
+  updatePathVisualizations(false);
 
   mpc_params_.cbf_obstacles_.clear();
   mpc_params_.cbf_obstacle_profiles_.clear();
@@ -1282,44 +1382,6 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
                      estimation_imu_non_noise_std_);
 
   car_odom_pub_.publish(car_odom_);
-  // Append car path (non-fading)
-  geometry_msgs::PoseStamped car_pose_stamped;
-  car_pose_stamped.header = car_odom_.header;
-  car_pose_stamped.pose = car_odom_.pose.pose;
-  car_path_.header.stamp = car_pose_stamped.header.stamp;
-  car_path_.poses.push_back(car_pose_stamped);
-  car_path_pub_.publish(car_path_);
-  if (!car_path_.poses.empty()) {
-    visualization_msgs::Marker car_path_marker;
-    car_path_marker.header = car_odom_.header;
-    car_path_marker.header.frame_id = acado_mpc_common::worldFrameId();
-    car_path_marker.ns = "car_path_marker";
-    car_path_marker.id = 0;
-    car_path_marker.type = visualization_msgs::Marker::LINE_STRIP;
-    car_path_marker.action = visualization_msgs::Marker::ADD;
-    car_path_marker.pose.orientation.w = 1.0;
-    car_path_marker.scale.x = 0.04;
-    const size_t n_car = car_path_.poses.size();
-    car_path_marker.points.reserve(n_car);
-    car_path_marker.colors.reserve(n_car);
-    for (size_t idx = 0; idx < n_car; ++idx) {
-      const auto& pose = car_path_.poses[idx];
-      geometry_msgs::Point p;
-      p.x = pose.pose.position.x;
-      p.y = pose.pose.position.y;
-      p.z = pose.pose.position.z;
-      car_path_marker.points.push_back(p);
-      std_msgs::ColorRGBA c;
-      // Car path: solid black
-      c.r = 0.0;
-      c.g = 0.0;
-      c.b = 0.0;
-      c.a = 1.0;
-      car_path_marker.colors.push_back(c);
-    }
-    car_path_marker.lifetime = ros::Duration(0.0);
-    car_path_marker_pub_.publish(car_path_marker);
-  }
   constexpr double kJackalChassisLengthM = 0.420;
   constexpr double kJackalWheelbaseM = 0.262;
   constexpr double kJackalTrackM = 0.37559;
@@ -1384,38 +1446,7 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
    */
    quad_odom_pub_[quad_id].publish(quad_odom_);
   (void)quad_odom_;
-  geometry_msgs::PoseStamped quad_pose_stamped;
-  quad_pose_stamped.header = quad_odom_.header;
-  quad_pose_stamped.pose = quad_odom_.pose.pose;
-  quad_path_.header.stamp = quad_pose_stamped.header.stamp;
-  quad_path_.poses.push_back(quad_pose_stamped);
-  // 不再裁剪路径，保持完整轨迹
-  quad_path_pub_[quad_id].publish(quad_path_);
-  // Publish a colored line strip marker matching the corresponding UAV body.
-  if (!quad_path_.poses.empty()) {
-    visualization_msgs::Marker path_marker;
-    path_marker.header = quad_odom_.header;
-    path_marker.header.frame_id = acado_mpc_common::worldFrameId();
-    path_marker.ns = "quad_path_marker";
-    path_marker.id = quad_id;
-    path_marker.type = visualization_msgs::Marker::LINE_STRIP;
-    path_marker.action = visualization_msgs::Marker::ADD;
-    path_marker.pose.orientation.w = 1.0;
-    path_marker.scale.x = 0.03;
-    const size_t n = quad_path_.poses.size();
-    path_marker.points.reserve(n);
-    path_marker.colors.reserve(n);
-    for (size_t idx = 0; idx < n; ++idx) {
-      const auto& pose = quad_path_.poses[idx];
-      geometry_msgs::Point p;
-      p.x = pose.pose.position.x;
-      p.y = pose.pose.position.y;
-      p.z = pose.pose.position.z;
-      path_marker.points.push_back(p);
-      path_marker.colors.push_back(quadPathColor(quad_id, 1.0));
-    }
-    quad_path_marker_pub_[quad_id].publish(path_marker);
-  }
+  updatePathVisualizations(true);
 
   visualization_msgs::Marker radius_marker;
   radius_marker.header = quad_odom_.header;
@@ -1526,11 +1557,11 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
       }
     }
     ObstacleVector world_metric_obstacles;
-    double preview_margin = 0.6;
-    pnh_.param("cbf/preview_margin", preview_margin, 0.6);
+    double preview_margin = 0.0;
+    acado_mpc_common::getCachedParam("cbf/preview_margin", preview_margin, 0.0, pnh_);
     preview_margin = std::max(0.0, preview_margin);
-    int preview_steps = 3;
-    pnh_.param("cbf/preview_steps", preview_steps, 3);
+    int preview_steps = 5;
+    acado_mpc_common::getCachedParam("cbf/preview_steps", preview_steps, 5, pnh_);
     preview_steps = std::max(0, preview_steps);
 
     const std::size_t horizon_steps =
@@ -2004,7 +2035,8 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
 
   // Effective CBF switch in simulation: require both static config and sim toggle.
   bool cbf_enabled_param = mpc_params_.cbf_enabled_;
-  pnh_.param("cbf/enabled", cbf_enabled_param, cbf_enabled_param);
+  acado_mpc_common::getCachedParam("cbf/enabled", cbf_enabled_param,
+                                  mpc_params_.cbf_enabled_, pnh_);
   const bool enable_cbf = cbf_enabled_param && cbf_use_in_sim_;
   const bool cbf_active = enable_cbf && !mpc_obstacles.empty();
   const std::string effective_active_obstacle_key =
@@ -2115,7 +2147,8 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
     command_context_diagnostics_.estimate_position = state_estimate_.position;
     command_context_diagnostics_.omega_profile0 = omega_non_profile.col(0);
   }
-  const ros::Time field_now = ros::Time::now();
+  const ros::Time field_now = control_cycle_stamp_.isZero()
+      ? ros::Time::now() : control_cycle_stamp_;
   const double field_dt = std::max(1.0e-3, mpc_controller_.getPredictionDt());
   const double field_age = field_snapshot && !field_snapshot->stamp.isZero()
       ? std::max(0.0, (field_now - field_snapshot->stamp).toSec()) : 0.0;
@@ -2129,7 +2162,17 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
        (field_stale ? "stale" : field_input_status));
   using FieldNominalPrediction =
       Eigen::Matrix<double, acado_mpc::kStateSize, acado_mpc::kSamples + 1>;
+  // Freeze one locally cached parameter pair for the entire horizon and any
+  // optional refinement in this control cycle, rather than querying per stage.
+  if (field_available) {
+    acado_mpc_common::getCachedParam("cbf/field_gamma1", field_hocbf_config_.gamma1,
+                                    mpc_params_.cbf_alpha1_, pnh_);
+    acado_mpc_common::getCachedParam("cbf/field_gamma2", field_hocbf_config_.gamma2,
+                                    mpc_params_.cbf_alpha2_, pnh_);
+  }
   FieldHocbfDebugProfile field_debug_profile{};
+  const bool detailed_field_diagnostics = field_detailed_diagnostics_requested_ ||
+      field_diagnostics_consumer_enabled_ || field_replay_diagnostics_enabled_;
   std::vector<field_replay::StageRecord> field_replay_stages;
 #if CONI_MPC_EXTERNAL_FIELD_MICRO_ITERATIONS
   FieldHocbfDebugProfile refined_field_debug_profile{};
@@ -2218,10 +2261,11 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
           }
 
           field_hocbf::KinematicPoints candidates;
-          for (const auto& point : field_snapshot->points) {
-            if (point.stage_index != static_cast<std::uint32_t>(source_stage)) {
-              continue;
-            }
+          const auto& slice_indices =
+              field_snapshot->stage_point_indices[static_cast<std::size_t>(source_stage)];
+          candidates.reserve(slice_indices.size());
+          for (const auto point_index : slice_indices) {
+            const auto& point = field_snapshot->points[point_index];
             const Eigen::Vector3d world_position = point.position_world;
             field_hocbf::KinematicPoint transformed;
             transformed.occupancy = point.occupancy;
@@ -2246,21 +2290,20 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
             }
             candidates.push_back(transformed);
           }
-          field_hocbf_config_.gamma1 = mpc_params_.cbf_alpha1_;
-          field_hocbf_config_.gamma2 = mpc_params_.cbf_alpha2_;
           field_hocbf::PruneStats prune_stats;
           const auto selected = field_hocbf::prune(
               candidates, nominal_position, field_hocbf_config_, &prune_stats);
           Eigen::Vector3d selected_relative_velocity_sum =
               Eigen::Vector3d::Zero();
           double selected_relative_speed_max = 0.0;
-          for (const auto& point : selected) {
-            const Eigen::Vector3d relative_velocity =
-                nominal_velocity - point.published_velocity_diagnostic;
-            selected_relative_velocity_sum += relative_velocity;
-            selected_relative_speed_max = std::max(
-                selected_relative_speed_max,
-                relative_velocity.norm());
+          if (detailed_field_diagnostics) {
+            for (const auto& point : selected) {
+              const Eigen::Vector3d relative_velocity =
+                  nominal_velocity - point.published_velocity_diagnostic;
+              selected_relative_velocity_sum += relative_velocity;
+              selected_relative_speed_max = std::max(
+                  selected_relative_speed_max, relative_velocity.norm());
+            }
           }
           Eigen::Vector3d nominal_a_non = Eigen::Vector3d::Zero();
           if (!isInertialFrame()) {
@@ -2313,7 +2356,8 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
             debug.candidate_count = prune_stats.candidate_count;
             debug.eligible_count = prune_stats.eligible_count;
             debug.selected_count = prune_stats.selected_count;
-            {
+            debug.detailed_diagnostics_enabled = detailed_field_diagnostics;
+            if (detailed_field_diagnostics) {
               std::ostringstream selected_ids;
               for (std::size_t i = 0; i < prune_stats.selected_source_ids.size(); ++i) {
                 if (i != 0) selected_ids << ';';
@@ -2321,7 +2365,7 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
               }
               debug.selected_source_ids = selected_ids.str();
             }
-            if (!selected.empty()) {
+            if (detailed_field_diagnostics && !selected.empty()) {
               debug.selected_relative_velocity_mean =
                   selected_relative_velocity_sum /
                   static_cast<double>(selected.size());
@@ -2436,8 +2480,9 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
     }
   }
   bool debug_force_legacy_noninertial_constant_profile = false;
-  pnh_.param("debug/force_legacy_noninertial_constant_profile",
-             debug_force_legacy_noninertial_constant_profile, false);
+  acado_mpc_common::getCachedParam("debug/force_legacy_noninertial_constant_profile",
+                                  debug_force_legacy_noninertial_constant_profile,
+                                  false, pnh_);
   const NonInertialProfile* omega_profile_arg =
       debug_force_legacy_noninertial_constant_profile ? nullptr
                                                       : &omega_non_profile;
@@ -2461,7 +2506,7 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
       state_estimate_, reference_window_, mpc_params_, world_q_model,
       world_p_model, omega_profile_arg, beta_profile_arg,
       a_car_profile_arg, &current_world_frame_velocity,
-      &world_velocity_frame_profile);
+      &world_velocity_frame_profile, &field_now);
 #if CONI_MPC_EXTERNAL_FIELD_MICRO_ITERATIONS
   // The OsqpEigen field controller performs two outer solves and restores
   // the anchor before the refinement solve.
@@ -2490,7 +2535,7 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
         state_estimate_, reference_window_, mpc_params_, world_q_model,
         world_p_model, omega_profile_arg, beta_profile_arg,
         a_car_profile_arg, &current_world_frame_velocity,
-        &world_velocity_frame_profile);
+        &world_velocity_frame_profile, &field_now);
     if (mpc_controller_.getLastSolveOk()) {
       command = refined_command;
       field_debug_profile = refined_field_debug_profile;
@@ -2858,7 +2903,9 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
       predicted_obstacle_min_clearance;
   current_step_debug.feedback_time_ms = feedback_time_ms;
   current_step_debug.preparation_time_ms = preparation_time_ms;
-  current_step_debug.core_time_ms = feedback_time_ms + preparation_time_ms;
+  // The controller's feedback timer already encloses QP preparation and solve.
+  // Preparation is a breakdown metric, so adding it again double-counts it.
+  current_step_debug.core_time_ms = feedback_time_ms;
   current_step_debug.tracking_error = metrics_step_tracking_error_.back();
   current_step_debug.diag_min_h_any = step_diag_min_h_any;
   current_step_debug.diag_min_cbf_any = step_diag_min_cbf_any;

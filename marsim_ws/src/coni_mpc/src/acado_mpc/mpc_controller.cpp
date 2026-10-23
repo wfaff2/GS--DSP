@@ -134,6 +134,10 @@ MpcController<T>::MpcController(
   }
   setNewParams(params_);
 
+  bool debug_check_noninertial_profile_col0 = false;
+  acado_mpc_common::getCachedParam("debug/check_noninertial_profile_col0",
+                                  debug_check_noninertial_profile_col0, false, pnh_);
+
   solve_from_scratch_ = true;
   preparationThread();
 }
@@ -212,9 +216,8 @@ acado_mpc_common::ControlCommand MpcController<T>::commandFromInput(
 }
 
 template<typename T>
-bool MpcController<T>::cacheSuccessfulPlan(
-    const Eigen::Ref<const Eigen::Matrix<T, kInputSize, kSamples>>& inputs,
-    bool increment_generation) {
+bool MpcController<T>::isValidPlan(
+    const Eigen::Ref<const Eigen::Matrix<T, kInputSize, kSamples>>& inputs) const {
   if (!inputs.allFinite()) return false;
   for (int stage = 0; stage < kSamples; ++stage) {
     const auto command = commandFromInput(inputs.col(stage));
@@ -223,10 +226,18 @@ bool MpcController<T>::cacheSuccessfulPlan(
       return false;
     }
   }
+  return true;
+}
 
+template<typename T>
+bool MpcController<T>::cacheSuccessfulPlan(
+    const Eigen::Ref<const Eigen::Matrix<T, kInputSize, kSamples>>& inputs,
+    const ros::Time& evaluation_time,
+    bool increment_generation) {
+  if (!isValidPlan(inputs)) return false;
   last_successful_inputs_ = inputs;
   has_successful_plan_ = true;
-  fallback_plan_cursor_ = std::min(1, kSamples - 1);
+  successful_plan_origin_ = evaluation_time;
   last_applied_plan_stage_ = 0;
   last_fallback_plan_exhausted_ = false;
   if (increment_generation) ++plan_generation_;
@@ -235,20 +246,43 @@ bool MpcController<T>::cacheSuccessfulPlan(
 
 template<typename T>
 acado_mpc_common::ControlCommand MpcController<T>::makeFailureFallback(
-    const char* reason) {
+    const char* reason, const ros::Time& evaluation_time) {
   last_command_used_fallback_ = true;
   last_fallback_had_previous_valid_ = has_successful_plan_;
   if (has_successful_plan_) {
-    const int selected_stage = std::max(
-        0, std::min(fallback_plan_cursor_, kSamples - 1));
+    if (evaluation_time < successful_plan_origin_) {
+      ROS_ERROR_STREAM(
+          "[MpcController] evaluation clock moved backwards from cached-plan "
+          "origin " << successful_plan_origin_ << " to " << evaluation_time
+                     << "; invalidating future-dated fallback plan");
+      has_successful_plan_ = false;
+      last_fallback_had_previous_valid_ = false;
+    }
+  }
+  if (has_successful_plan_) {
+    const double prediction_dt = getPredictionDt();
+    const double plan_age =
+        (evaluation_time - successful_plan_origin_).toSec();
+    int selected_stage = 0;
+    if (prediction_dt > 0.0 && std::isfinite(prediction_dt)) {
+      const double elapsed_stage =
+          std::floor(plan_age / prediction_dt + 1.0e-12);
+      if (elapsed_stage >= static_cast<double>(kSamples - 1)) {
+        selected_stage = kSamples - 1;
+      } else if (elapsed_stage > 0.0) {
+        selected_stage = static_cast<int>(elapsed_stage);
+      }
+    }
     Eigen::Matrix<T, kInputSize, 1> applied_input;
     const auto command = commandFromInput(
         last_successful_inputs_.col(selected_stage), &applied_input);
     latest_slack_ = static_cast<T>(command.slack);
     mpc_wrapper_.setPreviousInput(applied_input);
     last_applied_plan_stage_ = selected_stage;
+    // Once the final finite-horizon segment is reached, retain the existing
+    // terminal-command hold and expose it through this flag. This hold is
+    // not a certified terminal safety policy.
     last_fallback_plan_exhausted_ = selected_stage == kSamples - 1;
-    if (fallback_plan_cursor_ < kSamples - 1) ++fallback_plan_cursor_;
     ROS_WARN_STREAM_THROTTLE(
         0.5, "[MpcController] applying cached plan stage " << selected_stage
                  << " after " << reason
@@ -275,9 +309,13 @@ void MpcController<T>::restoreSuccessfulPrediction(
     T latest_slack) {
   if (!has_successful_plan_ || !states.allFinite() || !inputs.allFinite() ||
       !std::isfinite(static_cast<double>(latest_slack)) ||
-      !cacheSuccessfulPlan(inputs, /*increment_generation=*/false)) {
+      !isValidPlan(inputs)) {
     return;
   }
+  // A rejected same-cycle refinement never creates a new policy epoch.  Keep
+  // the first successful solve's origin and generation while restoring its
+  // rollout and inputs.
+  last_successful_inputs_ = inputs;
   predicted_states_ = states;
   predicted_inputs_ = inputs;
   Eigen::Matrix<T, kInputSize, 1> applied_input;
@@ -301,7 +339,8 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
     const NonInertialProfile* beta_non_profile,
     const NonInertialProfile* a_car_non_profile,
     const Eigen::Vector3d* W_v_non,
-    const WorldVelocityFrameProfile* world_velocity_frame_profile) {
+    const WorldVelocityFrameProfile* world_velocity_frame_profile,
+    const ros::Time* evaluation_time) {
 
 #define GREEN std::string("\033[1;42m")
 #define RST std::string("\033[0m")
@@ -311,7 +350,8 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
   last_fallback_had_previous_valid_ = false;
   last_fallback_plan_exhausted_ = false;
 
-  ros::Time call_time = ros::Time::now();
+  ros::Time call_time =
+      evaluation_time != nullptr ? *evaluation_time : ros::Time::now();
   if (params.changed_) {
     params_ = params;
     setNewParams(params_);
@@ -325,8 +365,8 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
   buildLegacyCurrentTimeNonInertialData(
       state_estimate, omega_non, beta_non, a_car_non);
   bool debug_check_noninertial_profile_col0 = false;
-  pnh_.param("debug/check_noninertial_profile_col0",
-             debug_check_noninertial_profile_col0, false);
+  acado_mpc_common::getCachedParam("debug/check_noninertial_profile_col0",
+                                  debug_check_noninertial_profile_col0, false, pnh_);
   if (debug_check_noninertial_profile_col0) {
     ROS_INFO_STREAM(
         "[NONINERTIAL_COL0_CHECK][LEGACY_PATH]"
@@ -397,7 +437,7 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
     last_solve_ok_ = false;
     resetPredictionsToSafeState();
     preparationThread();
-    return makeFailureFallback("stage-profile update failure");
+    return makeFailureFallback("stage-profile update failure", call_time);
   }
   const bool field_active = params.cbf_use_field_hocbf_;
   const bool previous_field_enabled = last_field_enabled_;
@@ -425,7 +465,7 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
       solve_from_scratch_ = true;
       last_solve_ok_ = false;
       preparationThread();
-      return makeFailureFallback("Field-HOCBF slack-bound update failure");
+      return makeFailureFallback("Field-HOCBF slack-bound update failure", call_time);
     }
     if (field_mode_changed || obstacle_mode_changed) {
       // A mode transition changes the path row and its slack bounds.  One
@@ -450,7 +490,7 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
     resetPredictionsToSafeState();
     ROS_ERROR("[MPC][RECOVERY] obstacle update failed -> force cold restart next cycle");
     preparationThread();
-    return makeFailureFallback("CBF online-data update failure");
+    return makeFailureFallback("CBF online-data update failure", call_time);
   }
 
   static const bool do_preparation_step(false);
@@ -497,7 +537,7 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
         << " | requested_cold_restart=" << use_cold_restart
         << " | obstacle_update_fail_count=" << obstacle_update_fail_count_
         << " | nonfinite_recovery_count=" << nonfinite_recovery_count_);
-    return makeFailureFallback("MPC solve failure or invalid prediction");
+    return makeFailureFallback("MPC solve failure or invalid prediction", call_time);
   }
   if (warm_start_) {
     solve_from_scratch_ = false;
@@ -597,14 +637,15 @@ acado_mpc_common::ControlCommand MpcController<T>::run(
     last_solve_ok_ = false;
     ROS_ERROR("[MPC][RECOVERY] invalid control command; selecting cached plan fallback");
     preparationThread();
-    return makeFailureFallback("invalid control command");
+    return makeFailureFallback("invalid control command", call_time);
   }
-  if (!cacheSuccessfulPlan(predicted_inputs_, /*increment_generation=*/true)) {
+  if (!cacheSuccessfulPlan(predicted_inputs_, call_time,
+                           /*increment_generation=*/true)) {
     ++nonfinite_recovery_count_;
     solve_from_scratch_ = true;
     last_solve_ok_ = false;
     ROS_ERROR("[MPC][RECOVERY] failed to cache complete finite input plan");
-    return makeFailureFallback("invalid successful input plan");
+    return makeFailureFallback("invalid successful input plan", call_time);
   }
   return command;
 #undef GREEN
