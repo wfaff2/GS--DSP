@@ -490,6 +490,7 @@ relative_est_pub_[quad_id] =
       !field_hocbf::validConfig(field_hocbf_config_)) {
     throw std::invalid_argument("Invalid conservative Field-HOCBF configuration");
   }
+  robust_ni_runtime_.initialize(pnh_, field_hocbf_config_);
   if (field_hocbf_enabled_) {
     std::string field_topic = "/my_map/future_occupancy_3d";
     pnh_.param("cbf/field_topic", field_topic, field_topic);
@@ -1125,6 +1126,16 @@ void NumSimMpc::runReactiveBaselineStep()
   current_step_debug.rot_load_omega_non = car_omega_non_raw;
 
   prev_step_debug_ = current_step_debug;
+}
+
+Eigen::Vector3d NumSimMpc::superviseWorldCommand(
+    const Eigen::Vector3d& proposal, const Eigen::Vector3d& position_world,
+    const Eigen::Vector3d& velocity_world, double dt, double stamp) {
+  return robust_ni_runtime_.supervise(
+      proposal, position_world, velocity_world, dt, stamp,
+      mpc_controller_.getLastSolveOk(),
+      mpc_controller_.getLastCommandUsedFallback(),
+      std::numeric_limits<double>::quiet_NaN());
 }
 
 // helper function
@@ -2085,6 +2096,46 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
   buildNonInertialDataProfile(omega_non_profile,
                               beta_non_profile,
                               a_car_non_profile);
+  if (robust_ni_runtime_.enabled()) {
+    causal_ni::PredictionSequence robust_ni_sequence;
+    for (int stage = 0; stage <= acado_mpc::kSamples; ++stage) {
+      robust_ni_sequence.accel_n[static_cast<std::size_t>(stage)] =
+          a_car_non_profile.col(stage);
+      robust_ni_sequence.omega[static_cast<std::size_t>(stage)] =
+          omega_non_profile(2, stage);
+      robust_ni_sequence.beta[static_cast<std::size_t>(stage)] =
+          beta_non_profile(2, stage);
+    }
+    causal_ni::InitialState robust_ni_initial;
+    robust_ni_initial.G_world = Eigen::Vector3d(
+        car_odom_.pose.pose.position.x, car_odom_.pose.pose.position.y,
+        car_odom_.pose.pose.position.z);
+    robust_ni_initial.Vg_world = Eigen::Vector3d(
+        car_odom_.twist.twist.linear.x, car_odom_.twist.twist.linear.y,
+        car_odom_.twist.twist.linear.z);
+    Eigen::Quaterniond robust_car_orientation(
+        car_odom_.pose.pose.orientation.w, car_odom_.pose.pose.orientation.x,
+        car_odom_.pose.pose.orientation.y, car_odom_.pose.pose.orientation.z);
+    if (robust_car_orientation.coeffs().allFinite() &&
+        robust_car_orientation.norm() > 1.0e-9) {
+      robust_car_orientation.normalize();
+    } else {
+      robust_car_orientation = Eigen::Quaterniond::Identity();
+    }
+    const Eigen::Matrix3d robust_car_rotation =
+        robust_car_orientation.toRotationMatrix();
+    robust_ni_initial.yaw = std::atan2(robust_car_rotation(1, 0),
+                                      robust_car_rotation(0, 0));
+    robust_ni_initial.omega = car_odom_.twist.twist.angular.z;
+    robust_ni_initial.P_world = Eigen::Vector3d(
+        quad_odom_.pose.pose.position.x, quad_odom_.pose.pose.position.y,
+        quad_odom_.pose.pose.position.z);
+    robust_ni_initial.W_world = Eigen::Vector3d(
+        quad_odom_.twist.twist.linear.x, quad_odom_.twist.twist.linear.y,
+        quad_odom_.twist.twist.linear.z);
+    robust_ni_runtime_.prepare(robust_ni_sequence, robust_ni_initial,
+                               mpc_controller_.getPredictedInputs());
+  }
   using WorldVelocityFrameProfile =
       acado_mpc::MpcController<double>::WorldVelocityFrameProfile;
   WorldVelocityFrameProfile world_velocity_frame_profile =
@@ -2160,8 +2211,48 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
   const std::string field_status = field_input_status == "invalid" ? "invalid" :
       (!field_snapshot_valid ? "missing" :
        (field_stale ? "stale" : field_input_status));
+  if (robust_ni_runtime_.enabled()) {
+    for (auto& map : robust_ni_cycle_maps_) {
+      map = field_derivative_cert::FieldSnapshot();
+      map.config = field_hocbf_config_;
+    }
+  }
+  if (robust_ni_runtime_.enabled() && field_available) {
+    const int robust_source_horizon =
+        field_age > field_dt * acado_mpc::kSamples
+            ? static_cast<int>(field_snapshot->last_occupied_stage)
+            : acado_mpc::kSamples;
+    const int robust_source_shift = std::max(
+        0, static_cast<int>(std::min(
+               static_cast<double>(robust_source_horizon),
+               std::floor(field_age / field_dt + 0.5))));
+    for (int stage = 0; stage <= acado_mpc::kSamples; ++stage) {
+      auto& map = robust_ni_cycle_maps_[static_cast<std::size_t>(stage)];
+      map.id = field_snapshot->snapshot_id;
+      // DSP occupancy is time-varying evidence. It is never promoted to a
+      // persistent, coverage-certified static map by this adapter.
+      map.persistent_static = false;
+      map.coverage_certified = false;
+      const int source_stage = std::min(
+          robust_source_horizon, stage + robust_source_shift);
+      const auto& indices = field_snapshot->stage_point_indices[
+          static_cast<std::size_t>(source_stage)];
+      map.points.reserve(indices.size());
+      for (const std::size_t point_index : indices) {
+        if (point_index >= field_snapshot->points.size()) continue;
+        const auto& raw = field_snapshot->points[point_index];
+        field_hocbf::KinematicPoint point;
+        point.position = raw.position_world;
+        point.occupancy = raw.occupancy;
+        point.source_id = raw.source_id;
+        map.points.push_back(point);
+      }
+    }
+  }
   using FieldNominalPrediction =
       Eigen::Matrix<double, acado_mpc::kStateSize, acado_mpc::kSamples + 1>;
+  using FieldNominalInputs =
+      Eigen::Matrix<double, acado_mpc::kInputSize, acado_mpc::kSamples>;
   // Freeze one locally cached parameter pair for the entire horizon and any
   // optional refinement in this control cycle, rather than querying per stage.
   if (field_available) {
@@ -2180,6 +2271,7 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
 #endif
   const auto buildFieldProfile =
       [&](const FieldNominalPrediction* nominal_prediction,
+          const FieldNominalInputs* nominal_inputs,
           bool& profile_active_out,
           FieldHocbfDebugProfile* debug_profile_out,
           std::vector<field_replay::StageRecord>* replay_stages_out) {
@@ -2231,6 +2323,17 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
           const Eigen::Vector3d omega_non = omega_non_profile.col(stage);
           const Eigen::Vector3d beta_non = beta_non_profile.col(stage);
           const Eigen::Vector3d a_car_non = a_car_non_profile.col(stage);
+          if (robust_ni_runtime_.enabled()) {
+            if (isInertialFrame()) {
+              robust_ni_runtime_.recordNominalFrame(
+                  stage, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(),
+                  Eigen::Matrix3d::Identity(), 0.0);
+            } else {
+              robust_ni_runtime_.recordNominalFrame(
+                  stage, car_position, car_velocity,
+                  world_q_non.toRotationMatrix(), omega_non.z());
+            }
+          }
 
           Eigen::Vector3d nominal_position = state_estimate_.position;
           Eigen::Vector3d nominal_velocity = state_estimate_.velocity;
@@ -2389,7 +2492,37 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
           const double state_feedback_offset =
               constraint.A.dot(k_v.cwiseProduct(nominal_velocity) +
                                k_p.cwiseProduct(nominal_position));
-          const double profile_b = constraint.b + state_feedback_offset;
+          Eigen::Vector3d nominal_input = Eigen::Vector3d::Zero();
+          if (stage < acado_mpc::kSamples && nominal_inputs != nullptr &&
+              nominal_inputs->allFinite()) {
+            nominal_input = nominal_inputs->block<3, 1>(0, stage);
+          }
+          const Eigen::Matrix3d R_wn = world_q_non.toRotationMatrix();
+          Eigen::Vector3d nominal_position_world = nominal_position;
+          Eigen::Vector3d nominal_velocity_world = nominal_velocity;
+          Eigen::Vector3d nominal_command_world = nominal_input;
+          if (!isInertialFrame()) {
+            nominal_position_world =
+                car_position + R_wn * nominal_position;
+            nominal_velocity_world = car_velocity + R_wn *
+                (nominal_velocity + omega_non.cross(nominal_position));
+            nominal_command_world = car_velocity + R_wn *
+                (nominal_input + omega_non.cross(nominal_position));
+          }
+          double robust_rho = 0.0;
+          if (robust_ni_runtime_.enabled()) {
+            const Eigen::Vector3d nominal_offsets =
+                robust_ni_runtime_.nominalOffsets(
+                    stage, car_position, car_velocity, R_wn, omega_non.z(),
+                    nominal_position, nominal_velocity, nominal_input);
+            robust_rho = robust_ni_runtime_.tighten(
+                stage, robust_ni_cycle_maps_[static_cast<std::size_t>(stage)],
+                nominal_position_world, nominal_velocity_world,
+                nominal_command_world, nominal_offsets.x(),
+                nominal_offsets.y(), nominal_offsets.z());
+          }
+          const double profile_b =
+              constraint.b + state_feedback_offset + robust_rho;
           if (replay_stages_out != nullptr) {
             replay_stages_out->back().profile_b = profile_b;
           }
@@ -2409,7 +2542,8 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
 
   bool field_profile_active = false;
   FieldHocbfProfile field_profile = buildFieldProfile(
-      nullptr, field_profile_active, &field_debug_profile,
+      nullptr, &mpc_controller_.getPredictedInputs(), field_profile_active,
+      &field_debug_profile,
       field_replay_diagnostics_enabled_ ? &field_replay_stages : nullptr);
   mpc_params_.cbf_field_hocbf_profile_ = field_profile;
   // Every fresh structurally valid snapshot owns the field path, including a
@@ -2521,7 +2655,8 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
     const double first_slack = mpc_controller_.getLatestSlack();
     bool refined_field_active = false;
     const FieldHocbfProfile refined_field_profile = buildFieldProfile(
-        &first_prediction, refined_field_active, &refined_field_debug_profile,
+        &first_prediction, &first_inputs, refined_field_active,
+        &refined_field_debug_profile,
         field_replay_diagnostics_enabled_ ? &refined_field_replay_stages : nullptr);
     const double profile_delta =
         (refined_field_profile - field_profile).norm();
@@ -2569,6 +2704,11 @@ acado_mpc_common::ControlCommand NumSimMpc::run( )
              "external profile refinement disabled");
   }
 #endif
+  if (robust_ni_runtime_.enabled()) {
+    robust_ni_runtime_.checkPlan(mpc_controller_.getPredictedStates(),
+                                 mpc_controller_.getPredictedInputs(),
+                                 robust_ni_cycle_maps_);
+  }
   // Attach the solved horizon to the same per-stage diagnostic record as the
   // Field-HOCBF coefficients.  ACADO has controls only on stages 0..N-1;
   // stage N therefore has no independent slack input.

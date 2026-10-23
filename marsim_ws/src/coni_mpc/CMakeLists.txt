@@ -189,6 +189,10 @@ add_library(NumericalCoNiMPC
         STATIC
         parameters/adaptive_trend_gain.cpp
         parameters/non_inertial_predictor.cpp
+        src/causal_ni_uncertainty.cpp
+        src/field_derivative_cert.cpp
+        src/recursive_safety_supervisor.cpp
+        robust_ni_runtime.cpp
         src/coni_mpc/num_sim_mpc.cpp
         src/coni_mpc/mpc_base.cpp)
 add_dependencies(NumericalCoNiMPC
@@ -322,6 +326,18 @@ if(CATKIN_ENABLE_TESTING)
                         Eigen3::Eigen)
         endif()
         catkin_add_gtest(field_hocbf_test test/field_hocbf_test.cpp)
+        catkin_add_gtest(causal_ni_uncertainty_test
+                test/causal_ni_uncertainty_test.cpp)
+        if(TARGET causal_ni_uncertainty_test)
+                target_link_libraries(causal_ni_uncertainty_test
+                        NumericalCoNiMPC gtest_main Eigen3::Eigen)
+        endif()
+        catkin_add_gtest(robust_field_supervisor_test
+                test/robust_field_supervisor_test.cpp)
+        if(TARGET robust_field_supervisor_test)
+                target_link_libraries(robust_field_supervisor_test
+                        NumericalCoNiMPC gtest_main Eigen3::Eigen)
+        endif()
         catkin_add_gtest(voxel_online_data_pool_test test/voxel_online_data_pool_test.cpp)
         if(TARGET voxel_online_data_pool_test)
                 target_link_libraries(voxel_online_data_pool_test gtest_main Eigen3::Eigen)

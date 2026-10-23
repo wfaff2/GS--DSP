@@ -3367,11 +3367,19 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
         provenance_collection_sec += steadyNowSec() - provenance_block_start;
       }
       v_world_cmd = command.velocity_cmd;
-      const Eigen::Quaterniond W_q_non =
+      const auto& raw_car = control_system_ptr_->getCarOdomDiagnostic();
+      const bool robust_execution = control_system_ptr_->robustNiEnabled();
+      const Eigen::Quaterniond W_q_non = robust_execution ?
+          Eigen::Quaterniond(raw_car.pose.pose.orientation.w,raw_car.pose.pose.orientation.x,
+                             raw_car.pose.pose.orientation.y,raw_car.pose.pose.orientation.z) :
           control_system_ptr_->getCarOrientation();
       const Eigen::Vector3d v_non =
+          robust_execution ? Eigen::Vector3d(raw_car.twist.twist.linear.x,
+              raw_car.twist.twist.linear.y,raw_car.twist.twist.linear.z) :
           control_system_ptr_->getCarLinearVelocity();
       const Eigen::Vector3d omega_non =
+          robust_execution ? Eigen::Vector3d(raw_car.twist.twist.angular.x,
+              raw_car.twist.twist.angular.y,raw_car.twist.twist.angular.z) :
           control_system_ptr_->getCarAngularVelocity();
       const Eigen::Vector3d car_pos = control_system_ptr_->getCarPosition();
       const State_t x_snapshot = getStateSnapshot();
@@ -3379,7 +3387,7 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
                                      x_snapshot(1),
                                      x_snapshot(2));
       Eigen::Vector3d p_rel = W_q_non.inverse() * (quad_pos_world - car_pos);
-      if (solve_ok && !control_system_ptr_->isInertialFrame()) {
+      if (solve_ok && !control_system_ptr_->isInertialFrame() && !robust_execution) {
         // Use the same estimated relative position as the accepted stage-0
         // constraint. Using simulator truth here would change omega x p
         // after optimization whenever position noise is enabled.
@@ -3447,6 +3455,15 @@ class QuadrotorSimulator : public NumericalSimulator<QuadrotorSystem>
       last_world_command_provenance_.yaw_after_limits = yaw_rate_world_cmd;
         provenance_collection_sec += steadyNowSec() - provenance_block_start;
       }
+    }
+    if (control_system_ptr_->robustNiEnabled()) {
+      const State_t state_now = getStateSnapshot();
+      v_world_cmd = control_system_ptr_->superviseWorldCommand(v_world_cmd,
+          state_now.head<3>(),state_now.segment<3>(3),control_dt_,ros::Time::now().toSec());
+      // The exact supervised world command is the final translation action.
+      // No subsequent conversion, clipping or cached-input substitution.
+      if(world_command_provenance_enabled_)
+        last_world_command_provenance_.world_command_after_limits=v_world_cmd;
     }
     control << v_world_cmd.x(), 
                v_world_cmd.y(), 

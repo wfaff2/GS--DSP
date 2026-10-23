@@ -36,6 +36,22 @@ tau_v_xy:                   0.2
 tau_v_z:                    0.2
 
 num_uavs:                   1
+# Robust planning and final world-command supervisor. Enable only deliberately:
+# absent continuous-time error bounds or a persistent cover are NOT certificates.
+robust_ni:
+  enabled: false
+  delta_a: []               # scalar or 21 nonnegative continuous-interval bounds
+  delta_omega: []
+  delta_beta: []
+  safety_reserve_eta: 0.0
+  require_certified_static_field: true
+  ray_bisection_iterations: 30
+  debug_csv: ""
+  static_field:
+    snapshot_id: 0
+    coverage_asserted: false # supplied geometric coverage assumption, not P>=0.15
+    persistent_asserted: false
+    voxels_xyzo: []          # fixed world [x,y,z,occupancy,...], externally justified
 world_frame_id:             map
 relative_frame_id:          base_link
 topic_prefix:               ""

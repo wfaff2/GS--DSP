@@ -33,6 +33,7 @@
 #include "coni_mpc/voxel_online_data_pool.h"
 #include "coni_mpc/field_replay_diagnostics.h"
 #include "coni_mpc/path_visualization.h"
+#include "coni_mpc/robust_ni_runtime.h"
 
 #include <algorithm>
 #include <array>
@@ -342,6 +343,11 @@ class NumSimMpc final : public MpcBase
   // this before computing their own velocity command.
   void runReactiveBaselineStep();
   virtual acado_mpc_common::ControlCommand run() override;
+  Eigen::Vector3d superviseWorldCommand(const Eigen::Vector3d& proposal,
+                                        const Eigen::Vector3d& position_world,
+                                        const Eigen::Vector3d& velocity_world,
+                                        double dt, double stamp);
+  bool robustNiEnabled() const { return robust_ni_runtime_.enabled(); }
   struct CommandContextDiagnostics {
     std::uint64_t snapshot_id = 0;
     double snapshot_stamp = 0.0;
@@ -580,6 +586,9 @@ class NumSimMpc final : public MpcBase
   bool has_last_predicted_world_positions_;
   StepDebugSnapshot prev_step_debug_;
   FieldHocbfDebugProfile last_field_hocbf_debug_profile_{};
+  RobustNiRuntime robust_ni_runtime_;
+  std::array<field_derivative_cert::FieldSnapshot,
+             acado_mpc::kSamples + 1> robust_ni_cycle_maps_{};
 
   void genRelativeEstimate();
   void buildNonInertialDataProfile(NonInertialProfile& omega_non_profile,
